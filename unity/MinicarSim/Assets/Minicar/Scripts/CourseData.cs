@@ -73,7 +73,9 @@ namespace Minicar
         public string carpet_tex = "textures/carpet.png";
         public string backdrop_tex = "textures/backdrop.png";
         public float backdrop_radius_m = 9f, backdrop_height_m = 4f, backdrop_z0_m = -0.3f;
-        public float background_gray = 110f;     // 背景 (背景円筒より上・外) の明るさ [0-255]
+        public float background_gray = 110f;
+        // 環境光の倍率。影側を向いた壁の板 (白・赤) も明るく見えるように (実画像の白壁 ≈ 195、床 ≈ 110)
+        public float ambient_gain = 1f;     // 背景 (背景円筒より上・外) の明るさ [0-255]
         public int spectators = 24;
         public int spectator_seed = 1;
         // エピソード乱択化 (/sim/episode の seed で引き直す)。0 で固定

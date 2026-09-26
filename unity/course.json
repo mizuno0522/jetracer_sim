@@ -451,6 +451,7 @@
   "backdrop_tex": "",
   "backdrop_radius_m": 9.0,
   "backdrop_height_m": 7.0,
+  "ambient_gain": 1.8,
   "background_gray": -1,
   "backdrop_z0_m": -0.3,
   "spectators": 24,

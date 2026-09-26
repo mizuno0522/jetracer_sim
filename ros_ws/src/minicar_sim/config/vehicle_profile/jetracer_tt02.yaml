@@ -71,6 +71,7 @@ vehicle_profile:
       backdrop_tex: ""                # 実画像を並べた背景円筒は平面的で不自然だったので使わない (空文字で無効)
       backdrop_radius_m: 9.0
       backdrop_height_m: 7.0
+      ambient_gain: 1.8           # 環境光の倍率。影側の白・赤の板を実画像の明るさへ (1.0 だと白壁が灰色に沈んだ)
       background_gray: -1         # 負 = Unity 既定のスカイボックス (水色) のまま
       backdrop_z0_m: -0.3
       spectators: 24              # 壁の外に立つ観戦者 (雑音として)。0 で無し

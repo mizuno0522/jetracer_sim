@@ -486,7 +486,7 @@ namespace Minicar
                 float t = Realism.episode_tint_range;
                 m_Ceiling.color = new Color(U(t), 0.97f * U(t), 0.92f * U(t));
             }
-            float a = U(Realism.episode_ambient_range);
+            float a = U(Realism.episode_ambient_range) * Realism.ambient_gain;
             RenderSettings.ambientSkyColor = new Color(0.40f, 0.40f, 0.42f) * a;
             RenderSettings.ambientEquatorColor = new Color(0.30f, 0.30f, 0.31f) * a;
             RenderSettings.ambientGroundColor = new Color(0.15f, 0.15f, 0.15f) * a;
@@ -518,9 +518,10 @@ namespace Minicar
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
             // 明るさは OpenCV 描画 (カーペット平均 ≈ 95) に合わせて控えめにする。
             // /camera/brightness を使う zone_estimator のしきい値が両描画で通用するように。
-            RenderSettings.ambientSkyColor = new Color(0.40f, 0.40f, 0.42f);
-            RenderSettings.ambientEquatorColor = new Color(0.30f, 0.30f, 0.31f);
-            RenderSettings.ambientGroundColor = new Color(0.15f, 0.15f, 0.15f);
+            float ag = (Realism != null && Realism.enable) ? Realism.ambient_gain : 1f;
+            RenderSettings.ambientSkyColor = new Color(0.40f, 0.40f, 0.42f) * ag;
+            RenderSettings.ambientEquatorColor = new Color(0.30f, 0.30f, 0.31f) * ag;
+            RenderSettings.ambientGroundColor = new Color(0.15f, 0.15f, 0.15f) * ag;
             QualitySettings.shadowDistance = 8f;
             QualitySettings.shadowCascades = 4;
             QualitySettings.shadowResolution = ShadowResolution.VeryHigh;
