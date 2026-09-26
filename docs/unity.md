@@ -92,7 +92,8 @@ ros2 launch minicar_sim sim_host.launch.py camera_backend:=unity      unity_play
 - 録画は起動直後から始まり、**Unity を SIGTERM で閉じたときに mp4 を閉じる** (Ctrl-C で launch を止めれば良い)。SIGKILL で殺すと再生できないファイルになる。
 - 断片化 mp4 なので、途中で止めてもそこまでは再生できる。
 - **録画サイズは min(`record_width`, ウィンドウ幅)**。既定ウィンドウは 1024×768 なので、1280 で録るなら `window_width:=1280 window_height:=720`、フル HD なら `window_width:=1920 window_height:=1080 record_width:=1920`。
-- sim PC での実測 (224×224 配信): 録画なし / 1280 / 1920 のいずれでも `/camera/image_raw` 15.0 Hz・遅延 60 ms で差なし、`/imu` 99.6 Hz。
+- sim PC での実測 (224×224 配信): ウィンドウ 1024×768 のままなら録画なし / 1280 / 1920 のいずれでも `/camera/image_raw` 15.0 Hz・遅延 60 ms で差なし、`/imu` 99.6 Hz。
+- **ウィンドウを 1920×1080 にすると画像の遅延が 60 → 72.5 ms (最大 105 ms) に増える** (15 Hz は維持)。描画が重くなるため。画像と IMU の相対遅れが変わるので、**学習データの記録と遅延の計測は既定の 1024×768 で**。大きいウィンドウは見せる動画を撮るときだけ。なお画面が 1920×1080 だと Wayland がパネルと枠のぶん縮め、mp4 は 1850×1016 になる。
 - `record_width` を上げるほど符号化が重くなり、`/camera/image_raw` の配信レートが落ちる (既存 sim で 30 → 21 Hz になった実測)。既定の 1280 から上げるときはレートを確認する。
 - 録画できるのは **Unity を動かしているホスト (sim PC)** の画面。Jetson からは録れない。
 
