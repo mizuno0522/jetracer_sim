@@ -5,8 +5,8 @@
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
-MODEL="$(realpath "$1")"; LABEL="$2"; SEC="${3:-90}"; SEED="${4:-900}"; VIDEO="${5:-}"
-OUTDIR="$(dirname "$MODEL")"
+if [ "$1" = teacher ]; then MODEL=teacher; else MODEL="$(realpath "$1")"; fi; LABEL="$2"; SEC="${3:-90}"; SEED="${4:-900}"; VIDEO="${5:-}"
+OUTDIR="$(dirname "$MODEL")"; [ "$MODEL" = teacher ] && OUTDIR="${OUTDIR_TEACHER:-$HOME/jetracer/runs/teacher}"; mkdir -p "$OUTDIR"
 source "$ROOT/scripts/sim_env.sh" >/dev/null
 export PYTHONNOUSERSITE=1
 PLAYER="${JETRACER_UNITY_PLAYER:-$HOME/jetracer/unity/player}/MinicarSim.x86_64"
@@ -22,10 +22,15 @@ sleep 12
 # policy_net は ONNX Runtime が要る。システムの Python (PYTHONNOUSERSITE=1) には無いので、
 # launch の policy_net は model_file 空で待機させ、同じコードを venv の Python で別名のノードとして動かす
 PY=~/jetracer/venv_sim2real/bin/python
-ros2 launch jetracer_stack vehicle_stack.launch.py teacher:=false auto_run:=true model_file:="" \
+if [ "$MODEL" = teacher ]; then   # 比較用: sim の真値で走る教師 (gt_teacher)
+ros2 launch jetracer_stack vehicle_stack.launch.py teacher:=true auto_run:=true \
+  > "$ROOT/log/evalpol_stack_$LABEL.log" 2>&1 &
+else
+ros2 launch jetracer_stack vehicle_stack.launch.py teacher:=false auto_run:=true \
   > "$ROOT/log/evalpol_stack_$LABEL.log" 2>&1 &
 "$PY" -c 'from jetracer_stack.policy_net import main; main()' --ros-args -r __node:=policy_net_onnx \
   -p model_file:="$MODEL" -p imu_window:=50 -p mask_bottom_frac:=0.0 > "$ROOT/log/evalpol_net_$LABEL.log" 2>&1 &
+fi
 set +m
 sleep 6
 {

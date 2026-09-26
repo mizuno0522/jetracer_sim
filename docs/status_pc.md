@@ -1,7 +1,7 @@
-# sim PC 側の状況 (2026-09-26 時点)
+# sim PC 側の状況 (2026-09-27 時点)
 
 sim PC (Ubuntu 22.04.5・Humble desktop・AMD 内蔵 GPU = CUDA 無し・Unity 6000.0.83f1) で確かめたことと、PC 側の担当
-(`unity/`・`jetracer_compat`・`tools/sim2real`・Unity 系の scripts) の現状。環境構築の手順そのものは [setup.md](setup.md)・[unity.md](unity.md)。結果の画像と動画は [results/2026-09-26](results/2026-09-26/README.md)。
+(`unity/`・`jetracer_compat`・`tools/sim2real`・Unity 系の scripts) の現状。環境構築の手順そのものは [setup.md](setup.md)・[unity.md](unity.md)。結果の画像と動画は [results/2026-09-26](results/2026-09-26/README.md)・[results/2026-09-27](results/2026-09-27/README.md) (方策)。
 
 ## いまの状態
 
@@ -16,6 +16,7 @@ sim PC (Ubuntu 22.04.5・Humble desktop・AMD 内蔵 GPU = CUDA 無し・Unity 6
 | カメラ幾何 (Unity) | `course.json` の `fx, fy, cx, cy, k1, k2`・`render_tan_*` で描く (下の節)。推定値 (高さ 0.148 m・下向き 50.9°・水平 144°/垂直 120°・fy/fx 1.78) で OpenCV 描画と一致 |
 | 他チームの JetRacer 標準コード | `jetracer_compat` で無改造のまま sim で走る (下の節)。v0.1.1 として公開 |
 | sim→real 画像変換 | 3 回目 (標準 CUT + 形を保つ損失) で合格。F 値 0.832 (下の節・[sim2real.md](sim2real.md)) |
+| policy_net の学習 | **sim の閉ループで合格**。画像 (＋IMU) だけで、学習に使っていない 7 seed を全部完走・衝突 0 (下の節・[tools/policy](../tools/policy/README.md))。実機は未確認 |
 
 ## カメラ幾何の Unity 実装と確認
 
@@ -55,6 +56,19 @@ sim PC (Ubuntu 22.04.5・Humble desktop・AMD 内蔵 GPU = CUDA 無し・Unity 6
 - 自分の実画像で作り直す手順は [sim2real.md](sim2real.md)。
 - 推論は ONNX で約 57 ms/枚 (CPU)。走行中に挟むと画像の遅れが増えるので、記録済み bag を後から変換する (`convert_bag.py`)。
 - 変換した bag は学習データの一部だけに混ぜる (9/12 の会場に寄せきらない)。
+
+## policy_net の模倣学習 (PC の CPU) — 2026-09-27
+
+- 道具: `tools/policy/` ([README](../tools/policy/README.md))。教師 (gt_teacher) の注視点に揺らぎを足して 30 本 × 60 s 記録し、
+  正解は真値 (/sim/ground_truth) から作る。半分 (奇数 seed) は cut_003 で実画像風に変換。ResNet18 ＋ IMU の 1 次元畳み込み、CPU で 1 エポック約 13 分。
+- **policy_001** (8 エポック): 学習に使っていない seed 900〜906 の 7 本すべてで完走・衝突 0。ラップ 24 s は教師と同じで、横偏差 (\|cte\| rms 0.025〜0.034 m) は教師 (0.050 m) より小さい。
+- 目隠しテスト: 画像を 0 にすると走れない (衝突 36 回)、IMU を 0 にしてもほぼ同じ → 方策は画像で走っていて、IMU はほとんど使っていない。
+- 実画像 (9/12 の実走ログ、人の操縦) で予測した注視点と人の舵の相関は +0.21〜0.23。曲がる向きは概ね揃うが、左の曲がりの読みが弱い。
+- 改善 1 回目 **policy_002** (強い拡張: ぼけ・白飛び・遮り): 実画像の相関が +0.11 に下がった → 不採用。
+- 改善 2 回目 **policy_003** (学習 bag を全部変換して追加学習 3 エポック): 実画像の相関 +0.29〜0.30、sim 閉ループも 7 本完走 (ラップ 23.5 s)。
+  ただし変換器が同じ 9/12 の会場の画像で学習しているので、その会場に寄ったぶんを含む。
+- モデル: `~/jetracer/runs/policy_00{1,3}/policy.onnx` ＋ `policy.onnx.data` (2 つで 1 組、opset 18)。git には入れていない。
+- 前夜の評価が 0 % だった原因: 評価スクリプトが launch に `model_file:=` (空) を渡し、launch 全体が引数エラーで起動していなかった。引数を外して直した。
 
 ## 踏んだ落とし穴 (PC)
 

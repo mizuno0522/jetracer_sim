@@ -55,6 +55,29 @@ class Policy(nn.Module):
         return torch.cat([torch.tanh(y[:, :2]), torch.sigmoid(y[:, 2:3])], 1)
 
 
+def strong_aug(x):
+    """実画像に多い崩れ (手ぶれ・動きのぼけ・白飛び・暗さ・遮り) を足す。形 (注視点の位置) は動かさない。"""
+    b = x.shape[0]
+    x = x.clamp(1e-4, 1) ** torch.empty(b, 1, 1, 1).uniform_(0.6, 1.6)                     # ガンマ
+    over = (torch.rand(b, 1, 1, 1) < 0.2).float()
+    x = x * (1 + over * torch.empty(b, 1, 1, 1).uniform_(0.3, 1.2))                          # 白飛び
+    x = x * torch.empty(b, 3, 1, 1).uniform_(0.85, 1.15)
+    for i in range(b):
+        r = float(torch.rand(1))
+        if r < 0.35:                                                                          # 動きのぼけ (横 or 縦)
+            k = int(torch.randint(3, 12, (1,)))
+            w = torch.ones(3, 1, 1, k) / k if torch.rand(1) < 0.6 else torch.ones(3, 1, k, 1) / k
+            pad = (k // 2, k - 1 - k // 2, 0, 0) if w.shape[3] > 1 else (0, 0, k // 2, k - 1 - k // 2)
+            x[i:i + 1] = F.conv2d(F.pad(x[i:i + 1], pad, mode='replicate'), w, groups=3)
+        elif r < 0.5:                                                                         # ピンぼけ
+            x[i:i + 1] = F.avg_pool2d(F.pad(x[i:i + 1], (2, 2, 2, 2), mode='replicate'), 5, 1)
+        if torch.rand(1) < 0.25:                                                              # 遮り (人・物)
+            h, w_ = int(torch.randint(15, 70, (1,))), int(torch.randint(10, 50, (1,)))
+            y0, x0 = int(torch.randint(0, 224 - h, (1,))), int(torch.randint(0, 224 - w_, (1,)))
+            x[i, :, y0:y0 + h, x0:x0 + w_] = torch.rand(3, 1, 1)
+    return x.clamp(0, 1)
+
+
 class Data:
     """bag ごとの npz と画像 .npy (mmap) を束ねる。"""
 
@@ -69,7 +92,7 @@ class Data:
     def __len__(self):
         return len(self.index)
 
-    def batch(self, idx, augment=False, rng=None):
+    def batch(self, idx, augment=False, rng=None, strong=False):
         ims, imus, ys = [], [], []
         for k in idx:
             p, i = self.index[k]
@@ -82,6 +105,8 @@ class Data:
             b = x.shape[0]
             x = x * torch.empty(b, 1, 1, 1).uniform_(0.7, 1.3) + torch.empty(b, 1, 1, 1).uniform_(-0.08, 0.08)   # 明るさ・露出
             x = x * torch.empty(b, 3, 1, 1).uniform_(0.92, 1.08)                                                  # 色味
+            if strong:
+                x = strong_aug(x)
             x = (x + torch.randn_like(x) * 0.02).clamp(0, 1)
         x = (x - MEAN) / STD
         imu = torch.from_numpy(np.stack(imus))
@@ -125,12 +150,16 @@ def main():
     ap.add_argument('--export', action='store_true')
     ap.add_argument('--zero-imu', action='store_true')
     ap.add_argument('--zero-image', action='store_true')
+    ap.add_argument('--init', default='', help='この ckpt.pt の重みから始める (追加学習)')
+    ap.add_argument('--strong-aug', action='store_true', help='ぼけ・白飛び・遮りの強い拡張 (実画像向け)')
     a = ap.parse_args()
     torch.set_num_threads(a.threads)
     out = os.path.expanduser(a.out)
     os.makedirs(out, exist_ok=True)
     ck = os.path.join(out, 'ckpt.pt')
-    model = Policy(pretrained=not (a.export or a.resume))
+    model = Policy(pretrained=not (a.export or a.resume or a.init))
+    if a.init and not a.export:
+        model.load_state_dict(torch.load(os.path.expanduser(a.init), map_location='cpu')['model'])
     if a.export:
         model.load_state_dict(torch.load(ck, map_location='cpu')['model'])
         model.zero_imu, model.zero_image = a.zero_imu, a.zero_image
@@ -161,7 +190,7 @@ def main():
         run = 0.0
         nb = len(tr) // a.bs
         for b in range(nb):
-            x, imu, t = tr.batch(perm[b * a.bs:(b + 1) * a.bs], augment=True, rng=rng)
+            x, imu, t = tr.batch(perm[b * a.bs:(b + 1) * a.bs], augment=True, rng=rng, strong=a.strong_aug)
             p = model(x, imu)
             # u は操舵に直結するので重く。s は小さく
             loss = 2.0 * F.smooth_l1_loss(p[:, 0], t[:, 0], beta=0.05) + F.smooth_l1_loss(p[:, 1], t[:, 1], beta=0.05) \
