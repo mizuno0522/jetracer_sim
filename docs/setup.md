@@ -56,7 +56,7 @@ cat /etc/nv_tegra_release                       # R36 (release), REVISION: 4.x
 
 ## Step 3 — 2 ホスト接続 (P9)
 
-**2026-09-26 に通った** (sim PC: Ryzen/AMD GPU・Humble 素、Jetson Orin Nano、1000BASE-T 直結、cyclonedds 有線限定、DOMAIN 42): PC の sim (OpenCV 描画) → Jetson で /imu 99 Hz・/camera/image_raw 14.4〜15 Hz・/sim/ground_truth 99 Hz を受信、Jetson の教師スタック → PC で /actuator_cmd 30 Hz。閉ループは 1 台のときと同じ 24.0 s/周・衝突 0・cte p95 0.10 m (`tools/lap_eval.py` を Jetson で実行)。画像の受信間隔は平均 70 ms だが最大 0.67 s の抜けが 10 s に 1 回あった (PC のベンチ sweep との同居が疑わしい。要再測)。遅延の絶対値は chrony 同期後に `ros2 topic delay` で取る。
+**2026-09-26 に通った** (sim PC: Ryzen/AMD GPU・Humble 素、Jetson Orin Nano、1000BASE-T 直結、cyclonedds 有線限定、DOMAIN 42): PC の sim (OpenCV 描画) → Jetson で /imu 99 Hz・/camera/image_raw 14.4〜15 Hz・/sim/ground_truth 99 Hz を受信、Jetson の教師スタック → PC で /actuator_cmd 30 Hz。閉ループは 1 台のときと同じ 24.0 s/周・衝突 0・cte p95 0.10 m (`tools/lap_eval.py` を Jetson で実行)。Jetson での受信間隔 (30 s・`ros2 topic hz`): 画像 15.0 Hz・最大 87 ms、/imu 99.7 Hz・最大 44 ms、failsafe の ESTOP 0 回 (最初に見えた 0.67 s の抜けは計測用の Python 購読者の取りこぼしで、経路の問題ではなかった)。PC 側 (送り元) は画像 publish→受信 1.5 ms、/imu 8 ms (imu_sim の遅延モデル込み)。遅延の絶対値は chrony 同期後に `ros2 topic delay` で取る。**計測は `ros2 topic hz`/`delay` か 1 トピックだけの購読者で。複数トピックを 1 つの spin_once ループで受けると Orin Nano では取りこぼす。**
 
 
 ```bash
