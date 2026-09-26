@@ -1,6 +1,6 @@
 # JetRacer sim
 
-> **他チームの方へ**: JetRacer ベースのソフトをこの sim で走らせる手順は [docs/for_teams.md](docs/for_teams.md) (v0.1.0・試用版。信頼度の表を先に読んでください)。
+> **他チームの方へ**: JetRacer ベースのソフトをこの sim で走らせる手順は [docs/for_teams.md](docs/for_teams.md) (v0.1.1・試用版。信頼度の表を先に読んでください。v0.1.0 はスロットルの向きが逆なので使わない)。
 
 自動運転ミニカーバトル 2026 のコースを **JetRacer ベースの車両 (Tamiya TT-02 4WD ＋ Jetson Orin Nano ＋ CSI カメラ ＋ 6 軸 IMU)** で走らせるための、ROS 2 ＋ Unity シミュレータ。
 [minicarbattle2026](https://github.com/mizuno0522/minicarbattle2026) の既存 sim (物理 `vehicle_sim`・Unity 描画) を転用し、**差し替えたのはブリッジ 1 枚とセンサ合成 (`imu_sim`) だけ**。物理・描画・`/actuator_cmd` の境界は動かしていない。

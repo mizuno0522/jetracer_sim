@@ -12,8 +12,9 @@ from jetracer.nvidia_racecar import NvidiaRacecar   # 以下は元のコード�
 from jetcam.csi_camera import CSICamera
 car = NvidiaRacecar()
 camera = CSICamera(width=224, height=224, capture_fps=65)
-car.steering_gain = -0.55; car.steering_offset = 0.12
-car.throttle = 0.15
+car.steering_gain = -0.55; car.steering_offset = 0.12; car.throttle_gain = 1.0   # 9/12 実走ロガーの値
+car.steering = -0.22        # この車はほぼ直進 (サーボの機械中立がずれている)
+car.throttle = -0.12        # ★この車はマイナスで前進 (ESC の向き)。−0.12 で約 2.0 m/s
 ```
 
 ## 変換 (実機と同じ)
@@ -25,7 +26,9 @@ car.throttle = 0.15
 | `camera.value` / `read()` | CSI カメラ 224×224 BGR | sim の `/camera/image_raw` (実機の取り込みに合わせた画角・縦横比・歪み) |
 
 較正は実機ブリッジと同じファイル (`jetracer_bridge/config/jetracer_bridge.yaml`) を読むので、実機を較正すれば sim も同じ値になる。
-★ いまのスロットル写像 `map_v_us` は仮値 (0.15 → 1.2 m/s、0.2 → 2.0 m/s)。実機で測って入れること。
+較正値は 9/12 の実走ログからの推定 (jetracer_bridge.yaml): スロットルは `invert: true` (マイナスで前進)、
+throttle_gain 1.0 で −0.106 → 1.26 / −0.12 → 2.04 / −0.13 → 2.45 m/s (周回の平均車速から。不感帯の直上で敏感)、
+舵は中立 1681 µs (steering −0.22 で直進)・端点 1178 / 2002 µs。
 指令は 30 Hz で再送する (実機の PCA9685 はパルスを保持し続けるため)。プログラムが止まると sim 側は 300 ms で失効して止まる。
 
 ## 動かし方
@@ -37,6 +40,6 @@ ros2 launch minicar_sim sim_host.launch.py unity_player:=$HOME/jetracer/unity/pl
 # 車両ソフトを動かす側 (Jetson でも PC でも。ROS_DOMAIN_ID を揃える)
 source scripts/sim_env.sh
 jupyter lab            # この端末から起動したノートブックで import jetracer_compat が使える
-ros2 run jetracer_compat jetracer_compat_demo --throttle 0.15 --steering 0.3   # 動作確認 (右に曲がる)
+ros2 run jetracer_compat jetracer_compat_demo                    # 動作確認 (throttle −0.12・steering −0.22 で前進・ほぼ直進)
 ```
 依存: `traitlets` (JetRacer の環境には入っている。無ければ `sudo apt install python3-traitlets`)。

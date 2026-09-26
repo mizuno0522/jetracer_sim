@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
-"""動作確認: JetRacer 標準の書き方そのままで sim を動かす (一定スロットル + 画像の明暗で左右に振る簡易ドライバ)。
-  ros2 run jetracer_compat jetracer_compat_demo [--seconds 20] [--throttle 0.2] [--steering -0.3]"""
+"""動作確認: JetRacer 標準の書き方そのままで sim を動かす (一定の steering / throttle)。
+  ros2 run jetracer_compat jetracer_compat_demo [--seconds 10] [--throttle -0.12] [--steering -0.22]
+既定の gain / offset は 9/12 実走ロガーの値 (steering_gain −0.55・offset 0.12・throttle_gain 1.0)。
+この車は ★スロットルがマイナスで前進 (ESC の向き)、steering −0.22 でほぼ直進 (サーボの機械中立がずれている)。"""
 import argparse
 import time
 
@@ -13,10 +15,14 @@ def main():
 
     ap = argparse.ArgumentParser()
     ap.add_argument('--seconds', type=float, default=10.0)
-    ap.add_argument('--throttle', type=float, default=0.2)
-    ap.add_argument('--steering', type=float, default=0.0)
+    ap.add_argument('--throttle', type=float, default=-0.12)
+    ap.add_argument('--steering', type=float, default=-0.22)
+    ap.add_argument('--steering-gain', type=float, default=-0.55)
+    ap.add_argument('--steering-offset', type=float, default=0.12)
+    ap.add_argument('--throttle-gain', type=float, default=1.0)
     a, _ = ap.parse_known_args()
     car = NvidiaRacecar()
+    car.steering_gain, car.steering_offset, car.throttle_gain = a.steering_gain, a.steering_offset, a.throttle_gain
     camera = CSICamera(width=224, height=224, capture_fps=15)
     print('camera', camera.value.shape, camera.value.dtype)
     car.steering = a.steering
