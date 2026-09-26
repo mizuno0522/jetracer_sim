@@ -15,7 +15,7 @@ sim PC (Ubuntu 22.04.5・Humble desktop・AMD 内蔵 GPU = CUDA 無し・Unity 6
 | Unity プレイヤー | ソースはリポジトリの `unity/MinicarSim`、ビルドは `scripts/build_unity.sh` → `~/jetracer/unity/player`。他チーム向けはビルド済みを [Release v0.1.1](https://github.com/mizuno0522/jetracer_sim/releases/tag/v0.1.1) に置き `scripts/get_unity_player.sh` で取る |
 | カメラ幾何 (Unity) | `course.json` の `fx, fy, cx, cy, k1, k2`・`render_tan_*` で描く (下の節)。推定値 (高さ 0.148 m・下向き 50.9°・水平 144°/垂直 120°・fy/fx 1.78) で OpenCV 描画と一致 |
 | 他チームの JetRacer 標準コード | `jetracer_compat` で無改造のまま sim で走る (下の節)。v0.1.1 として公開 |
-| sim→real 画像変換 | FastCUT を CPU で学習中 (下の節) |
+| sim→real 画像変換 | 1 回目 (FastCUT) は失敗、標準 CUT で学習し直し中 (下の節) |
 
 ## カメラ幾何の Unity 実装と確認
 
@@ -42,11 +42,13 @@ sim PC (Ubuntu 22.04.5・Humble desktop・AMD 内蔵 GPU = CUDA 無し・Unity 6
   Release から取ったプレイヤーでも同じ結果。
 - 終了時のクラッシュ (`terminate called without an active exception`) は、spin を `spin_once` のループにして終了時に止めてから rclpy を閉じる形で解消。
 
-## sim→real 画像変換 (FastCUT、PC の CPU)
+## sim→real 画像変換 (CUT、PC の CPU)
 
 - 道具: `tools/sim2real/` ([README](../tools/sim2real/README.md))。venv は `scripts/setup_sim2real.sh` (`python3-venv` が無いこの PC では virtualenv で作る)。
-- 学習 `~/jetracer/runs/cut_001`: A = Unity 描画 (推定カメラ値・床テープの乱択化入り) 8 本 × 60 s から 3,700 枚、B = 9/12 の実画像 11,271 枚。
-  128 切り出し・FastCUT で 0.21 s/反復、3 万反復で約 1.8 時間。最初の 5,000 反復は仮のカメラ値の A で、そこから `--resume`。
+- 学習データ: A = Unity 描画 (推定カメラ値・床テープの乱択化入り) 8 本 × 60 s から 3,700 枚、B = 9/12 の実画像 11,271 枚。
+- 1 回目 `cut_001` (FastCUT・128 切り出し・0.21 s/反復) は**失敗**。19,000 反復で床に緑・水色の斑点が出た。色を保つ恒等 NCE を省く FastCUT は崩れやすく、
+  128 の切り出しも推論時の 224 全体と構図が合わなかった。
+- 2 回目 `cut_002` (標準 CUT・176 切り出し・0.56 s/反復・16,000 反復、約 2.5 時間) を学習中。
 - 推論は ONNX で約 57 ms/枚 (CPU)。走行中に挟むと画像の遅れが増えるので、記録済み bag を後から変換する (`convert_bag.py`)。
 - 変換した bag は学習データの一部だけに混ぜる (9/12 の会場に寄せきらない)。
 
@@ -54,7 +56,7 @@ sim PC (Ubuntu 22.04.5・Humble desktop・AMD 内蔵 GPU = CUDA 無し・Unity 6
 
 | 症状 | 原因 | 対処 |
 |---|---|---|
-| 自分の端末が落ちる | `pkill -f "<文字列>"` がその文字列を含む自分のシェルにも一致 | `scripts/stop_sim.sh` は実行ファイルのパスで先頭固定 (`^`)。手で止めるときは PID で |
+| 自分の端末が落ちる | `pkill -f "<文字列>"` や `kill $(pgrep -f "<文字列>")` がその文字列を含む自分のシェルにも一致 | `scripts/stop_sim.sh` は実行ファイルのパスで先頭固定 (`^`)。手で止めるときは `ps` で PID を確かめてから |
 | スクリプトから上げた launch が Ctrl-C で止まらない | 非対話シェルの `&` job は SIGINT 無視を継承 | `set -m` を付けてから起動 (`run_sim_local.sh`・`smoke_test.sh`・`record.sh`) |
 | `git pull --rebase` が「unstaged changes」で止まる | Unity のビルドが `Assets/Scenes/Minicar.unity` を毎回書き換える | ビルド後は `git checkout -- unity/MinicarSim/Assets/Scenes/Minicar.unity` |
 | venv が作れない | `python3.10-venv` が未導入 (sudo が要る) | `setup_sim2real.sh` が virtualenv に切り替える |

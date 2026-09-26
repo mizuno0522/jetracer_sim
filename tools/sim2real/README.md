@@ -14,16 +14,16 @@ source scripts/sim_env.sh
 $PY tools/sim2real/extract_frames.py "bags/ep_20*" -o ~/jetracer/data/sim_frames --every 2
 # B = 実画像: ~/jetracer/data/real_260912 (zip を展開したもの)
 
-# 2. 学習 (CPU。FastCUT・128 切り出しで約 0.21 s/反復 → 3 万反復で約 1.8 時間。--resume で続きから)
+# 2. 学習 (CPU。標準 CUT・176 切り出しで約 0.56 s/反復 → 16,000 反復で約 2.5 時間。--resume で続きから)
 $PY tools/sim2real/train_cut.py --sim ~/jetracer/data/sim_frames --real ~/jetracer/data/real_260912 \
-    --out ~/jetracer/runs/cut_001 --iters 30000 --crop 128 --fast
-#   → runs/cut_001/samples/*.png で途中経過、終了時に G.onnx
+    --out ~/jetracer/runs/cut_002 --iters 16000 --crop 176
+#   → runs/cut_002/samples/*.png で途中経過、終了時に G.onnx
 
 # 3. 幾何が保たれているか (変換前後のエッジの一致。中央値 ≥ 0.6 で合格)
-$PY tools/sim2real/eval_geometry.py --model ~/jetracer/runs/cut_001/G.onnx --sim ~/jetracer/data/sim_frames --grid /tmp/s2r.png
+$PY tools/sim2real/eval_geometry.py --model ~/jetracer/runs/cut_002/G.onnx --sim ~/jetracer/data/sim_frames --grid /tmp/s2r.png
 
 # 4. bag を変換 (画像だけ差し替え、stamp とほかのトピックはそのまま) → bags/<元>_s2r/
-$PY tools/sim2real/convert_bag.py "bags/ep_20*" --model ~/jetracer/runs/cut_001/G.onnx
+$PY tools/sim2real/convert_bag.py "bags/ep_20*" --model ~/jetracer/runs/cut_002/G.onnx
 ```
 
 - 画面下端の柱は学習させない: 入力の柱を両ドメインとも同じ色で塗り、変換後は入力の画素で上書き (`common.py`)。
@@ -34,8 +34,13 @@ $PY tools/sim2real/convert_bag.py "bags/ep_20*" --model ~/jetracer/runs/cut_001/
 
 ## 現状 (2026-09-26)
 
-- `~/jetracer/runs/cut_001` を学習中。A は推定カメラ値 (高さ 0.148 m・下向き 50.9°・fy/fx 1.78) と床テープの乱択化入りの Unity 描画 8 本 (3,700 枚)、
-  B は 9/12 MEC の実画像 11,271 枚。最初の 5,000 反復は仮のカメラ値の A で、そこから `--resume` で 3 万反復まで。
-- 途中経過は `runs/cut_001/samples/NNNNNN.png` (上段 = sim、下段 = 変換後、右端 = 実画像)。
+| 学習 | 設定 | 結果 |
+|---|---|---|
+| `runs/cut_001` | FastCUT (`--fast`)・128 切り出し・0.21 s/反復 | **失敗**。19,000 反復で床に緑・水色の斑点が出て、実画像とかけ離れた (色を保つ恒等 NCE が無く崩れやすい。128 の切り出しと推論時の 224 全体の構図も合わない)。止めた |
+| `runs/cut_002` | 標準 CUT (恒等 NCE あり・λ_NCE 1)・176 切り出し・0.56 s/反復・16,000 反復 (約 2.5 時間) | 学習中 |
+
+- A: 推定カメラ値 (高さ 0.148 m・下向き 50.9°・fy/fx 1.78) と床テープの乱択化入りの Unity 描画 8 本 (3,700 枚)。B: 9/12 MEC の実画像 11,271 枚。
+- 途中経過は `runs/<名前>/samples/NNNNNN.png` (上段 = sim、下段 = 変換後、右端の列 = 実画像)。
+- **CPU で急ぐときも `--fast` は使わない**。色が崩れた。切り出しは推論の 224 に近い大きさ (176 以上) にする。
 - 終わったら `eval_geometry.py` で幾何が保たれているかを確かめてから `convert_bag.py` を使う。
 - カメラを実機のチェッカーボード較正で確定させたら、A を撮り直して `--resume` で追加学習する。
