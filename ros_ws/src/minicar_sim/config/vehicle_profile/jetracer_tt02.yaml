@@ -50,7 +50,7 @@ vehicle_profile:
     realism:
       enable: true
       supersample: 2              # 2 倍で描いて縮小 (実画像の柔らかさと AA)
-      k1: -0.08                   # Brown 樽型 (正規化半径)。★チェッカーボードで測ったら置き換える
+      k1: 0.0                     # ★0 で無効。SensorPost は「出力画素→サンプル位置 r(1+k1 r²)」なので樽型は k1>0 (-0.08 は糸巻き型だった)。カメラ幾何の推定 (Jetson 側) の結果で置き換える
       k2: 0.0
       zoom: 1.0
       vignette: 0.16              # 端で 16 % 暗い

@@ -688,8 +688,11 @@ namespace Minicar
                         Line(new Vector2(w.x0, w.y0), new Vector2(w.x1, w.y1), 1.3f);
                 Flush(color == "red" ? new Color(1f, 0.42f, 0.42f, 0.95f) : new Color(0.88f, 0.92f, 1f, 0.9f));
             }
-            // 中心線
-            for (int s = 0; s < m_Center.Length - 1; s++) Line(m_Center[s], m_Center[s + 1], 1.6f);
+            // 中心線 (白)。参照線 (route.yaml) があるときは車はそちらを走るので描かない (白と橙の 2 本が紛らわしい)。
+            // 周回・セクタの判定は描画と無関係に中心線で行う
+            bool hasRef = m_Data.reference_line != null && m_Data.reference_line.Length >= 6;
+            if (!hasRef)
+                for (int s = 0; s < m_Center.Length - 1; s++) Line(m_Center[s], m_Center[s + 1], 1.6f);
 
             Flush(Color.white);
             // 参照線 (route.yaml)。中心線と別色 (橙) で重ねる。無ければ描かない
