@@ -1,6 +1,6 @@
 # JetRacer sim
 
-> **他チームの方へ**: JetRacer ベースのソフトをこの sim で走らせる手順は [docs/for_teams.md](docs/for_teams.md) (v0.1.1・試用版。信頼度の表を先に読んでください)。ビルド済み Unity プレイヤーは [Release v0.1.1](https://github.com/mizuno0522/jetracer_sim/releases/tag/v0.1.1)。
+> **他チームの方へ**: JetRacer ベースのソフトをこの sim で走らせる手順は [docs/for_teams.md](docs/for_teams.md) (v0.2.0・試用版。信頼度の表を先に読んでください)。ビルド済み Unity プレイヤーは [Release v0.2.0](https://github.com/mizuno0522/jetracer_sim/releases/tag/v0.2.0)。
 
 自動運転ミニカーバトル 2026 のコースを **JetRacer ベースの車両 (Tamiya TT-02 4WD ＋ Jetson Orin Nano ＋ CSI カメラ ＋ 6 軸 IMU)** で走らせるための、ROS 2 ＋ Unity シミュレータ。
 [minicarbattle2026](https://github.com/mizuno0522/minicarbattle2026) の既存 sim (物理 `vehicle_sim`・Unity 描画) を転用し、**差し替えたのはブリッジ 1 枚とセンサ合成 (`imu_sim`) だけ**。物理・描画・`/actuator_cmd` の境界は動かしていない。
@@ -99,7 +99,7 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 | ✅ 記録と録画 | `scripts/record.sh` (seed を変えて rosbag を N 本)・`record:=` (Unity 表示を mp4)・`tools/record_video.py` (車が見ている画を mp4) |
 | ✅ sim→real 画像変換 | CUT を PC の CPU で学習 (3 回目で合格、形の一致 F 値 0.83)。記録済みの bag を後から変換し、学習データの一部だけに混ぜる。自分の実画像で作り直す手順は [docs/sim2real.md](docs/sim2real.md) |
 | ✅ Jetson の画面をネット越しに | `scripts/setup_vnc.sh` (仮想ディスプレイ) / `--mirror` (普段の画面)。Mac からは SSH トンネル ([docs/setup.md](docs/setup.md)) |
-| ✅ **他チームの JetRacer 標準コードを sim で走らせる** | `jetracer_compat` (NvidiaRacecar / jetcam CSICamera の互換クラス)。先頭に 2 行足すだけで、元のコードは無改造。**v0.1.1** として公開 ([docs/for_teams.md](docs/for_teams.md)) |
+| ✅ **他チームの JetRacer 標準コードを sim で走らせる** | `jetracer_compat` (NvidiaRacecar / jetcam CSICamera の互換クラス)。先頭に 2 行足すだけで、元のコードは無改造。**v0.1.1** で公開 (最新 v0.2.0) ([docs/for_teams.md](docs/for_teams.md)) |
 | 🟡 舵とスロットル | 9/12 の実走ログから推定: **スロットルはマイナスで前進** (中立より下のパルス)、steering −0.22 で直進 (中立 1681 µs)、平均車速 −0.106 → 1.26 〜 −0.130 → 2.45 m/s。車体を持ち上げた実測で確定させる |
 | 🟡 カメラの幾何 | 実走画像から推定して反映 (高さ 0.148 m・ピッチ 50.9°・水平 144°/垂直 120°・fy/fx 1.78)。旧値 (0.12 m・12°・120° 正方) は実機と大きくずれていた。**チェッカーボード較正 (`tools/camera_calib.py`) で確定させる** |
 | ⬜ **実機の較正** | δmax・舵の端点と実現率・ESC の写像・IMU 5 測定・カメラ。今の値はすべて実走ログや画像からの推定か仮値。**ここが全部の前提** ([docs/calibration.md](docs/calibration.md)) |
@@ -112,7 +112,7 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 ## 開発の進め方 (このリポジトリを直す人向け)
 
 - Jetson (車両側・較正) と sim PC (Unity・学習) の 2 か所から同じ `main` に push する。**push の前に必ず `git pull --rebase`**。同じファイルを同時に直さないよう、担当を分ける (Jetson: `jetracer_common`・`minicar_sim`・`jetracer_bridge`・`jetracer_stack`・tools の較正系 / PC: `unity/`・`jetracer_compat`・`tools/sim2real`・Unity 系の scripts)
-- 他チームに渡す版はタグ (`v0.1.1` など) で固定し、Unity プレイヤーは同じ名前の GitHub Release に添付する。`main` を進めても他チームの手元は変わらない。版を上げるときはタグと Release を両方作る
+- 他チームに渡す版はタグ (`v0.2.0` など) で固定し、Unity プレイヤーは同じ名前の GitHub Release に添付する。`main` を進めても他チームの手元は変わらない。版を上げるときはタグと Release を両方作る
 - 数値の定義元は 1 か所: 車両・カメラは `vehicle_profile/jetracer_tt02.yaml`、舵とスロットルの較正は `jetracer_bridge/config/jetracer_bridge.yaml`。値を変えたら `./scripts/test.sh` と `tools/lap_eval.py` で閉ループを確かめる
 
 ## ドキュメント
