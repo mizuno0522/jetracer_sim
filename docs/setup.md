@@ -63,8 +63,11 @@ cat /etc/nv_tegra_release                       # R36 (release), REVISION: 4.x
 | /camera/image_raw (OpenCV 描画) | 5 ms | 33 ms | stamp は描画後なので描画時間は含まない。Unity 描画は stamp = 姿勢の sim 時刻なので描画時間込みになる (要別測) |
 | /imu | 12 ms | 44 ms | imu_sim の遅延モデル (base 4 ms ＋ ジッタ) 込み |
 | /sim/ground_truth | 1 ms | 31 ms | |
+| **/camera/image_raw (Unity 描画)** | **64 ms** | 90 ms | stamp = 姿勢の sim 時刻。描画 ＋ ROS-TCP-Endpoint ＋ DDS 込み (PC ローカルで 62 ms、有線で +2〜5 ms)。既存記録の 0.07〜0.10 s より少し良い (224×224)。failsafe の 150 ms に余裕 |
+| /imu (Unity 時) | 8 ms | 22 ms | |
+| /actuator_cmd (Jetson → PC、往路) | 0.8 ms | 1.3 ms | PC 側で計測 |
 
-1 台 (localhost) の既存記録「画像 0.07〜0.10 s」は Unity 描画込みの値。有線区間そのものは数 ms で、設計の見積りどおり。**計測は `ros2 topic hz`/`delay` か 1 トピックだけの購読者で。複数トピックを 1 つの spin_once ループで受けると Orin Nano では取りこぼす。**
+1 台 (localhost) の既存記録「画像 0.07〜0.10 s」は Unity 描画込みの値で、2 ホストでも 64 ms。有線区間そのものは数 ms で、設計の見積りどおり。Unity 描画・2 ホストでの閉ループも 24.0 s/周・衝突 0・cte p95 0.10 m (OpenCV 描画と同じ = 教師は画像を見ていないので当然。画像を見る policy_net で差が出るかはこれから)。**画像と IMU の相対遅れは Unity で 64 − 8 = 56 ms、OpenCV で 5 − 12 = −7 ms**。学習データは Unity で取る前提なので、実機のカメラ遅延 (露光 → 受信) をこの 56 ms に合わせるか、imu_sim の latency を実機に合わせるかを較正で決める (docs/calibration.md)。**計測は `ros2 topic hz`/`delay` か 1 トピックだけの購読者で。複数トピックを 1 つの spin_once ループで受けると Orin Nano では取りこぼす。**
 
 
 ```bash
