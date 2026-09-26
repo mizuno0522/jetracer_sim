@@ -17,6 +17,7 @@ namespace Minicar
         Material m_CarpetMat;
         Color m_CarpetBase = Color.white;
         Transform m_Spectators;
+        Transform m_Tapes;
 
         Material m_Lit, m_Unlit;
         Transform m_Root;
@@ -497,7 +498,54 @@ namespace Minicar
             }
             if (Realism.episode_spectators && Realism.spectators > 0)
                 BuildSpectators(Realism.spectator_seed + (int)(seed % 100000));
+            BuildTapes(new System.Random(unchecked((int)(seed * 2654435761u))));
             Debug.Log($"[CourseBuilder] episode seed={seed}: light {m_Ceiling?.intensity:F2} ambient x{a:F2}");
+        }
+
+        // 床の白テープ (幅 5 cm)。走路の中心線上のランダムな位置に、走路にほぼ直交して 0〜N 本。
+        // 規約のスタートライン (下段レーン x ≈ 2.7 / 4.6 / 6.5 m) はそれぞれ確率 start_line_prob で。
+        void BuildTapes(System.Random rng)
+        {
+            if (m_Tapes != null) Destroy(m_Tapes.gameObject);
+            m_Tapes = new GameObject("Tapes").transform;
+            m_Tapes.SetParent(m_Root, false);
+            var r = Realism;
+            float[] c = (Data.reference_line != null && Data.reference_line.Length >= 6) ? Data.reference_line : Data.centerline_shortcut;
+            float R() => (float)rng.NextDouble();
+            Material Tape()
+            {
+                byte g = (byte)(205 + rng.Next(0, 45));
+                return Lit(new Color32(g, g, (byte)Mathf.Max(0, g - rng.Next(0, 12)), 255), null, 0.35f);
+            }
+            void Strip(Vector2 mid, Vector2 along, float len, float w, Material mat)
+            {
+                // along = テープの長手方向 (単位)、幅方向はそれに直交
+                Vector2 n = new Vector2(-along.y, along.x) * (w * 0.5f), a = along * (len * 0.5f);
+                const float z = 0.0065f;
+                Vector3 P(Vector2 p) => RosFrame.ToUnity(p.x, p.y, z);
+                var go = MeshObject("Tape", QuadMesh(P(mid - a + n), P(mid + a + n), P(mid + a - n), P(mid - a - n), RosFrame.ToUnity(0f, 0f, 1f)), mat);
+                go.transform.SetParent(m_Tapes, true);
+            }
+            int m = c != null ? c.Length / 2 : 0;
+            int nTapes = m >= 3 ? rng.Next(0, Mathf.Max(0, r.episode_tapes_max) + 1) : 0;
+            for (int k = 0; k < nTapes; k++)
+            {
+                int i = rng.Next(0, m);
+                int j = (i + 1) % m;
+                var p0 = new Vector2(c[i * 2], c[i * 2 + 1]);
+                var t = (new Vector2(c[j * 2], c[j * 2 + 1]) - p0).normalized;
+                float ang = (R() * 2f - 1f) * r.tape_angle_deg * Mathf.Deg2Rad;
+                var across = new Vector2(-t.y, t.x);
+                across = new Vector2(across.x * Mathf.Cos(ang) - across.y * Mathf.Sin(ang), across.x * Mathf.Sin(ang) + across.y * Mathf.Cos(ang));
+                float len = Mathf.Lerp(r.tape_len_min_m, r.tape_len_max_m, R());
+                float w = r.tape_width_m * (0.8f + 0.4f * R());
+                Strip(p0, across, len, w, Tape());
+            }
+            if (r.start_line_x != null)
+                foreach (float x in r.start_line_x)
+                    if (R() < r.start_line_prob)
+                        Strip(new Vector2(x, 0.5f * (r.start_line_y0 + r.start_line_y1)), new Vector2(0f, 1f),
+                              r.start_line_y1 - r.start_line_y0, r.tape_width_m, Tape());
         }
 
         void BuildVenueLighting()

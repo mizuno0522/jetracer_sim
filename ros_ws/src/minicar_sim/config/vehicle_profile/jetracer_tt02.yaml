@@ -81,6 +81,16 @@ vehicle_profile:
       episode_tint_range: 0.04      # 床・照明の色味 ± r
       episode_ambient_range: 0.15   # 環境光 ×(1 ± r)
       episode_spectators: true      # 観戦者の配置も引き直す
+      # 床を横切る白テープ。会場ごとに有無・位置が違う (9/12 MEC は完全なコースではない) ので固定では描かず乱択化
+      episode_tapes_max: 6          # 走路上のランダムな位置に 0〜N 本 (走路にほぼ直交 ±tape_angle_deg)
+      tape_width_m: 0.05
+      tape_angle_deg: 10
+      tape_len_min_m: 0.6
+      tape_len_max_m: 0.9
+      start_line_prob: 0.5          # 規約のスタートライン 1/2/3 (p.24 の図から目読み x ≈ 2.7/4.6/6.5 m ±0.1、下段レーン y 0.5〜1.9)
+      start_line_x: [2.7, 4.6, 6.5]
+      start_line_y0: 0.5
+      start_line_y1: 1.9
       # 壁の板はレギュレーション p.24 のとおり 1 枚ごとに赤か白の単色 (配色は course.py の WALL_COLORS)。
       # 色は流用元の値 (2025 車載画像で合わせたもの)。実画像の測定値 (赤 BGR 66,70,141) は露出で暗いので使わない
       wall_white_r: 226

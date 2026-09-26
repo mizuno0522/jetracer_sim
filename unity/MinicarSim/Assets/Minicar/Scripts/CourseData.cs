@@ -83,6 +83,14 @@ namespace Minicar
         public float episode_tint_range = 0.04f;    // 床・照明の色味 ± r (RGB 各)
         public float episode_ambient_range = 0.15f; // 環境光 ×(1 ± r)
         public bool episode_spectators = true;      // 観戦者の配置も引き直す
+        // 床を横切る白テープ (会場ごとに有無・位置が違うので固定では描かない。エピソードごとに乱択)
+        public int episode_tapes_max = 6;           // 走路上のランダムな位置に 0〜N 本 (走路にほぼ直交 ±tape_angle_deg)
+        public float tape_width_m = 0.05f;
+        public float tape_angle_deg = 10f;
+        public float tape_len_min_m = 0.6f, tape_len_max_m = 0.9f;
+        public float start_line_prob = 0.5f;        // 規約のスタートライン 1/2/3 (下段レーン) をそれぞれこの確率で出す
+        public float[] start_line_x = { 2.7f, 4.6f, 6.5f };
+        public float start_line_y0 = 0.5f, start_line_y1 = 1.9f;
         public float wall_white_r = 193f, wall_white_g = 192f, wall_white_b = 191f;
         public float wall_red_r = 141f, wall_red_g = 70f, wall_red_b = 67f;
         public float carpet_r = 117f, carpet_g = 115f, carpet_b = 112f;
