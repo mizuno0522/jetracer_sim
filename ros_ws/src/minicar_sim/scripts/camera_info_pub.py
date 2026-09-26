@@ -32,7 +32,7 @@ class CameraInfoPub(Node):
         self.info.width = g.w
         self.info.height = g.out_height
         self.info.distortion_model = 'plumb_bob'
-        self.info.d = [float(v) for v in cam.get('D', [0.0, 0.0, 0.0, 0.0, 0.0])]
+        self.info.d = [float(v) for v in g.D()]           # plumb_bob [k1, k2, 0, 0, 0] (CamGeom と同じ)
         self.info.k = [float(v) for v in K.flatten()]
         self.info.r = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
         self.info.p = [float(K[0, 0]), 0.0, float(K[0, 2]), 0.0,
@@ -42,7 +42,8 @@ class CameraInfoPub(Node):
                          history=QoSHistoryPolicy.KEEP_LAST, depth=1)
         self.pub = self.create_publisher(CameraInfo, '/camera/camera_info', qos)
         self.create_subscription(Image, '/camera/image_raw', self.cb, qos)
-        self.get_logger().info(f"camera_info: {g.w}x{g.out_height} f={g.f:.1f}px")
+        self.get_logger().info(f"camera_info: {g.w}x{g.out_height} fx={g.fx:.1f} fy={g.fy:.1f} "
+                               f"k1={g.k1:+.3f} k2={g.k2:+.3f}")
 
     def cb(self, msg):
         self.info.header.stamp = msg.header.stamp

@@ -44,6 +44,31 @@ def _profile_camera(name):
     return load_profile(find_profile(name))['camera']
 
 
+def _camera_block(cam):
+    """course.json の camera。★定義元は vehicle_profile.camera、式は jetracer_common.cam_geom (OpenCV plumb_bob)。
+    Unity は次の手順で描く (vehicle_sim の OpenCV 描画と同じ):
+      1. ピンホールで、正規化座標 x ∈ [render_tan_x0, render_tan_x1]、y ∈ [render_tan_y0, render_tan_y1] の範囲を描く
+         (歪みがあると出力の端はピンホールでより外側を見ているので、出力より広く描く)
+      2. 出力画素 (u, v) ごとに xd = (u + 0.5 − cx) / fx, yd = (v + 0.5 − cy) / fy を、
+         x = xd / (1 + k1 r² + k2 r⁴) (r² = x² + y²) の不動点反復 (5〜10 回) で逆歪みして、ピンホール画像の (x, y) を引く
+      fov_deg は旧形式 (歪み無し・正方画素) の互換用。fx/fy/k1/k2 がある Unity はそちらを使うこと。"""
+    from jetracer_common.cam_geom import CamGeom
+    g = CamGeom.from_profile(cam)
+    x0, x1, y0, y1 = g.undistorted_extent()
+    th, tv = g.true_fov_deg()
+    return dict(width=int(cam['width']), height=int(cam['height']),
+                fov_deg=min(170.0, float(cam['hfov_deg'])),
+                fx=round(g.fx, 4), fy=round(g.fy, 4), cx=round(g.cx, 4), cy=round(g.cy, 4),
+                k1=g.k1, k2=g.k2,
+                render_tan_x0=round(x0, 5), render_tan_x1=round(x1, 5),
+                render_tan_y0=round(y0, 5), render_tan_y1=round(y1, 5),
+                true_hfov_deg=round(th, 2), true_vfov_deg=round(tv, 2),
+                mount_height_m=float(cam['mount_height_m']),
+                pitch_deg=float(cam['pitch_deg']),
+                crop_top_frac=float(cam.get('crop_top_frac', 0.0)),
+                rate_hz=float(cam.get('rate_hz', 15.0)))
+
+
 def build(profile=DEFAULT_PROFILE, route=None):
     p = _sim_yaml()
     v = _sim_yaml('sim_viz')
@@ -76,13 +101,7 @@ def build(profile=DEFAULT_PROFILE, route=None):
                    bar_z=LIGHT_RIG['bar_z'], leg_r=LIGHT_RIG['leg_r']),
         tunnel_height_m=1.33,            # レギュレーション: 高さ 133cm・上部 OPEN
         # ★ vehicle_profile.camera が定義元 (224×224・15 Hz の凍結値もここから)
-        camera=dict(width=int(cam['width']),
-                    height=int(cam['height']),
-                    fov_deg=min(170.0, float(cam['hfov_deg'])),
-                    mount_height_m=float(cam['mount_height_m']),
-                    pitch_deg=float(cam['pitch_deg']),
-                    crop_top_frac=float(cam.get('crop_top_frac', 0.0)),
-                    rate_hz=float(cam.get('rate_hz', 15.0))),
+        camera=_camera_block(cam),
         # 実カメラ風の後処理と会場の演出 (Unity のみ)。無ければ Unity 側の既定 (オフ)
         realism=cam.get('realism', {'enable': False}),
         # RViz (sim_viz) と同じ表示仕様: 走行軌跡の速度色と凡例バー

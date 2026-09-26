@@ -217,7 +217,10 @@ class VehicleSim(Node):
         self.declare_parameter('start_offset_m', 0.0)
         self.declare_parameter('cam_width', 320)
         self.declare_parameter('cam_height', 240)
-        self.declare_parameter('cam_fov_deg', 120.0)   # 既定は sim.yaml と同値
+        self.declare_parameter('cam_fov_deg', 120.0)   # 既定は sim.yaml と同値 (ピンホール等価の水平画角 = fx)
+        self.declare_parameter('cam_vfov_deg', 0.0)    # 0 = 正方画素 (fy = fx)。取り込みを縮めて正方形にしていると fy ≠ fx
+        self.declare_parameter('cam_k1', 0.0)          # 半径方向の歪み (OpenCV plumb_bob。k1 < 0 で樽型)
+        self.declare_parameter('cam_k2', 0.0)
         self.declare_parameter('cam_mount_height_m', 0.12)
         self.declare_parameter('cam_pitch_deg', 12.0)      # 下向き
         # 実機 camera_node の crop_top_frac と一致させること
@@ -435,10 +438,16 @@ class VehicleSim(Node):
                 f"cam_fov_deg={fov_deg:.0f} はピンホール描画では表現できない。"
                 f"170 度に丸めた (魚眼の中心側だけを写す扱い)")
             fov_deg = 170.0
-        fov = math.radians(max(10.0, fov_deg))
-        self.cam_f = (self.cam_w / 2.0) / math.tan(fov / 2.0)
-        self.cam_cx = self.cam_w / 2.0
-        self.cam_cy = self.cam_h / 2.0
+        fov_deg = max(10.0, fov_deg)
+        # ★ カメラの幾何は CamGeom (jetracer_common) が定義元。ラベル・cmd_shaper・camera_info と同じ式
+        self._cam_model = CamGeom(self.cam_w, self.cam_h, fov_deg, self.cam_hm,
+                                  math.degrees(self.cam_pitch),
+                                  vfov_deg=float(p('cam_vfov_deg').value),
+                                  k1=float(p('cam_k1').value), k2=float(p('cam_k2').value))
+        g = self._cam_model
+        self.cam_f = g.fx                      # 互換 (ログ表示)
+        self.cam_cx, self.cam_cy = g.cx, g.cy
+        self._setup_render_canvas(g)
         # 実機 camera_node の crop_top_frac と同じ量を配信直前に捨てる。
         # 描画は cam_h のまま行い、切るのは publish_camera の最後だけ
         # (地平線や標識の描画式はクロップ前の cam_cy を前提にしている)。
@@ -570,9 +579,11 @@ class VehicleSim(Node):
             self.get_logger().info(f"参照線: {route_file} ({p('route_name').value}) 全長 {self.ref.total:.2f} m")
         else:
             self.ref = ReferenceLine(self.course.center)
+        g0 = self._cam_model
         self.cam_geom = CamGeom(self.cam_w, self.cam_h, fov_deg, self.cam_hm,
                                 math.degrees(self.cam_pitch),
-                                float(p('cam_crop_top_frac').value))
+                                float(p('cam_crop_top_frac').value),
+                                vfov_deg=float(p('cam_vfov_deg').value), k1=g0.k1, k2=g0.k2)
         # ★ vehicle_profile の drivetrain は front/rear/all/4wd_locked
         if self.drive not in ('front', 'rear', 'all', '4wd_locked'):
             self.get_logger().error(f"drivetrain='{self.drive}' は不明。all として扱う")
@@ -1584,6 +1595,33 @@ class VehicleSim(Node):
         return np.array([s['x'], (y0 + y1) / 2.0,
                          s['board_z0'] + s['board_h'] / 2.0])
 
+    def _setup_render_canvas(self, g):
+        """OpenCV 描画のキャンバス。歪みがあると出力の端はピンホールでより外側を見ているので、
+        その範囲 (CamGeom.undistorted_extent) をピンホールで描いてから cv2.remap で出力へ写す。"""
+        if not g.distorted:
+            self._rw, self._rh = self.cam_w, self.cam_h
+            self._rfx, self._rfy, self._rcx, self._rcy = g.fx, g.fy, g.cx, g.cy
+            self._remap = None
+            return
+        x0, x1, y0, y1 = g.undistorted_extent()
+        pad = 2
+        rw = int(math.ceil((x1 - x0) * g.fx)) + 2 * pad
+        rh = int(math.ceil((y1 - y0) * g.fy)) + 2 * pad
+        if rw > 4 * self.cam_w or rh > 4 * self.cam_h:
+            self.get_logger().warn(f"歪みが強くキャンバスが大きい ({rw}×{rh})。4 倍で打ち切る (端が伸びる)")
+            rw, rh = min(rw, 4 * self.cam_w), min(rh, 4 * self.cam_h)
+        self._rw, self._rh = rw, rh
+        self._rfx, self._rfy = g.fx, g.fy
+        self._rcx, self._rcy = -x0 * g.fx + pad, -y0 * g.fy + pad
+        us, vs = np.meshgrid(np.arange(self.cam_w, dtype=np.float64) + 0.5,
+                             np.arange(self.cam_h, dtype=np.float64) + 0.5)
+        xu, yu = g.undistort((us - g.cx) / g.fx, (vs - g.cy) / g.fy)
+        self._remap = ((xu * g.fx + self._rcx - 0.5).astype(np.float32),
+                       (yu * g.fy + self._rcy - 0.5).astype(np.float32))
+        th, tv = g.true_fov_deg()
+        self.get_logger().info(f"カメラ: fx {g.fx:.1f} fy {g.fy:.1f} k1 {g.k1:+.3f} k2 {g.k2:+.3f} → "
+                               f"見込み角 水平 {th:.0f}°・垂直 {tv:.0f}° (キャンバス {rw}×{rh})")
+
     def _cam_basis(self):
         """カメラ姿勢: 車の yaw ＋ 下向き pitch。x=右, y=下, z=前 の正規直交基底。"""
         psi, phi = self.yaw, self.cam_pitch
@@ -1600,8 +1638,8 @@ class VehicleSim(Node):
         v = np.asarray(pts, float) - C
         zc = v @ zh
         safe = np.where(np.abs(zc) < 1e-6, 1e-6, zc)
-        u = self.cam_cx + self.cam_f * (v @ xh) / safe
-        w = self.cam_cy + self.cam_f * (v @ yh) / safe
+        u = self._rcx + self._rfx * (v @ xh) / safe
+        w = self._rcy + self._rfy * (v @ yh) / safe
         return np.stack([u, w], axis=1), zc
 
     def _horizon_row(self):
@@ -1610,8 +1648,8 @@ class VehicleSim(Node):
                          self.y + 500.0 * math.sin(self.yaw), 0.0]])
         uv, zc = self._project(far)
         if zc[0] <= 0:
-            return self.cam_h // 3
-        return int(np.clip(uv[0, 1], 0, self.cam_h))
+            return self._rh // 3
+        return int(np.clip(uv[0, 1], 0, self._rh))
 
     # -----------------------------------------------------------------
     # 赤白ウォールとカーペット
@@ -1698,7 +1736,7 @@ class VehicleSim(Node):
         # 画面外の板を捨てる
         umin, umax = uv[:, :, 0].min(axis=1), uv[:, :, 0].max(axis=1)
         vmin, vmax = uv[:, :, 1].min(axis=1), uv[:, :, 1].max(axis=1)
-        on_screen = (umax > 0) & (umin < self.cam_w) & (vmax > 0) & (vmin < self.cam_h)
+        on_screen = (umax > 0) & (umin < self._rw) & (vmax > 0) & (vmin < self._rh)
 
         order = np.argsort(-depth)
         for i in order:
@@ -1785,7 +1823,7 @@ class VehicleSim(Node):
         here = surface_at(self.x, self.y)
         base = self._AREA_COLOR.get(here)
         if base is not None:
-            horizon = int(np.clip(self._horizon_row(), 0, self.cam_h))
+            horizon = int(np.clip(self._horizon_row(), 0, self._rh))
             img[horizon:] = base
 
         # 近いセルだけに絞る → 残り全部を 1 回で射影する
@@ -1804,8 +1842,8 @@ class VehicleSim(Node):
         ok = np.all(zc > 0.08, axis=1)                  # 四隅ともカメラ前方
         umin, umax = uv[:, :, 0].min(axis=1), uv[:, :, 0].max(axis=1)
         vmin, vmax = uv[:, :, 1].min(axis=1), uv[:, :, 1].max(axis=1)
-        ok &= (umax >= 0) & (umin <= self.cam_w) & \
-              (vmax >= 0) & (vmin <= self.cam_h)
+        ok &= (umax >= 0) & (umin <= self._rw) & \
+              (vmax >= 0) & (vmin <= self._rh)
         if not np.any(ok):
             return
         # 遠いセルから描く (画家のアルゴリズム。重なりの前後を正しく)
@@ -1842,7 +1880,7 @@ class VehicleSim(Node):
         ok = (zc > 0.12)
         u = np.rint(uv[:, 0]).astype(int)
         v = np.rint(uv[:, 1]).astype(int)
-        ok &= (u >= 0) & (u < self.cam_w) & (v >= 0) & (v < self.cam_h)
+        ok &= (u >= 0) & (u < self._rw) & (v >= 0) & (v < self._rh)
         if not np.any(ok):
             return
         u, v, shade = u[ok], v[ok], shade[ok]
@@ -1943,8 +1981,8 @@ class VehicleSim(Node):
             return
         dst = uv.astype(np.float32)
         # 画面から大きく外れていれば描かない
-        if dst[:, 0].max() < 0 or dst[:, 0].min() > self.cam_w or \
-           dst[:, 1].max() < 0 or dst[:, 1].min() > self.cam_h:
+        if dst[:, 0].max() < 0 or dst[:, 0].min() > self._rw or \
+           dst[:, 1].max() < 0 or dst[:, 1].min() > self._rh:
             return
         # 裏側は黒いプラダン (レギュレーション p.30 の背面図)。表を貼ったままだと
         # 通過後に後ろから矢印が見えてしまい、検出器が誤った向きを掴む。
@@ -1956,9 +1994,9 @@ class VehicleSim(Node):
         th, tw = tex.shape[:2]
         src = np.array([[0, 0], [tw - 1, 0], [tw - 1, th - 1], [0, th - 1]], np.float32)
         Hm = cv2.getPerspectiveTransform(src, dst)
-        warped = cv2.warpPerspective(tex, Hm, (self.cam_w, self.cam_h))
+        warped = cv2.warpPerspective(tex, Hm, (self._rw, self._rh))
         mask = cv2.warpPerspective(np.full((th, tw), 255, np.uint8), Hm,
-                                   (self.cam_w, self.cam_h))
+                                   (self._rw, self._rh))
         img[mask > 0] = warped[mask > 0]
 
     def _draw_opponents(self, img):
@@ -2006,7 +2044,7 @@ class VehicleSim(Node):
         # 誰も見ていないなら描かない (検出器を止めた実行を軽くするため)
         if self.pub_cam.get_subscription_count() == 0:
             return
-        W, H = self.cam_w, self.cam_h
+        W, H = self._rw, self._rh
         img = np.empty((H, W, 3), np.uint8)
         horizon = int(np.clip(self._horizon_row(), 0, H))
         img[:horizon] = (110, 110, 110)      # 会場(中庸グレー)
@@ -2019,6 +2057,10 @@ class VehicleSim(Node):
             self._draw_walls(img)
         self._draw_opponents(img)
         self._draw_arrow_board(img)
+        # ピンホールのキャンバス → 歪んだ出力画像 (樽型・fx≠fy)。歪み無しなら恒等なので飛ばす
+        if self._remap is not None:
+            img = cv2.remap(img, self._remap[0], self._remap[1], cv2.INTER_LINEAR,
+                            borderMode=cv2.BORDER_REPLICATE)
 
         # --- 区間ごとの照明 (①トンネルの暗転 / ③ライトかく乱) ---
         gain, tint, desat = self._scene_light()
