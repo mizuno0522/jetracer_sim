@@ -85,11 +85,22 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 
 ## 現状 (2026-09-26)
 
-- ✅ この Jetson (Orin Nano・JetPack 6.2.1・Humble) で **ビルド・単体テスト・閉ループ (realtime / lockstep) を確認済み** (Unity 無し・OpenCV 描画)
-- ✅ **参照線を TT-02 用に引き直した** (`tools/make_route.py` → `config/route_jetracer_tt02.yaml`、launch の既定)。コース中心線は坂道出口の右ヘアピンで R 0.42 m と δmax 27° の R_min 0.506 m を割っていたが、最小曲率で引き直して最小 R 0.556 m・壁余裕 ≥ 0.18 m。教師で 5 周 22.8〜24.0 s/周・衝突 0・cte p95 0.10 m (`tools/lap_eval.py`)。**δmax を実測したら `make_route.py --delta-max <rad>` で引き直す** (暫定 27° のまま)
-- 4WD 拘束 (windup) の飽和形を修正 (旧式はフルロックで横グリップ 0 になり車が止まった)。★要較正のまま
-- ⬜ 2 ホスト接続 (P9)・Unity のレンズ歪み/露出/ブラー・IMU 5 測定・policy_net の学習は未着手 (設計 未決タブの「決める順番」)
-- 数値のうち ★要実測 は暫定値 (`vehicle_profile`・`imu_sim.yaml`・`jetracer_bridge.yaml` の各コメント)
+**sim 側は一通り動く。実機側 (較正・学習) がこれから。**
+
+| | |
+|---|---|
+| ✅ ビルド・単体テスト 14 件 | Jetson (Orin Nano・JetPack 6.2.1・Humble) と sim PC (Ubuntu 22.04.5・AMD GPU) の両方 |
+| ✅ 閉ループ (1 台・Unity 無し) | realtime / lockstep とも。`scripts/run_sim_local.sh`・`scripts/smoke_test.sh` |
+| ✅ **2 ホスト接続 (P9)** | 1000BASE-T 直結で通った。画像 15 Hz・遅延 64 ms (Unity 描画) / 5 ms (OpenCV)、IMU 100 Hz・8 ms、往路 0.8 ms、教師で 24.0 s/周・衝突 0。[docs/setup.md](docs/setup.md) |
+| ✅ **参照線を TT-02 用に引き直した** | 中心線は坂道出口の右ヘアピンで R 0.42 m と δmax 27° の R_min 0.506 m を割っていた。最小曲率で引き直して最小 R 0.556 m・壁余裕 ≥ 0.18 m (`tools/make_route.py` → `config/route_jetracer_tt02.yaml`、launch の既定) |
+| ✅ Unity 描画 | JetRacer 用の複製プロジェクト (`unity/MinicarSim`)。224×224・15 Hz、実カメラ寄せの後処理 (樽型歪み・周辺減光・ブラー・自動露出・柱)、駐車枠の P1/P2/P3、エピソード乱択化 (照明・床・観戦者)、参照線のミニマップ表示 |
+| ✅ 記録と録画 | `scripts/record.sh` (seed を変えて rosbag を N 本)・`record:=` (Unity 表示を mp4)・`tools/record_video.py` (車が見ている画を mp4) |
+| ⬜ **実機の較正** | δmax・サーボ端点・ESC の写像・IMU 5 測定。**ここが全部の前提** ([docs/calibration.md](docs/calibration.md)) |
+| ⬜ policy_net の学習 | 記録 → 学習 → ONNX → TensorRT → sim で陽性対照 → 実機 A/B |
+| ⬜ 強化学習 | lockstep の IF はある。Gymnasium ラッパと N 台並列は未着手 ([docs/lockstep.md](docs/lockstep.md)) |
+
+- 数値のうち ★要実測 は暫定値 (`vehicle_profile`・`imu_sim.yaml`・`jetracer_bridge.yaml` の各コメント)。**δmax を実測したら `make_route.py --delta-max <rad>` で参照線を引き直す**
+- 4WD 拘束 (windup) は飽和形に直したが係数は ★要較正 (フルロック旋回の減速量を実測して合わせる)
 
 ## ドキュメント
 
