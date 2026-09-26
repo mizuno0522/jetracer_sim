@@ -49,6 +49,7 @@ for _v in ('OPENBLAS_NUM_THREADS', 'OMP_NUM_THREADS', 'MKL_NUM_THREADS',
 import numpy as np
 
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import (QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy,
                        QoSDurabilityPolicy)
@@ -286,15 +287,17 @@ class VehicleSim(Node):
         self.declare_parameter('motor_v_free_mps', 4.5)     # 無負荷相当の車速 (駆動力が 0 になる点)
         # --- 4WD 拘束 (drivetrain: 4wd_locked) ---
         # 前後輪の回転が拘束されるので、旋回中は前輪 (経路が長い) が引きずられ後輪が押す。
-        # 巻き込み量 (1/cosδ − 1) を slip_elastic で正規化した割合だけ前後力を使い、
-        # 摩擦円の横方向の余力を減らし、抵抗として運動エネルギーを捨てる。★要較正
+        # 巻き込み量 r = 1/cosδ − 1 を slip_elastic で飽和させた割合 w = g·r / (g·r + slip_elastic) だけ
+        # 前後力を使い、摩擦円の横方向の余力を減らし、抵抗として運動エネルギーを捨てる。★要較正
+        # (δmax 27° で r = 0.12 → w ≈ 0.5。以前の min(1, r/slip_elastic) は 26.5° で w = 1 になり
+        #  横グリップが 0・抵抗 4 m/s² で、フルロックの旋回で車が止まった。2026-09-26 の参照線試験)
         self.declare_parameter('windup_gain', 1.0)
         self.declare_parameter('windup_drag', 0.5)
         # --- 姿勢 (roll / pitch) の準静的な模型。imu_sim の重力投影に使う ---
         self.declare_parameter('roll_per_ms2', 0.020)       # rad / (m/s²) 横加速度 → 外側へロール
         self.declare_parameter('pitch_per_ms2', 0.012)      # rad / (m/s²) 加速で鼻上げ
         # --- ground truth ---
-        self.declare_parameter('lookahead_m', 0.8)
+        self.declare_parameter('lookahead_m', 0.5)
         self.declare_parameter('lookahead_speed_gain', 0.3)  # ld = lookahead_m + gain × v
         self.declare_parameter('ground_truth_rate_hz', 100.0)
         self.declare_parameter('route_file', '')             # 空ならコース中心線。make_route.py の route.yaml も可
@@ -559,6 +562,9 @@ class VehicleSim(Node):
         self.episode_seed = int(p('episode_seed').value)
         route_file = str(p('route_file').value).strip()
         if route_file:
+            if '/' not in route_file:          # 名前だけなら minicar_sim の config/ (install 側) から
+                from ament_index_python.packages import get_package_share_directory
+                route_file = os.path.join(get_package_share_directory('minicar_sim'), 'config', route_file)
             self.ref = ReferenceLine.from_yaml_route(os.path.expanduser(route_file),
                                                      str(p('route_name').value))
             self.get_logger().info(f"参照線: {route_file} ({p('route_name').value}) 全長 {self.ref.total:.2f} m")
@@ -887,8 +893,8 @@ class VehicleSim(Node):
         # 使った前後力の割合 windup を摩擦円から差し引き、抵抗として捨てる。
         windup = 0.0
         if self.drive == '4wd_locked' and abs(v) > 0.05:
-            ratio = 1.0 / max(1e-3, math.cos(self.steer)) - 1.0
-            windup = min(1.0, self.windup_gain * ratio / max(1e-3, self.slip_elastic))
+            ratio = self.windup_gain * (1.0 / max(1e-3, math.cos(self.steer)) - 1.0)
+            windup = ratio / (ratio + max(1e-3, self.slip_elastic))     # 0 ≤ w < 1 (飽和形)
             wshrink = math.sqrt(max(0.0, 1.0 - windup ** 2))
             mu_f_eff *= wshrink
             mu_r_eff *= wshrink
@@ -2307,11 +2313,12 @@ def main(args=None):
             ex.spin()
         else:
             rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass                       # launch の SIGINT で ExternalShutdownException が出る (Traceback を出さない)
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

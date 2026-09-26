@@ -11,6 +11,7 @@ failsafe: 上流側の監視。画像・IMU・指令の途絶と NaN を見て /
 import math
 
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from sensor_msgs.msg import Image, Imu
@@ -100,11 +101,12 @@ def main(args=None):
     n = Failsafe()
     try:
         rclpy.spin(n)
-    except KeyboardInterrupt:
-        pass
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass                       # launch の SIGINT で ExternalShutdownException が出る (Traceback を出さない)
     finally:
         n.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

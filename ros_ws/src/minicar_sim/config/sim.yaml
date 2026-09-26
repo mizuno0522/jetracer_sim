@@ -17,7 +17,7 @@ vehicle_sim:
     odom_rate_hz: 50.0        # /odom, TF (sim 専用。推論は購読しない)
     slow_rate_hz: 20.0
     ground_truth_rate_hz: 100.0
-    lookahead_m: 0.8          # 先行注視点 = 参照線上 (lookahead_m + gain × v) 先
+    lookahead_m: 0.5          # 先行注視点 = 参照線上 (lookahead_m + gain × v) 先。0.8 だとコーナー半径 (0.56 m) より長く内側を切る (cte p95 0.21 → 0.5 で 0.10 m。2026-09-26)
     lookahead_speed_gain: 0.3
     route_file: ''            # 空 = コース中心線。make_route.py の route.yaml を指定すると参照線を差し替え
     route_name: shortcut

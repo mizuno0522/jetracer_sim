@@ -8,6 +8,7 @@ gt_teacher (sim 専用): /sim/ground_truth の先行注視点 (u, v) と曲率�
 速度係数 s は曲率と区間から: s = clip(s_max − k_curv × |κ|, s_min, s_max)、でこぼこ・坂は下げる。
 """
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 
 from minicar_msgs.msg import LookAhead
@@ -53,11 +54,12 @@ def main(args=None):
     n = GtTeacher()
     try:
         rclpy.spin(n)
-    except KeyboardInterrupt:
-        pass
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass                       # launch の SIGINT で ExternalShutdownException が出る (Traceback を出さない)
     finally:
         n.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

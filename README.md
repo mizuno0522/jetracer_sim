@@ -31,7 +31,7 @@ jetracer_sim/
 ├── unity/course.json        コース＋カメラ幾何の書き出し (Unity 側は数値を持たない)。Unity プロジェクトは minicarbattle2026/unity
 ├── docker/                  sim PC の ROS 側 (sim.Dockerfile / docker-compose.yml) と学習器 (learner.Dockerfile)
 ├── config/cyclonedds.xml    2 ホスト用 DDS 設定
-├── tools/                   imu_allan.py・imu_spectrum.py (IMU 5 測定の解析)・corridor_check.py (参照線の机上判定)
+├── tools/                   make_route.py (参照線の引き直し)・corridor_check.py (机上判定)・lap_eval.py (周回評価)・imu_allan.py・imu_spectrum.py (IMU 5 測定の解析)
 ├── scripts/                 build.sh・test.sh・run_sim_local.sh・export_course.sh・check_no_sim_topics.sh・sim_env.sh
 └── docs/                    architecture (境界・トピック)・setup (2 ホスト構築)・unity・docker・calibration・lockstep (強化学習 IF)
 ```
@@ -63,6 +63,7 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 |---|---|
 | sim PC (Unity 描画) | `ros2 launch minicar_sim sim_host.launch.py` (`unity_player:=<Build/MinicarSim.x86_64>`。既存 sim と同居なら `tcp_port:=10001`・[docs/unity.md](docs/unity.md)) |
 | sim PC (Unity 無し) | `ros2 launch minicar_sim sim_host.launch.py camera_backend:=opencv unity_player:=none` |
+| 参照線を変える | `python3 tools/make_route.py --delta-max <rad> --plot /tmp/route.png` → `tools/corridor_check.py --route ...` → `route_file:=` |
 | sim PC (強化学習) | `ros2 launch minicar_sim sim_host.launch.py sim_mode:=lockstep` → `/sim/reset`・`/sim/step` |
 | Jetson (sim 接続・教師) | `ros2 launch jetracer_stack vehicle_stack.launch.py teacher:=true` |
 | Jetson (推論) | `ros2 launch jetracer_stack vehicle_stack.launch.py model_file:=policy.onnx` |
@@ -84,7 +85,8 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 ## 現状 (2026-09-26)
 
 - ✅ この Jetson (Orin Nano・JetPack 6.2.1・Humble) で **ビルド・単体テスト・閉ループ (realtime / lockstep) を確認済み** (Unity 無し・OpenCV 描画)
-- ⚠ **参照線が TT-02 で通らない**: `tools/corridor_check.py` の机上判定で、δmax 27° の R_min 0.506 m に対しコース中心線の最小曲率半径は 0.42 m (坂道の右 180°)。δmax の実測 → 参照線の引き直し (設計 未決⑦) が先
+- ✅ **参照線を TT-02 用に引き直した** (`tools/make_route.py` → `config/route_jetracer_tt02.yaml`、launch の既定)。コース中心線は坂道出口の右ヘアピンで R 0.42 m と δmax 27° の R_min 0.506 m を割っていたが、最小曲率で引き直して最小 R 0.556 m・壁余裕 ≥ 0.18 m。教師で 5 周 22.8〜24.0 s/周・衝突 0・cte p95 0.10 m (`tools/lap_eval.py`)。**δmax を実測したら `make_route.py --delta-max <rad>` で引き直す** (暫定 27° のまま)
+- 4WD 拘束 (windup) の飽和形を修正 (旧式はフルロックで横グリップ 0 になり車が止まった)。★要較正のまま
 - ⬜ 2 ホスト接続 (P9)・Unity のレンズ歪み/露出/ブラー・IMU 5 測定・policy_net の学習は未着手 (設計 未決タブの「決める順番」)
 - 数値のうち ★要実測 は暫定値 (`vehicle_profile`・`imu_sim.yaml`・`jetracer_bridge.yaml` の各コメント)
 

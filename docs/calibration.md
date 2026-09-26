@@ -32,7 +32,7 @@
 |---|---|---|
 | 舵の端点 | µs を 1000 → 2000 まで刻んで、リンケージが当たる直前を min/max、直進を center に | `steering.pulse_us` |
 | 舵の実現率 | δ を数段階で与え、前輪の切れ角を分度器 (または上から写真) で測る。左右別々に | `steering.map: [δ_rad, µs, ...]`。空なら線形 |
-| **δmax** | 上の表の端。左右の小さいほう | `vehicle_profile.delta_max_rad` (暫定 0.47 = 27°)。**これが決まらないと参照線が引き直せない** (README 現状・設計 未決⑦) |
+| **δmax** | 上の表の端。左右の小さいほう | `vehicle_profile.delta_max_rad` (暫定 0.47 = 27°)。決まったら `python3 tools/make_route.py --delta-max <rad>` で参照線を引き直し、`tools/corridor_check.py --route` と `tools/lap_eval.py` で確認 (設計 未決⑦) |
 | 中立 | 2026-09-12 のログでは直進時に運転者が左へ 0.22 当てていた = 機械中立がずれている | リンケージで合わせるか `center` を動かす。**直したら学習データは取り直し** |
 | ESC の中立と不感帯 | TBLE-02S の設定手順で neutral を合わせ、動き出す µs を前後で記録 | `throttle.pulse_us`・`vehicle_profile.esc.deadband_mps` |
 | 後退ロック | 前進中に後退を入れると中立を経由しないとブレーキになる。中立を挟む時間を測る | `esc.reverse_via_neutral_ms` (暫定 120) |
@@ -68,4 +68,4 @@
 | 描画バックエンド | `camera_backend:=opencv` と `unity` | 同じ参照線で同程度 | 見た目に過学習 |
 | 遅延 | `latency.base_ms` を 2 倍 | 少し悪化するが走る | 時刻の整合に依存しすぎ |
 
-`tools/corridor_check.py --profile jetracer_tt02` は走行ゼロで参照線の通過可否を出す机上判定。δmax を実測したら `vehicle_profile.delta_max_rad` を直して再実行する。
+`tools/corridor_check.py --profile jetracer_tt02 --route ros_ws/src/minicar_sim/config/route_jetracer_tt02.yaml` は走行ゼロで参照線の通過可否を出す机上判定。δmax を実測したら `vehicle_profile.delta_max_rad` を直し、`tools/make_route.py` で参照線を引き直してから再実行する。
