@@ -31,7 +31,7 @@ jetracer_sim/
 ├── unity/course.json        コース＋カメラ幾何の書き出し (Unity 側は数値を持たない)。Unity プロジェクトは minicarbattle2026/unity
 ├── docker/                  sim PC の ROS 側 (sim.Dockerfile / docker-compose.yml) と学習器 (learner.Dockerfile)
 ├── config/cyclonedds.xml    2 ホスト用 DDS 設定
-├── tools/                   make_route.py (参照線の引き直し)・corridor_check.py (机上判定)・lap_eval.py (周回評価)・record_video.py (画像トピック → mp4)・imu_allan.py・imu_spectrum.py (IMU 5 測定の解析)
+├── tools/                   make_route.py・corridor_check.py (参照線)・lap_eval.py (周回評価)・camera_calib.py (チェッカーボード較正)・fit_camera_from_images.py (実走画像からカメラ推定)・record_video.py・imu_allan.py・imu_spectrum.py (IMU 5 測定)・sim2real/ (画像変換)
 ├── scripts/                 setup_host.sh (★環境を一気に作る: apt・sysctl・固定 IP・chrony)・p9_check.sh (2 ホスト直結の起動前チェック)・build.sh・test.sh・run_sim_local.sh・smoke_test.sh・setup_ws.sh・setup_unity_player.sh・export_course.sh・check_no_sim_topics.sh・sim_env.sh
 └── docs/                    architecture (境界・トピック)・setup (2 ホスト構築)・unity・docker・calibration・lockstep (強化学習 IF)
 ```
@@ -93,8 +93,10 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 | ✅ 閉ループ (1 台・Unity 無し) | realtime / lockstep とも。`scripts/run_sim_local.sh`・`scripts/smoke_test.sh` |
 | ✅ **2 ホスト接続 (P9)** | 1000BASE-T 直結で通った。画像 15 Hz・遅延 64 ms (Unity 描画) / 5 ms (OpenCV)、IMU 100 Hz・8 ms、往路 0.8 ms、教師で 24.0 s/周・衝突 0。[docs/setup.md](docs/setup.md) |
 | ✅ **参照線を TT-02 用に引き直した** | 中心線は坂道出口の右ヘアピンで R 0.42 m と δmax 27° の R_min 0.506 m を割っていた。最小曲率で引き直して最小 R 0.556 m・壁余裕 ≥ 0.18 m (`tools/make_route.py` → `config/route_jetracer_tt02.yaml`、launch の既定) |
-| ✅ Unity 描画 | JetRacer 用の複製プロジェクト (`unity/MinicarSim`)。224×224・15 Hz、実カメラ寄せの後処理 (樽型歪み・周辺減光・ブラー・自動露出・柱)、駐車枠の P1/P2/P3、エピソード乱択化 (照明・床・観戦者)、参照線のミニマップ表示 |
+| ✅ Unity 描画 | JetRacer 用の複製プロジェクト (`unity/MinicarSim`)。224×224・15 Hz、カメラの幾何は profile の 1 か所から (fx≠fy・樽型歪み)、実カメラ寄せの後処理 (周辺減光・ブラー・自動露出・柱)、駐車枠の P1/P2/P3、エピソード乱択化 (照明・床・観戦者・床の白テープ)、参照線のミニマップ表示 |
 | ✅ 記録と録画 | `scripts/record.sh` (seed を変えて rosbag を N 本)・`record:=` (Unity 表示を mp4)・`tools/record_video.py` (車が見ている画を mp4) |
+| 🟡 sim→real 画像変換 | CUT (FastCUT) を PC の CPU で学習中。記録済みの bag を後から変換する方式で、変換した bag は学習データの一部だけに混ぜる ([tools/sim2real/README.md](tools/sim2real/README.md)) |
+| ✅ Jetson の画面をネット越しに | `scripts/setup_vnc.sh` (仮想ディスプレイ) / `--mirror` (普段の画面)。Mac からは SSH トンネル ([docs/setup.md](docs/setup.md)) |
 | 🟡 カメラの幾何 | 実走画像から推定して反映 (高さ 0.148 m・ピッチ 50.9°・水平 144°/垂直 120°・fy/fx 1.78)。旧値 (0.12 m・12°・120° 正方) は実機と大きくずれていた。**チェッカーボード較正 (`tools/camera_calib.py`) で確定させる** |
 | ⬜ **実機の較正** | δmax・サーボ端点・ESC の写像・IMU 5 測定・カメラ。**ここが全部の前提** ([docs/calibration.md](docs/calibration.md)) |
 | ⬜ policy_net の学習 | 記録 → 学習 → ONNX → TensorRT → sim で陽性対照 → 実機 A/B |

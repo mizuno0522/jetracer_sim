@@ -36,6 +36,19 @@
 
 安全の層 (上から): ① RC マルチプレクサの手動切替 (試走のみ・本番は受信機を外す) → ② `jetracer_bridge` の 300 ms 失効 (スロットル中立・舵は保持) → ③ `failsafe` の途絶検出 (ESTOP を 1 s 保持)。`vehicle_sim` も同じ 300 ms 失効と ESTOP 保持を実装している。
 
+## カメラの幾何は 1 か所で定義する
+
+`vehicle_profile.camera` (fx・fy・cx・cy・k1・k2・取付の高さ・ピッチ) が唯一の定義元で、式は `jetracer_common/cam_geom.py` (OpenCV plumb_bob)。これを読むのは:
+
+| 使う側 | 用途 |
+|---|---|
+| `vehicle_sim` | `/sim/ground_truth` の先行注視点 (u, v) の計算と OpenCV 描画 |
+| Unity (course.json 経由) | センサーカメラの投影と歪み |
+| `camera_info_pub` / `csi_camera_node` | `/camera/camera_info` の K・D |
+| `cmd_shaper` | 画像座標 (u, v) → 床面 → Pure Pursuit |
+
+**ラベルを作る式と、推論時に画像座標を床に戻す式が同じ**であることが、「ラベルの点が走路の上に来る」条件。どれか 1 つだけ値を変えると sim-to-real の穴になるので、値は profile にだけ書き、`tools/camera_calib.py` (チェッカーボード) の出力をそのまま貼る。物理的にあり得ない歪みと画角の組み合わせは `CamGeom` が起動時に拒否する。
+
 ## 3 つの時計
 
 | 時計 | レート | 役割 |
