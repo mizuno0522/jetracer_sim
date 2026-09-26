@@ -44,3 +44,38 @@ vehicle_profile:
     pitch_deg: 12.0           # 下向き正 ★要実測
     crop_top_frac: 0.0        # 実機は切らない。車体の写り込みは camera_preproc で両系同じマスク
     distortion: none          # ★未実装 (Brown 樽型。チェッカーボードで係数を測ってから Unity に入れる)
+    # --- 実カメラの見た目に寄せる後処理と会場の演出 (Unity のみ。course.json の realism に書き出す) ---
+    # 数値の根拠は 2026-09-12 手動走行ログの統計 (tools/make_real_textures.py → StreamingAssets/textures/stats.json):
+    # 床 BGR≈(109,112,114)・白壁≈(197,195,192)・赤帯≈(66,70,142)・周辺減光 中心/端≈1.16・柱 列 54-57 / 121-124 (行 209-223)
+    realism:
+      enable: true
+      supersample: 2              # 2 倍で描いて縮小 (実画像の柔らかさと AA)
+      k1: -0.08                   # Brown 樽型 (正規化半径)。★チェッカーボードで測ったら置き換える
+      k2: 0.0
+      zoom: 1.0
+      vignette: 0.16              # 端で 16 % 暗い
+      blur_px: 0.8
+      motion_px_per_rad_s: 2.0    # ヨーレート 1 rad/s あたり横 2 px のブラー
+      exposure_target: 110        # 自動露出の目標平均輝度 (実画像の平均 112)
+      exposure_tau_s: 0.4
+      gamma: 1.0
+      noise: 0.02
+      post_dark: 0.25
+      posts: [0.241, 0.259, 0.933, 0.540, 0.558, 0.933]   # 柱 (x0, x1, y0) ×2、画像の正規化座標
+      carpet_tex: textures/carpet.png
+      backdrop_tex: ""                # 実画像を並べた背景円筒は平面的で不自然だったので使わない (空文字で無効)
+      backdrop_radius_m: 9.0
+      backdrop_height_m: 7.0
+      background_gray: -1         # 負 = Unity 既定のスカイボックス (水色) のまま
+      backdrop_z0_m: -0.3
+      spectators: 24              # 壁の外に立つ観戦者 (雑音として)。0 で無し
+      spectator_seed: 1
+      wall_white_r: 215             # 実測 195 だが自動露出後の p95 (220) に合わせて明るめ
+      wall_white_g: 213
+      wall_white_b: 211
+      wall_red_r: 141
+      wall_red_g: 70
+      wall_red_b: 67
+      carpet_r: 117               # carpet.png が無いときの単色
+      carpet_g: 115
+      carpet_b: 112

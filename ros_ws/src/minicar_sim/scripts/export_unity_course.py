@@ -83,6 +83,8 @@ def build(profile=DEFAULT_PROFILE):
                     pitch_deg=float(cam['pitch_deg']),
                     crop_top_frac=float(cam.get('crop_top_frac', 0.0)),
                     rate_hz=float(cam.get('rate_hz', 15.0))),
+        # 実カメラ風の後処理と会場の演出 (Unity のみ)。無ければ Unity 側の既定 (オフ)
+        realism=cam.get('realism', {'enable': False}),
         # RViz (sim_viz) と同じ表示仕様: 走行軌跡の速度色と凡例バー
         viz=dict(speed_color_max_mps=float(v.get('speed_color_max_mps', 2.5)),
                  trail_max_points=int(v.get('trail_max_points', 700)),
