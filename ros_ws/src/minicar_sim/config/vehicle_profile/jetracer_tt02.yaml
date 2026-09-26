@@ -40,13 +40,16 @@ vehicle_profile:
     rate_hz: 15.0
     # --- 画角と歪み。★定義元はここ、式は jetracer_common/cam_geom.py (OpenCV plumb_bob)。ラベル・cmd_shaper・camera_info・
     #     OpenCV 描画・Unity (course.json) がすべてここから読む。tools/camera_calib.py の出力をそのまま貼れる形 ---
-    hfov_deg: 120.0           # ピンホール等価の水平画角 (fx = (W/2)/tan(hfov/2))。★未実測 (tools/camera_calib.py か fit_camera_from_images.py)
-    vfov_deg: 0.0             # 0 = 正方画素 (fy = fx)。★実機は jetcam 既定で 1280×720 (Argus mode 4) → 640×480 → 224×224 に縮めるので fy/fx ≈ 1.78 の見込み
-    k1: 0.0                   # 半径方向の歪み (OpenCV の正規化座標 x = X/Z で。k1 < 0 で樽型)。★未実測
+    # ★2026-09-26 実走画像 (9/12 MEC、10 枚) からの推定 (tools/fit_camera_from_images.py --fix-aspect 1.778 --no-color)。
+    #   縦 (高さ・ピッチ・fy) は縦横比を自由にした推定とも一致 (0.145 m・50.7°・fy 66.8) していて信頼できる。
+    #   横 (fx) は縦横比を取り込み経路の事実から 1.778 に固定して出した値。**チェッカーボード較正 (tools/camera_calib.py) で置き換える**
+    hfov_deg: 143.6           # ピンホール等価の水平画角 (fx 36.8 px)。旧値 120 (仮)
+    vfov_deg: 119.4           # fy 65.4 px。fy/fx = 1.78: jetcam 既定 640×480 要求 → Argus mode 4 (1280×720) → 224×224 に潰す
+    k1: -0.0017               # 半径方向の歪み (OpenCV の正規化座標 x = X/Z で。k1 < 0 で樽型)。画像からはほぼ 0
     k2: 0.0
-    mount_height_m: 0.12      # ★要実測
+    mount_height_m: 0.148     # ★画像から推定 (旧 0.12 仮)。camera_calib.py mount で実測して置き換える
     mount_x_m: 0.0            # base_link (後軸) からの前後位置 ★要実測
-    pitch_deg: 12.0           # 下向き正 ★要実測
+    pitch_deg: 50.9           # 下向き正。★画像から推定 (旧 12 仮。実画像は地平線が上から 14%、旧値だと 44%)
     crop_top_frac: 0.0        # 実機は切らない。車体の写り込みは camera_preproc で両系同じマスク
     # --- 実カメラの見た目に寄せる後処理と会場の演出 (Unity のみ。course.json の realism に書き出す) ---
     # 数値の根拠は 2026-09-12 手動走行ログの統計 (tools/make_real_textures.py → StreamingAssets/textures/stats.json):

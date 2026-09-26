@@ -95,7 +95,8 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 | ✅ **参照線を TT-02 用に引き直した** | 中心線は坂道出口の右ヘアピンで R 0.42 m と δmax 27° の R_min 0.506 m を割っていた。最小曲率で引き直して最小 R 0.556 m・壁余裕 ≥ 0.18 m (`tools/make_route.py` → `config/route_jetracer_tt02.yaml`、launch の既定) |
 | ✅ Unity 描画 | JetRacer 用の複製プロジェクト (`unity/MinicarSim`)。224×224・15 Hz、実カメラ寄せの後処理 (樽型歪み・周辺減光・ブラー・自動露出・柱)、駐車枠の P1/P2/P3、エピソード乱択化 (照明・床・観戦者)、参照線のミニマップ表示 |
 | ✅ 記録と録画 | `scripts/record.sh` (seed を変えて rosbag を N 本)・`record:=` (Unity 表示を mp4)・`tools/record_video.py` (車が見ている画を mp4) |
-| ⬜ **実機の較正** | δmax・サーボ端点・ESC の写像・IMU 5 測定。**ここが全部の前提** ([docs/calibration.md](docs/calibration.md)) |
+| 🟡 カメラの幾何 | 実走画像から推定して反映 (高さ 0.148 m・ピッチ 50.9°・水平 144°/垂直 120°・fy/fx 1.78)。旧値 (0.12 m・12°・120° 正方) は実機と大きくずれていた。**チェッカーボード較正 (`tools/camera_calib.py`) で確定させる** |
+| ⬜ **実機の較正** | δmax・サーボ端点・ESC の写像・IMU 5 測定・カメラ。**ここが全部の前提** ([docs/calibration.md](docs/calibration.md)) |
 | ⬜ policy_net の学習 | 記録 → 学習 → ONNX → TensorRT → sim で陽性対照 → 実機 A/B |
 | ⬜ 強化学習 | lockstep の IF はある。Gymnasium ラッパと N 台並列は未着手 ([docs/lockstep.md](docs/lockstep.md)) |
 

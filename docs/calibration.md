@@ -49,6 +49,11 @@
 
 ## 4. カメラ
 
+**まず `tools/camera_calib.py`** (チェッカーボード)。内部パラメータ (fx・fy・cx・cy・k1・k2) と取付 (高さ・ピッチ・前後位置) が出て、`vehicle_profile.camera` にそのまま貼れる。使い方は先頭のコメント。**実機と同じ経路 (`csi_camera_node` → `/camera/image_raw` 224×224) の画像で測る**こと。
+
+実機が無いときの第一近似は `tools/fit_camera_from_images.py <走行ログ>` (実画像の壁と course.py の壁の配置から同時推定)。2026-09-26 に 9/12 のログで推定した値が今の profile に入っている。縦 (高さ・ピッチ・fy) は安定して決まるが、横 (fx) と縦横比は画像の壁だけでは決まらないので、縦横比は取り込み経路から固定した (jetcam 既定 640×480 要求 → Argus は IMX219 の mode 4 = 1280×720 を選ぶ → 224×224 に潰す → fy/fx = 1.78)。
+
+
 | 項目 | やり方 | 入れる先 |
 |---|---|---|
 | 切り出しか縮小か | 実機の nvarguscamerasrc パイプライン (センサ解像度→224×224 の方法) | `camera_node.square_mode`・`vehicle_profile.camera.hfov_deg` |

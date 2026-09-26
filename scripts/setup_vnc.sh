@@ -4,6 +4,8 @@
 #
 #   sudo ./scripts/setup_vnc.sh            # 導入と自動起動の設定 (1 回だけ)。最後にパスワードを聞く
 #   sudo ./scripts/setup_vnc.sh --lan      # SSH トンネル無しで LAN から直接つなぐ (パスワードは暗号化されない)
+#   sudo ./scripts/setup_vnc.sh --mirror   # 仮想画面ではなく、モニターに映っている普段のデスクトップ (:0) を共有する (x11vnc・port 5902)
+#                                           X の画面データを直接読むので、モニターへの信号が途切れても影響しない
 #   ./scripts/setup_vnc.sh status          # 動いているか
 #
 # 既定 (localhost のみ待ち受け) の Mac からのつなぎ方:
@@ -18,8 +20,9 @@ PORT=$((5900 + DISP))
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
 if [ "${1:-}" = status ]; then
-  systemctl --user is-active "jetracer-vnc.service" 2>/dev/null || true
-  ss -ltn | grep ":$PORT " || echo "port $PORT で待ち受けていない"
+  echo "仮想画面 (5901): $(systemctl --user is-active jetracer-vnc.service 2>/dev/null)"
+  echo "普段の画面 (5902): $(systemctl --user is-active jetracer-x11vnc.service 2>/dev/null)"
+  ss -ltn | grep -E ":590[12] " || echo "5901/5902 とも待ち受けていない"
   exit 0
 fi
 
@@ -28,6 +31,46 @@ LAN=0
 [ "$(id -u)" = 0 ] || { echo "sudo で実行すること (導入に apt が要る)" >&2; exit 2; }
 U="${SUDO_USER:?sudo から実行すること}"
 UH=$(getent passwd "$U" | cut -d: -f6)
+UID_N=$(id -u "$U")
+
+if [ "${1:-}" = --mirror ]; then
+  MPORT=5902
+  echo "== apt: x11vnc"
+  apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq x11vnc >/dev/null
+  install -d -o "$U" -g "$U" -m 700 "$UH/.vnc"
+  if [ ! -s "$UH/.vnc/passwd" ]; then
+    echo "== VNC のパスワードを決める"
+    sudo -u "$U" x11vnc -storepasswd "$UH/.vnc/passwd"
+  fi
+  install -d -o "$U" -g "$U" "$UH/.config/systemd/user"
+  cat > "$UH/.config/systemd/user/jetracer-x11vnc.service" <<SVC
+[Unit]
+Description=JetRacer VNC mirror of the desktop :0 (port $MPORT)
+After=graphical-session.target
+
+[Service]
+Environment=DISPLAY=:0
+# -localhost: Jetson の中だけで待ち受け (Mac からは SSH トンネル)。-forever -shared: 切っても終わらない・複数可
+ExecStart=/usr/bin/x11vnc -display :0 -auth guess -localhost -rfbport $MPORT -rfbauth %h/.vnc/passwd -forever -shared -noxdamage -quiet
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+SVC
+  chown -R "$U:$U" "$UH/.config/systemd"
+  sudo -u "$U" XDG_RUNTIME_DIR=/run/user/$UID_N systemctl --user daemon-reload
+  sudo -u "$U" XDG_RUNTIME_DIR=/run/user/$UID_N systemctl --user enable --now jetracer-x11vnc.service
+  sleep 3
+  if ss -ltn | grep -q ":$MPORT "; then
+    echo "== 起動した (普段のデスクトップ :0 を port $MPORT で共有)"
+    echo "   Mac のターミナル:  ssh -N -L $MPORT:localhost:$MPORT $U@ubuntu.local   (開いたままにする)"
+    echo "   Mac の VNC Viewer:  localhost:$MPORT    (画面共有なら vnc://localhost:$MPORT)"
+  else
+    echo "★ 待ち受けていない。ログ:  journalctl --user -u jetracer-x11vnc -n 30" >&2; exit 1
+  fi
+  exit 0
+fi
 
 echo "== apt: tigervnc と xfce"
 apt-get update -qq
@@ -83,7 +126,6 @@ if [ ! -s "$UH/.vnc/passwd" ]; then
   sudo -u "$U" tigervncpasswd "$UH/.vnc/passwd"
 fi
 
-UID_N=$(id -u "$U")
 sudo -u "$U" XDG_RUNTIME_DIR=/run/user/$UID_N systemctl --user daemon-reload
 sudo -u "$U" XDG_RUNTIME_DIR=/run/user/$UID_N systemctl --user enable --now jetracer-vnc.service
 sleep 3

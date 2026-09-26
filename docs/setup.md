@@ -92,6 +92,8 @@ sudo ./scripts/setup_vnc.sh          # 導入・ログイン不要の自動起�
 # Mac の VNC Viewer:  localhost:5901
 ```
 
+**モニターに映っている普段のデスクトップ**を見たいなら `sudo ./scripts/setup_vnc.sh --mirror` (x11vnc、port 5902)。X の画面データを直接読むので、モニターへの信号が途切れても影響しない。Mac からは上の 5901 を 5902 に替えるだけ。
+
 既定は Jetson の中 (localhost) でしか待ち受けず、Mac からは SSH の暗号化トンネルで入る (VNC のパスワードは平文で流れるため)。家の LAN だけで直接つなぐなら `sudo ./scripts/setup_vnc.sh --lan` → VNC Viewer で `ubuntu.local:5901`。仮想ディスプレイの中の OpenGL (rviz など) はソフトウェア描画で遅い。
 
 ## 失敗の定番

@@ -197,7 +197,14 @@ def main():
     ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--plot', default='')
     ap.add_argument('--aspects', default='1.0,1.333,1.778', help='試す fy/fx の初期値')
+    ap.add_argument('--fix-aspect', type=float, default=0.0,
+                    help='fy/fx をこの値に固定 (取り込み経路から分かっているとき。jetcam 既定 + Argus mode 4 なら 1.778)')
+    ap.add_argument('--no-color', action='store_true', help='赤白を分けずに壁の領域だけで比べる')
     a = ap.parse_args()
+    global COLOR
+    COLOR = not a.no_color
+    if a.fix_aspect > 0:
+        a.aspects = str(a.fix_aspect)
     rng = np.random.default_rng(a.seed)
 
     simcfg = yaml.safe_load(open(os.path.join(SIM, 'config', 'sim.yaml')))['vehicle_sim']['ros__parameters']
@@ -239,7 +246,9 @@ def main():
         nf = len(reals)
 
         def f(xv):
-            q = xv[:5]
+            q = xv[:5].copy()
+            if a.fix_aspect > 0:
+                q[3] = a.fix_aspect
             if not (0.04 < q[0] < 0.25 and 0 < q[1] < 80 and 40 < q[2] < 170 and 0.7 < q[3] < 2.2 and -0.3 < q[4] <= 0.02):
                 return 2.0
             cam_ = cam_from_vec(q)
@@ -251,7 +260,9 @@ def main():
               f'({r.nfev} 評価, {time.time() - t1:.0f} s)')
         if best is None or r.fun < best.fun:
             best = r
-    q = best.x[:5]
+    q = best.x[:5].copy()
+    if a.fix_aspect > 0:
+        q[3] = a.fix_aspect
     cam = cam_from_vec(q)
     iou = 1.0 - best.fun
     g = CamGeom(W, H, q[2], q[0], q[1], vfov_deg=math.degrees(2 * math.atan((H / 2.0) / cam['fy'])), k1=q[4])
