@@ -68,6 +68,11 @@ namespace Minicar
         public float background_gray = 110f;     // 背景 (背景円筒より上・外) の明るさ [0-255]
         public int spectators = 24;
         public int spectator_seed = 1;
+        // エピソード乱択化 (/sim/episode の seed で引き直す)。0 で固定
+        public float episode_light_range = 0.15f;   // 天井光の強さ ×(1 ± r)
+        public float episode_tint_range = 0.04f;    // 床・照明の色味 ± r (RGB 各)
+        public float episode_ambient_range = 0.15f; // 環境光 ×(1 ± r)
+        public bool episode_spectators = true;      // 観戦者の配置も引き直す
         public float wall_white_r = 193f, wall_white_g = 192f, wall_white_b = 191f;
         public float wall_red_r = 141f, wall_red_g = 70f, wall_red_b = 67f;
         public float carpet_r = 117f, carpet_g = 115f, carpet_b = 112f;

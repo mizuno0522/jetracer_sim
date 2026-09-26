@@ -13,6 +13,10 @@ namespace Minicar
         public Material ArrowFrontMaterial { get; private set; }
         public Light DisturbLight { get; private set; }
         public RealismData Realism { get; private set; }
+        Light m_Ceiling;
+        Material m_CarpetMat;
+        Color m_CarpetBase = Color.white;
+        Transform m_Spectators;
 
         Material m_Lit, m_Unlit;
         Transform m_Root;
@@ -170,12 +174,11 @@ namespace Minicar
                 .layer = RvizLayout.SensorOnlyLayer;
             // 実画像から作ったカーペットのタイル (StreamingAssets/textures/carpet.png) があればそれを貼る
             var real = Realism.enable ? LoadTexture(Realism.carpet_tex) : null;
-            if (real != null)
-                FloorRect("Carpet", -0.05f, -0.1f, 10.4f, 6.45f, 0f,
-                          Lit(new Color32(255, 255, 255, 255), real, 0.0f, new Vector2(30, 19)));   // 1 タイル ≈ 0.35 m
-            else
-                FloorRect("Carpet", -0.05f, -0.1f, 10.4f, 6.45f, 0f,
-                          Lit(kCarpet, Speckle(256, 0.28f, 2), 0.0f, new Vector2(60, 40)));
+            m_CarpetMat = real != null
+                ? Lit(new Color32(255, 255, 255, 255), real, 0.0f, new Vector2(30, 19))    // 1 タイル ≈ 0.35 m
+                : Lit(kCarpet, Speckle(256, 0.28f, 2), 0.0f, new Vector2(60, 40));
+            m_CarpetBase = m_CarpetMat.color;
+            FloorRect("Carpet", -0.05f, -0.1f, 10.4f, 6.45f, 0f, m_CarpetMat);
         }
 
         Texture2D LoadTexture(string rel)
@@ -227,14 +230,18 @@ namespace Minicar
 
         // 観戦者: 壁の外側に立つ人。カプセル (胴) + 球 (頭)、服の色はランダム。
         // 実会場では壁の上に人が並んで見えるので、その「雑音」を入れる (seed で固定)。
-        void BuildSpectators()
+        void BuildSpectators() => BuildSpectators(Realism.spectator_seed);
+
+        void BuildSpectators(int seed)
         {
             int n = Realism.spectators;
             if (n <= 0) return;
-            var rng = new System.Random(Realism.spectator_seed);
+            var rng = new System.Random(seed);
             float x0 = -0.05f, y0 = -0.1f, x1 = 10.4f, y1 = 6.45f;      // カーペットの外周
+            if (m_Spectators != null) Destroy(m_Spectators.gameObject);
             var parent = new GameObject("Spectators").transform;
             parent.SetParent(m_Root, false);
+            m_Spectators = parent;
             for (int i = 0; i < n; i++)
             {
                 // 外周のどこかに、壁から 0.3〜2.5 m 離して立つ
@@ -466,11 +473,39 @@ namespace Minicar
             DisturbLight.shadows = LightShadows.None;
         }
 
+        // /sim/episode の seed で照明・床の色味・観戦者を引き直す (乱択化。幅は realism.episode_*)。
+        // 物理 (vehicle_sim) と IMU (imu_sim) も同じ seed で引き直すので、1 本の bag = 1 エピソード。
+        public void ApplyEpisode(uint seed)
+        {
+            if (Realism == null || !Realism.enable) return;
+            var rng = new System.Random(unchecked((int)seed));
+            float U(float r) => 1f + r * (2f * (float)rng.NextDouble() - 1f);
+            if (m_Ceiling != null)
+            {
+                m_Ceiling.intensity = 0.55f * U(Realism.episode_light_range);
+                float t = Realism.episode_tint_range;
+                m_Ceiling.color = new Color(U(t), 0.97f * U(t), 0.92f * U(t));
+            }
+            float a = U(Realism.episode_ambient_range);
+            RenderSettings.ambientSkyColor = new Color(0.40f, 0.40f, 0.42f) * a;
+            RenderSettings.ambientEquatorColor = new Color(0.30f, 0.30f, 0.31f) * a;
+            RenderSettings.ambientGroundColor = new Color(0.15f, 0.15f, 0.15f) * a;
+            if (m_CarpetMat != null)
+            {
+                float t = Realism.episode_tint_range;
+                m_CarpetMat.color = new Color(m_CarpetBase.r * U(t), m_CarpetBase.g * U(t), m_CarpetBase.b * U(t), 1f);
+            }
+            if (Realism.episode_spectators && Realism.spectators > 0)
+                BuildSpectators(Realism.spectator_seed + (int)(seed % 100000));
+            Debug.Log($"[CourseBuilder] episode seed={seed}: light {m_Ceiling?.intensity:F2} ambient x{a:F2}");
+        }
+
         void BuildVenueLighting()
         {
             // 屋内会場: 天井照明を模した拡散光 + 弱い影
             var go = new GameObject("CeilingLight");
             var sun = go.AddComponent<Light>();
+            m_Ceiling = sun;
             sun.type = LightType.Directional;
             sun.intensity = 0.55f;
             sun.color = new Color(1f, 0.97f, 0.92f);

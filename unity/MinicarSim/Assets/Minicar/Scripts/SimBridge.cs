@@ -183,6 +183,11 @@ namespace Minicar
             m_ShotInterval = float.Parse(Arg("-shotinterval", "2"), System.Globalization.CultureInfo.InvariantCulture);
             m_Ros.RegisterPublisher<ImageMsg>(kImageTopic);
             m_Ros.Subscribe<Float64MultiArrayMsg>(kStateTopic, OnState);
+            // エピソード seed (vehicle_sim が LATCHED で出す)。照明・床・観戦者を引き直す
+            m_Ros.Subscribe<UInt32Msg>("/sim/episode", msg => m_Course.ApplyEpisode(msg.data));
+            // 起動時の seed は引数 -seed で受ける (/sim/episode は LATCHED だが endpoint 経由の購読は
+            // 接続前の latched メッセージを受け取れないため)。走行中の引き直し (lockstep Reset) は上の購読で
+            if (uint.TryParse(Arg("-seed", ""), out uint seed0)) m_Course.ApplyEpisode(seed0);
             // 占有格子 (RViz の FusionGrid と同じもの)。全景に重ねる
             m_Ros.Subscribe<OccupancyGridMsg>("/fusion/local_map", msg => m_GridMsg[0] = msg);
             m_Ros.Subscribe<OccupancyGridMsg>("/sim/rival_local_map", msg => m_GridMsg[1] = msg);

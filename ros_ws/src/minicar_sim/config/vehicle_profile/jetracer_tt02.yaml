@@ -70,6 +70,11 @@ vehicle_profile:
       backdrop_z0_m: -0.3
       spectators: 24              # 壁の外に立つ観戦者 (雑音として)。0 で無し
       spectator_seed: 1
+      # エピソード乱択化 (/sim/episode の seed で引き直す。幅は暫定・0 で固定)
+      episode_light_range: 0.15     # 天井光の強さ ×(1 ± r)
+      episode_tint_range: 0.04      # 床・照明の色味 ± r
+      episode_ambient_range: 0.15   # 環境光 ×(1 ± r)
+      episode_spectators: true      # 観戦者の配置も引き直す
       # 壁の板はレギュレーション p.24 のとおり 1 枚ごとに赤か白の単色 (配色は course.py の WALL_COLORS)。
       # 色は流用元の値 (2025 車載画像で合わせたもの)。実画像の測定値 (赤 BGR 66,70,141) は露出で暗いので使わない
       wall_white_r: 226

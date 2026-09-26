@@ -102,6 +102,7 @@ ros2 topic echo /camera/camera_info --once  # camera_info_pub が vehicle_profil
 | モーションブラー | ヨーレート比例の横ブラー (2 px per rad/s) | — |
 | 車体の柱 | 画面下の 2 本を実機と同じ列 (54–57・121–124、行 209〜) に描く (`posts`) | ★**両系同値**: 実機側 `camera_preproc` (stack.yaml `policy_net.mask_bottom_frac`、現在 0.0) でマスクするなら、その領域と `posts` を同じ値にすること。片方だけだと sim-to-real の穴 |
 | 観戦者 | 壁の外に 24 人 (seed 固定)。壁の上に見える雑音として | — |
+| エピソード乱択化 | `/sim/episode` (vehicle_sim が LATCHED で出す seed) を受けて天井光の強さ・色味、環境光、床の色味、観戦者の配置を引き直す (`episode_*`。幅は暫定) | 1 本の bag = 1 seed (`scripts/record.sh`)。物理・IMU も同じ seed |
 | 背景 | Unity 既定のスカイボックス (`background_gray: -1`)。実画像を並べた背景円筒は平面的で不採用 | 上半分が実画像より 10〜15 暗い (未調整) |
 
 描画そのもの (C#・シェーダ) を変えたときだけ `scripts/build_unity.sh`。数値だけなら `setup_unity_player.sh` (course.json 差し替え) で足りる。

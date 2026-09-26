@@ -33,3 +33,13 @@ PC 側セッションが main=3cb8872 を clone して確認した結果と、Je
 
 - imu_model: PC 草案との差分で「こちらに無い汚れ」は見当たらない (重力投影・てこ腕・DLPF→間引き・量子化・飽和・遅延/ジッタ/取りこぼし・温度・乱択化は両方にある)。確認したい点だけ: (1) 停車中のモータ高調波の振幅 (v→0 で位相が止まると定数 sin が偽のバイアスになる。草案は min(1, |v|/0.2) の包絡を掛けた)、(2) 高調波の位相を push を跨いで連続にしているか、(3) 白色雑音 σ を √bw で取っている (草案は √fs_out)。Allan 分散の実測が入れば消える差。
 - 既存 sim の sweep (DOMAIN 0) と同居して 42 で問題なく分離できた。
+
+## P9 (2 ホスト直結) — 2026-09-26 完了
+
+PC (192.168.10.2, enp5s0) ↔ Jetson (192.168.10.3)。`setup_host.sh pc --nic enp5s0` → `p9_check.sh` 9/9 → ufw で 192.168.10.0/24 を許可 (NTP が落ちていた) → chrony 同期 0.1 ms。
+Jetson の教師スタック → PC の物理で 3 周 (24.0 s/周・衝突 0・cte p95 0.10 m)。遅延の実測は docs/setup.md の表 (画像 OpenCV 5 ms / Unity 64 ms、/imu 8〜12 ms、/actuator_cmd 往路 0.8 ms)。
+
+## データ記録
+
+`scripts/record.sh [本数] [秒/本] [--unity]`: seed を変えながら教師で走らせ、7 トピック (画像・camera_info・/imu・/actuator_cmd・/lookahead・/sim/ground_truth・/sim/episode) を mcap で `bags/ep_<seed>_<日時>/` に。同名 .json に seed・秒数・git rev。
+Unity は `/sim/episode` で照明・床の色味・観戦者を引き直す (`camera.realism.episode_*`)。

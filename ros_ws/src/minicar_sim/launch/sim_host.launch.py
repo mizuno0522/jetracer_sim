@@ -108,7 +108,9 @@ def generate_launch_description():
                                            'ROS_TCP_PORT': ParameterValue(tcp_port, value_type=int)}],
              condition=IfCondition(use_unity)),
         ExecuteProcess(
-            cmd=[unity_player, '-rosip', '127.0.0.1', '-rosport', tcp_port, '-layout', 'aic', '-laps', '0',
+            # -seed: 起動時のエピソード seed (照明・床・観戦者の乱択化)。/sim/episode は LATCHED だが
+            #        endpoint 経由では接続前の latched が届かないので引数でも渡す
+            cmd=[unity_player, '-rosip', '127.0.0.1', '-rosport', tcp_port, '-layout', 'aic', '-laps', '0', '-seed', seed,
                  '-logFile', os.path.expanduser('~/.ros/log/jetracer_unity_player.log')],
             name='unity_player', output='screen',
             condition=IfCondition(PythonExpression(
