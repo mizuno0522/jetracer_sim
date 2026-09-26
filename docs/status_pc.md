@@ -1,38 +1,64 @@
-# sim PC 側の状況 (2026-09-26)
+# sim PC 側の状況 (2026-09-26 時点)
 
-PC 側セッションが main=3cb8872 を clone して確認した結果と、Jetson 側への提案。環境の事実は docs/setup.md・docs/unity.md に反映済み。
+sim PC (Ubuntu 22.04.5・Humble desktop・AMD 内蔵 GPU = CUDA 無し・Unity 6000.0.83f1) で確かめたことと、PC 側の担当
+(`unity/`・`jetracer_compat`・`tools/sim2real`・Unity 系の scripts) の現状。環境構築の手順そのものは [setup.md](setup.md)・[unity.md](unity.md)。
 
-## 確認結果
+## いまの状態
 
-| 項目 | 結果 |
+| 項目 | 状態 |
 |---|---|
-| `scripts/build.sh` | 7 パッケージ 28 s で成功 (Humble desktop・PYTHONNOUSERSITE=1) |
-| `scripts/test.sh` | 14 passed |
-| 1 台閉ループ (opencv・teacher・auto_run) | /imu 98.7 Hz・/camera/image_raw 15.0 Hz・/actuator_cmd 30.0 Hz・/sim/ground_truth 99.9 Hz。教師で周回 (cte ≈ 0.004 m)。`check_no_sim_topics.sh`: cmd_shaper/failsafe ok |
-| Unity (プレイヤーコピー方式・`tcp_port:=10001`) | /camera/image_raw 224×224 bgr8 15.0 Hz・/camera/camera_info 15.0 Hz・/imu 99.9 Hz・/actuator_cmd 30.0 Hz。endpoint に `Connection from 127.0.0.1`。画像の frame_id は `camera` (Unity 側の値。実機 `camera_link` と揃えるなら SimBridge.cs の 1 行) |
-| `rmw_cyclonedds_cpp` | **未導入** (sudo が要るのでユーザーに依頼中)。上の確認は `RMW_IMPLEMENTATION=rmw_fastrtps_cpp` で実施。`scripts/sim_env.sh` は cyclonedds を強制するので、導入までは source 後に上書きが要る |
-| `ros_tcp_endpoint` | このリポジトリの ros_ws には無い。素で動かすには `source ~/ros2_unity_ws/install/setup.bash` を追加で source する (docs/unity.md の記載どおり)。`sim_host.launch.py camera_backend:=unity` は endpoint が無いと launch 自体が例外で止まる |
-| 終了時の traceback | SIGINT で imu_sim_node / camera_info_pub / vehicle_sim が exit code 1 (rclpy の ExternalShutdownException を except していない)。動作には影響しないが、launch ログが赤くなる。`except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException)` で消える |
+| ビルド・単体テスト | 新規 clone から `colcon build` 8 パッケージ・`scripts/test.sh` とも通過 (v0.1.1 相当) |
+| 1 台閉ループ (`scripts/smoke_test.sh`) | PASS。教師で 50 s に 2 周・\|cte\| p95 0.10 m・衝突 0、/imu 100 Hz・画像 15 Hz・/actuator_cmd 30 Hz |
+| 2 ホスト直結 (P9) | 完了 (下の節)。PC の enp5s0 は NetworkManager の `jetracer-link` (192.168.10.2)。既存 sim 用の `sim_link` (192.168.0.20) とは排他で、戻すときは `sudo nmcli con up sim_link` |
+| DDS | `rmw_cyclonedds_cpp` 導入済み。`scripts/sim_env.sh` が有線のリンク状態で `~/cyclonedds-wired.xml` / `~/cyclonedds-local.xml` を自動で選ぶ |
+| Unity 中継 | `scripts/setup_ws.sh` が `ros_ws/src/ros_tcp_endpoint` に取り込む (この PC は `~/ros2_unity_ws` の checkout を symlink) |
+| Unity プレイヤー | ソースはリポジトリの `unity/MinicarSim`、ビルドは `scripts/build_unity.sh` → `~/jetracer/unity/player`。他チーム向けはビルド済みを [Release v0.1.1](https://github.com/mizuno0522/jetracer_sim/releases/tag/v0.1.1) に置き `scripts/get_unity_player.sh` で取る |
+| カメラ幾何 (Unity) | `course.json` の `fx, fy, cx, cy, k1, k2`・`render_tan_*` で描く (下の節)。推定値 (高さ 0.148 m・下向き 50.9°・水平 144°/垂直 120°・fy/fx 1.78) で OpenCV 描画と一致 |
+| 他チームの JetRacer 標準コード | `jetracer_compat` で無改造のまま sim で走る (下の節)。v0.1.1 として公開 |
+| sim→real 画像変換 | FastCUT を CPU で学習中 (下の節) |
 
-## 追加したスクリプト (提案・このブランチ)
+## カメラ幾何の Unity 実装と確認
 
-| ファイル | 内容 |
-|---|---|
-| `scripts/stop_sim.sh` | 起動物を全部止める。`pkill -f` のパターンは実行ファイルのパスで先頭固定 (`^`)。緩い文字列だと同じ文字列を含む自分の端末まで殺す (実際に踏んだ) |
-| `scripts/run_sim_local.sh` | `set -m` を追加。非対話シェルのバックグラウンド job は SIGINT 無視を継承するので、`kill -INT` が launch に届かず `wait` が永久に止まる (実際に踏んだ)。trap で stop_sim.sh も呼ぶ |
-| `scripts/setup_unity_player.sh` | ビルド済みプレイヤーを `~/jetracer/unity/player` にコピーし、`export_course.sh` の course.json を差し替える (再ビルド不要の手順の自動化) |
-| `scripts/smoke_test.sh` | 単体テスト → 閉ループ起動 → /imu・/camera・/actuator_cmd のレートと教師の走行 (10 s で Δs > 3 m, |cte| < 0.3) → /sim/ 購読禁止 |
+- `SimBridge.ApplyIntrinsics`: `render_tan_x0/x1/y0/y1` の範囲を off-axis 透視 (`Matrix4x4.Frustum`) で描く。fy ≠ fx もこれで扱う。
+- `SensorPost.shader`: 出力画素 → 正規化座標 → 不動点反復 8 回で歪みを解く → ピンホールで描いた RT をサンプル。式は `jetracer_common/cam_geom.py` と同じ。
+  旧 `realism.k1/k2/zoom` は向きが逆 (糸巻き型) だったので廃止。
+- 確認: start 姿勢で `camera_backend:=opencv` と `unity` を撮り比べ、Sobel エッジの一致 (F 値)。
 
-## Unity (JetRacer 用の複製プロジェクト)
+| カメラの値 | F 値 (許容 2 px) | F 値 (許容 4 px) |
+|---|---|---|
+| 仮の歪みあり (vfov 90・k1 −0.02・pitch 30) | 0.69 | 0.78 |
+| 実走画像からの推定値 (ca98075) | 0.76 | 0.84 |
 
-- 複製: `~/jetracer/unity/MinicarSim` (Assets/Packages/ProjectSettings のみ。Library は初回ビルドで生成)。ビルド済み: `~/jetracer/unity/player`。
-- 追加: 駐車枠の P1/P2/P3 マーク (`LabelTexture.cs` 5×7 ドット文字・テープ色・走路側から読める向き。`course.json` の `parking_slots[].name` を描く)。
-- 進行中 (ユーザー要望): 実カメラ画像 (2026-09-12 手動走行ログ 11,271 枚) に描画を寄せる。実画像の統計: 全体平均 BGR (110,112,116)・床 (110,113,115)・白壁 (195,193,190)・赤帯 (67,70,141)・周辺減光 中心/端 = 119/102・画面下端に黒い柱 2 本 (列 54–57・121–125、行 209–223)。sim 現状は床が暗く (92,95,95)・背景が一様灰色・壁が細く暗い。後処理 (樽型歪み・周辺減光・ブラー・柱) と材質/照明の調整を Unity 側で入れる。
+  残りの差は床の雑音粒・観戦者など描画内容の違いで、地平線と壁の下端は重なる。
+- 実画像との並べ比べで、構図 (地平線が上から約 14 %・床が大半) が近くなったことをユーザーに確認してもらった。
+- AIC 表示の下段「CAMERA」は、表示用の横長カメラではなく実際に配信している 224×224 (後処理後) をそのまま出す。
+  以前は別の横長カメラを映していて、「画角が違う」と見える一因だった。
 
-## PC 側で分かったこと (Jetson 側の設計へのフィードバック)
+## jetracer_compat (他チームの JetRacer 標準コードを sim で)
 
-- imu_model: PC 草案との差分で「こちらに無い汚れ」は見当たらない (重力投影・てこ腕・DLPF→間引き・量子化・飽和・遅延/ジッタ/取りこぼし・温度・乱択化は両方にある)。確認したい点だけ: (1) 停車中のモータ高調波の振幅 (v→0 で位相が止まると定数 sin が偽のバイアスになる。草案は min(1, |v|/0.2) の包絡を掛けた)、(2) 高調波の位相を push を跨いで連続にしているか、(3) 白色雑音 σ を √bw で取っている (草案は √fs_out)。Allan 分散の実測が入れば消える差。
-- 既存 sim の sweep (DOMAIN 0) と同居して 42 で問題なく分離できた。
+- `import jetracer_compat; jetracer_compat.install()` で `jetracer.nvidia_racecar` / `jetcam.csi_camera` が sim 版になる。
+- 変換: 値 × gain + offset → ServoKit のパルス 1500 + 750·u µs → `jetracer_bridge.yaml` の較正の逆写像 → ActuatorCmd (30 Hz 再送)。
+- 確認 (9/12 ロガーの gain −0.55・offset 0.12・throttle_gain 1.0): throttle −0.12 → 2.04 m/s 前進、steering −0.22 で直進 (ヨーレート 0.00)、±0.3 で左右に曲がる、画像 15 Hz。
+  Release から取ったプレイヤーでも同じ結果。
+- 終了時のクラッシュ (`terminate called without an active exception`) は、spin を `spin_once` のループにして終了時に止めてから rclpy を閉じる形で解消。
+
+## sim→real 画像変換 (FastCUT、PC の CPU)
+
+- 道具: `tools/sim2real/` ([README](../tools/sim2real/README.md))。venv は `scripts/setup_sim2real.sh` (`python3-venv` が無いこの PC では virtualenv で作る)。
+- 学習 `~/jetracer/runs/cut_001`: A = Unity 描画 (推定カメラ値・床テープの乱択化入り) 8 本 × 60 s から 3,700 枚、B = 9/12 の実画像 11,271 枚。
+  128 切り出し・FastCUT で 0.21 s/反復、3 万反復で約 1.8 時間。最初の 5,000 反復は仮のカメラ値の A で、そこから `--resume`。
+- 推論は ONNX で約 57 ms/枚 (CPU)。走行中に挟むと画像の遅れが増えるので、記録済み bag を後から変換する (`convert_bag.py`)。
+- 変換した bag は学習データの一部だけに混ぜる (9/12 の会場に寄せきらない)。
+
+## 踏んだ落とし穴 (PC)
+
+| 症状 | 原因 | 対処 |
+|---|---|---|
+| 自分の端末が落ちる | `pkill -f "<文字列>"` がその文字列を含む自分のシェルにも一致 | `scripts/stop_sim.sh` は実行ファイルのパスで先頭固定 (`^`)。手で止めるときは PID で |
+| スクリプトから上げた launch が Ctrl-C で止まらない | 非対話シェルの `&` job は SIGINT 無視を継承 | `set -m` を付けてから起動 (`run_sim_local.sh`・`smoke_test.sh`・`record.sh`) |
+| `git pull --rebase` が「unstaged changes」で止まる | Unity のビルドが `Assets/Scenes/Minicar.unity` を毎回書き換える | ビルド後は `git checkout -- unity/MinicarSim/Assets/Scenes/Minicar.unity` |
+| venv が作れない | `python3.10-venv` が未導入 (sudo が要る) | `setup_sim2real.sh` が virtualenv に切り替える |
+| Unity の白い板が灰色に沈む | 影側の壁には環境光しか当たらない | `realism.ambient_gain` 1.8 |
 
 ## P9 (2 ホスト直結) — 2026-09-26 完了
 
