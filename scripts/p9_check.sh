@@ -40,7 +40,11 @@ R=$(sysctl -n net.core.rmem_max)
 if command -v chronyc >/dev/null; then
   OFF=$(chronyc tracking 2>/dev/null | awk '/System time/{print $4}')
   REF=$(chronyc tracking 2>/dev/null | awk '/Reference ID/{print $NF}')
-  if [ -n "$OFF" ] && awk -v o="$OFF" 'BEGIN{exit !(o < 0.001)}'; then pass "chrony ずれ ${OFF}s (参照 $REF)"; else fail "chrony ずれ ${OFF:-?}s (参照 ${REF:-?})。1 ms 未満になるまで待つか設定を見直す"; fi
+  LEAP=$(chronyc tracking 2>/dev/null | awk -F': ' '/Leap status/{print $2}')
+  if [ "$LEAP" != "Normal" ] || [ -z "$REF" ] || [ "$REF" = "()" ]; then
+    fail "chrony 未同期 (Leap status: ${LEAP:-?}, 参照 ${REF:-無し})。相手の chrony server が上がってから数分待つ (chronyc sources -v)"
+  elif awk -v o="$OFF" 'BEGIN{exit !(o < 0.001)}'; then pass "chrony ずれ ${OFF}s (参照 $REF)"
+  else fail "chrony ずれ ${OFF}s (参照 $REF)。1 ms 未満になるまで待つ"; fi
 else
   fail "chrony が無い (apt install chrony)"
 fi
