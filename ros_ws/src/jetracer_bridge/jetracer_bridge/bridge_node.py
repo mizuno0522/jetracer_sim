@@ -155,15 +155,19 @@ class JetRacerBridge(Node):
     def throttle_us(self, target_v, brake):
         p = self.get_parameter
         neutral = float(p('throttle.pulse_us.neutral').value)
+        # map_v_us・brake_us・reverse_us は「中立より上 = 前進」の向きで書く。ESC の配線で逆 (中立より下で前進) なら
+        # invert: true で中立を軸に折り返す。★これを無視すると前進のつもりで後退し、ブレーキが加速になる
+        inv = bool(p('throttle.invert').value)
+        flip = (lambda us: 2.0 * neutral - us) if inv else (lambda us: us)
         if brake:
-            return float(p('throttle.brake_us').value)
+            return flip(float(p('throttle.brake_us').value))
         if target_v is None:
             return neutral
         if target_v < 0:
-            return float(p('throttle.reverse_us').value)
+            return flip(float(p('throttle.reverse_us').value))
         table = list(p('throttle.map_v_us').value)
         pairs = [(table[i], table[i + 1]) for i in range(0, len(table) - 1, 2)]
-        us = _interp_table(pairs, target_v)
+        us = flip(_interp_table(pairs, target_v))
         return max(float(p('throttle.pulse_us.min').value), min(float(p('throttle.pulse_us.max').value), us))
 
     def _write(self, steer_us, thr_us):
