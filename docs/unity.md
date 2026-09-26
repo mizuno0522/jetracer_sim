@@ -81,6 +81,27 @@ ros2 topic echo /camera/camera_info --once  # camera_info_pub が vehicle_profil
 
 `camera_backend:=opencv` (Unity 無し・`vehicle_sim` の射影描画) と同じ `camera_info` を使うので、先行注視点の画像座標 (`/sim/ground_truth` の u・v_px) は描画バックエンドに依らず同じになる。Unity と OpenCV で壁の位置がずれて見えたら `course.json` の書き出し忘れ。
 
+## 録画
+
+**Unity の表示 (追従視点・HUD・ミニマップ・センサ画像)** は Unity が描いた画面をそのまま ffmpeg (libx264 ultrafast) へ流して録る。デスクトップ録画 (x11grab) と違い Wayland でも黒画面にならず、描画も止まらない。既存 sim の `ScreenRecorder.cs` をそのまま使う (`sudo apt install ffmpeg` が要る)。
+
+```bash
+ros2 launch minicar_sim sim_host.launch.py camera_backend:=unity      unity_player:=~/jetracer/unity/player/MinicarSim.x86_64 tcp_port:=10001      record:=~/Videos/run.mp4                      # record_fps:=30 record_width:=1280 も指定できる
+```
+
+- 録画は起動直後から始まり、**Unity を SIGTERM で閉じたときに mp4 を閉じる** (Ctrl-C で launch を止めれば良い)。SIGKILL で殺すと再生できないファイルになる。
+- 断片化 mp4 なので、途中で止めてもそこまでは再生できる。
+- `record_width` を上げるほど符号化が重くなり、`/camera/image_raw` の配信レートが落ちる (既存 sim で 30 → 21 Hz になった実測)。既定の 1280 から上げるときはレートを確認する。
+- 録画できるのは **Unity を動かしているホスト (sim PC)** の画面。Jetson からは録れない。
+
+**車が実際に見ている画** (`/camera/image_raw`) を録るなら `tools/record_video.py`。Unity の HUD は入らないが、Unity 無し (`camera_backend:=opencv`) でも 2 ホストでも録れ、受信したフレームそのものなので経路の取りこぼしもそのまま映る。
+
+```bash
+python3 tools/record_video.py --seconds 60 --scale 3 --hud -o ~/Videos/camera.mp4
+```
+
+`--scale 3` は 224×224 を 3 倍に、`--hud` は sim 時刻・車速・横偏差・周回を下端に焼き込む。`--fps` は受信レート (既定 15) に合わせること。ずれていると終了時に警告が出る。
+
 ## lockstep (`sim_mode:=lockstep`) での描画
 
 `/sim/render_state` の stamp は sim 時刻。`/sim/step` は、この step で画像が来る予定 (15 Hz なので 2 step に 1 枚) のときだけ、直前より新しい stamp の画像が返るまで `step_image_timeout_s` (既定 0.5 s) 待つ。Unity が遅ければ step がその分遅くなるだけで、物理は進まない。`step_id`・`car_id` は `/sim/render_state` に予約済みで、Unity 側は当面無視してよい (N 台並列のときに使う)。

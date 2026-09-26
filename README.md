@@ -31,7 +31,7 @@ jetracer_sim/
 ├── unity/course.json        コース＋カメラ幾何の書き出し (Unity 側は数値を持たない)。Unity プロジェクトは minicarbattle2026/unity
 ├── docker/                  sim PC の ROS 側 (sim.Dockerfile / docker-compose.yml) と学習器 (learner.Dockerfile)
 ├── config/cyclonedds.xml    2 ホスト用 DDS 設定
-├── tools/                   make_route.py (参照線の引き直し)・corridor_check.py (机上判定)・lap_eval.py (周回評価)・imu_allan.py・imu_spectrum.py (IMU 5 測定の解析)
+├── tools/                   make_route.py (参照線の引き直し)・corridor_check.py (机上判定)・lap_eval.py (周回評価)・record_video.py (画像トピック → mp4)・imu_allan.py・imu_spectrum.py (IMU 5 測定の解析)
 ├── scripts/                 setup_host.sh (★環境を一気に作る: apt・sysctl・固定 IP・chrony)・p9_check.sh (2 ホスト直結の起動前チェック)・build.sh・test.sh・run_sim_local.sh・smoke_test.sh・setup_ws.sh・setup_unity_player.sh・export_course.sh・check_no_sim_topics.sh・sim_env.sh
 └── docs/                    architecture (境界・トピック)・setup (2 ホスト構築)・unity・docker・calibration・lockstep (強化学習 IF)
 ```
@@ -64,6 +64,7 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 | sim PC (Unity 描画) | `ros2 launch minicar_sim sim_host.launch.py` (`unity_player:=<Build/MinicarSim.x86_64>`。既存 sim と同居なら `tcp_port:=10001`・[docs/unity.md](docs/unity.md)) |
 | sim PC (Unity 無し) | `ros2 launch minicar_sim sim_host.launch.py camera_backend:=opencv unity_player:=none` |
 | 参照線を変える | `python3 tools/make_route.py --delta-max <rad> --plot /tmp/route.png` → `tools/corridor_check.py --route ...` → `route_file:=` |
+| 録画 | Unity の表示: `sim_host.launch.py ... record:=~/Videos/run.mp4` / 車が見ている画: `python3 tools/record_video.py --scale 3 --hud` ([docs/unity.md](docs/unity.md)) |
 | sim PC (強化学習) | `ros2 launch minicar_sim sim_host.launch.py sim_mode:=lockstep` → `/sim/reset`・`/sim/step` |
 | Jetson (sim 接続・教師) | `ros2 launch jetracer_stack vehicle_stack.launch.py teacher:=true` |
 | Jetson (推論) | `ros2 launch jetracer_stack vehicle_stack.launch.py model_file:=policy.onnx` |

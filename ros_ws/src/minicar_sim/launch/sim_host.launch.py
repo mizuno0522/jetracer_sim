@@ -57,6 +57,12 @@ def generate_launch_description():
         DeclareLaunchArgument('unity_player',
                               default_value=os.path.expanduser('~/minicarbattle2026/unity/MinicarSim/Build/MinicarSim.x86_64'),
                               description='Unity プレイヤー。none で起動しない (手動起動やエディタ Play のとき)'),
+        DeclareLaunchArgument('record', default_value='',
+                              description='Unity の画面を録画する mp4 のパス (例 ~/Videos/run.mp4)。空なら録画しない。'
+                                          'ffmpeg が要る。camera_backend:=unity のときだけ効く'),
+        DeclareLaunchArgument('record_fps', default_value='30'),
+        DeclareLaunchArgument('record_width', default_value='1280',
+                              description='録画の幅 [px]。フル解像度のままだと符号化が重く、画像配信のレートが落ちる'),
         DeclareLaunchArgument('tcp_port', default_value='10000',
                               description='ros_tcp_endpoint のポート。同じ PC で既存 sim (M-05・10000) も動かすなら 10001 等に'),
         DeclareLaunchArgument('rviz', default_value='false'),
@@ -110,7 +116,12 @@ def generate_launch_description():
         ExecuteProcess(
             # -seed: 起動時のエピソード seed (照明・床・観戦者の乱択化)。/sim/episode は LATCHED だが
             #        endpoint 経由では接続前の latched が届かないので引数でも渡す
+            # -record: 空なら録画しない。Unity が描いた画面をそのまま ffmpeg (libx264 ultrafast) へ流すので
+            #          デスクトップ録画 (x11grab) と違い Wayland でも黒画面にならず、描画も止まらない
             cmd=[unity_player, '-rosip', '127.0.0.1', '-rosport', tcp_port, '-layout', 'aic', '-laps', '0', '-seed', seed,
+                 '-record', LaunchConfiguration('record'),
+                 '-recordfps', LaunchConfiguration('record_fps'),
+                 '-recordwidth', LaunchConfiguration('record_width'),
                  '-logFile', os.path.expanduser('~/.ros/log/jetracer_unity_player.log')],
             name='unity_player', output='screen',
             condition=IfCondition(PythonExpression(
