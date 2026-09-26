@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>jetracer_common</name>
+  <version>0.1.0</version>
+  <description>ROS 非依存の共有モジュール: カメラ幾何・アクチュエータ模型・IMU センサモデル・参照線。sim と実機の両方から import する</description>
+  <maintainer email="mizuno0522@gmail.com">Hiroshi Mizuno</maintainer>
+  <license>MIT</license>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <test_depend>python3-pytest</test_depend>
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

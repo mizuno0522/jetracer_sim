@@ -1,0 +1,9 @@
+uint32 seed               # 物理・imu_sim・Unity の乱択化をすべてこの seed から
+string spawn              # "start" | "random" | "zone:<id>"
+string[] override_keys    # imu_sim.turn_on_bias.accel_sigma 等の yaml パスを上書き (未実装分は警告)
+float64[] override_values
+---
+bool ok
+sensor_msgs/Image image           # 初期観測 (画像が来ていなければ空)
+sensor_msgs/Imu[] imu             # 直近窓 (来ているぶん)
+minicar_sim_msgs/StepInfo info

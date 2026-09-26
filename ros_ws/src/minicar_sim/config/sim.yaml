@@ -1,0 +1,78 @@
+# JetRacer sim: vehicle_sim のパラメータ (コース・路面・センサ合成・sim の運転)。
+# ★ 車両の数値 (ホイールベース・舵角・カメラ幾何・アクチュエータ) はここに書かない。
+#   config/vehicle_profile/<name>.yaml が定義元で、起動時に上書きされる。
+vehicle_sim:
+  ros__parameters:
+    rate_hz: 100.0            # 物理。imu_sim はここから 1 kHz を作る (触らない)
+    sim_mode: realtime        # realtime / lockstep (launch の sim_mode:= で切替)
+    control_hz: 30.0
+    cmd_msg: actuator         # /actuator_cmd = minicar_msgs/ActuatorCmd
+    cmd_timeout_s: 0.3        # ブリッジと同じ 300 ms 失効
+    estop_hold_s: 1.0
+    vehicle_profile_file: jetracer_tt02
+    debug_motion: false
+    sensor_noise_m: 0.004
+    rear_sonar_max_m: 2.0
+    publish_ground_truth: true
+    odom_rate_hz: 50.0        # /odom, TF (sim 専用。推論は購読しない)
+    slow_rate_hz: 20.0
+    ground_truth_rate_hz: 100.0
+    lookahead_m: 0.8          # 先行注視点 = 参照線上 (lookahead_m + gain × v) 先
+    lookahead_speed_gain: 0.3
+    route_file: ''            # 空 = コース中心線。make_route.py の route.yaml を指定すると参照線を差し替え
+    route_name: shortcut
+    off_track_margin_m: 0.05
+    collision_clear_m: 0.10
+    episode_seed: 0
+    # --- 路面ごとの摩擦係数 (4 輪それぞれの位置で引く。実測ではなく材質からの見積り) ---
+    mu_carpet: 0.85
+    mu_turf: 1.05
+    mu_slip_plate: 0.25
+    mu_rough: 0.55
+    mu_slope: 0.70
+    slide_damp_ratio: 0.35
+    slide_share: 0.35
+    rough_drag_per_s: 0.9
+    rough_yaw_noise: 0.12
+    slope_grade: 0.08
+    slip_elastic: 0.12
+    slip_runaway: 0.60
+    inject_stuck_at_s: -1.0
+    stuck_duration_s: 3.0
+    spawn_opponent: false
+    opponent_speed_mps: 0.6
+    opponent_lead_m: 0.8
+    opponent_lateral_m: 0.0
+    publish_opponent_info: false
+    use_shortcut: true        # ②坂道ショートカット経由 (実走ログの 1 周 28.8 m と整合)
+    narrow_divider: true
+    # --- 旧 sim の測距センサ (JetRacer 機には無い。既定 off。bench 互換のため残す) ---
+    use_lidar: false
+    lidar_rate_hz: 20.0
+    lidar_res_deg: 0.5
+    lidar_mount_x_m: 0.0
+    lidar_mount_y_m: 0.0
+    tof_height_m: 0.060
+    sonar_height_m: 0.060
+    lidar_height_m: 0.100
+    publish_mag: false        # 6 軸なので地磁気は出さない
+    # --- 合成カメラ。解像度・画角・取付は vehicle_profile.camera から入る ---
+    arrow_random_each_lap: true
+    cam_draw_walls: true
+    wall_height_m: 0.089
+    wall_base_m: 0.030
+    cam_floor_speckle: true
+
+sim_viz:
+  ros__parameters:
+    rate_hz: 5.0
+    vehicle_length_m: 0.43
+    vehicle_width_m: 0.19
+    use_shortcut: true
+    lidar_rate_hz: 20.0
+    lidar_res_deg: 0.5
+    wheelbase_m: 0.257
+    max_steer_rad: 0.47
+    speed_color_max_mps: 2.5
+    trail_max_points: 700
+    trail_min_dist_m: 0.03

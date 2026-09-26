@@ -1,0 +1,27 @@
+cmd_shaper:
+  ros__parameters:
+    rate_hz: 30.0               # 凍結値
+    max_age_s: 0.30
+    steer_rate_limit_rad_s: 8.0
+    accel_limit_mps2: 3.0
+    decel_limit_mps2: 6.0
+    min_lookahead_m: 0.25
+    v_max_override_mps: 0.0
+    auto_run: false             # /run (std_msgs/Bool) を待つ
+failsafe:
+  ros__parameters:
+    image_timeout_s: 0.15
+    imu_timeout_s: 0.05
+    cmd_timeout_s: 0.10
+    arm_grace_s: 3.0
+    confirm_ticks: 2            # 連続 2 ティック (67 ms) 超えで ESTOP
+policy_net:
+  ros__parameters:
+    model_file: ''              # ONNX。空なら出さない
+    imu_window: 50
+    mask_bottom_frac: 0.0       # 車体の写り込み (画面下の 4 本の柱)。実機で決めて両系同じ値に
+gt_teacher:
+  ros__parameters:
+    s_max: 0.6
+    s_min: 0.25
+    curv_gain: 0.18

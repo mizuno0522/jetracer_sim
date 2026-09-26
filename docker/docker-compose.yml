@@ -1,0 +1,26 @@
+# sim PC: ROS 側を Docker で (Unity プレイヤーは compose の外・素で起動)。
+#   cd docker && docker compose build && docker compose up -d sim
+#   docker compose logs -f sim
+# ★ network_mode: host 以外では動かない (DDS の探索はマルチキャスト)。rmem_max はホストの sysctl。chrony はホストで。
+services:
+  sim:
+    build: {context: .., dockerfile: docker/sim.Dockerfile}
+    network_mode: host
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42}
+      - ROS_LOCALHOST_ONLY=0
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      - CYCLONEDDS_URI=file:///cfg/cyclonedds.xml
+      - SIM_MODE=${SIM_MODE:-realtime}
+      - CAMERA_BACKEND=${CAMERA_BACKEND:-unity}
+    volumes:
+      - ../config:/cfg:ro            # cyclonedds.xml
+      - ../bags:/bags                # 大きいので必ず外に出す
+      - ../ros_ws/src/minicar_sim/config:/ws/src/minicar_sim/config:ro   # sim.yaml・imu_sim.yaml・vehicle_profile を編集したら再起動だけ
+  learner:
+    build: {context: .., dockerfile: docker/learner.Dockerfile}
+    network_mode: host
+    deploy: {resources: {reservations: {devices: [{capabilities: [gpu]}]}}}
+    environment: [ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42}, ROS_LOCALHOST_ONLY=0, RMW_IMPLEMENTATION=rmw_cyclonedds_cpp]
+    volumes: [../bags:/bags, ../runs:/runs]
+    profiles: [learn]                # docker compose --profile learn up learner

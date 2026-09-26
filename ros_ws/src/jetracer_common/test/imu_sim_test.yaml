@@ -1,0 +1,22 @@
+imu_sim:
+  mount: {xyz: [0.08, 0.0, 0.06], rpy_deg: [180.0, 0.0, 90.0], rpy_err_deg: [1.0, 1.0, 1.0]}
+  rate: {physics_hz: 100, internal_hz: 1000, output_hz: 100}
+  range: {accel_g: 4, gyro_dps: 500, bits: 16, saturate: true}
+  dlpf: {accel_bw_hz: 94, accel_delay_ms: 3.0, gyro_bw_hz: 98, gyro_delay_ms: 2.8}
+  noise: {accel_nd: 0.0040, gyro_nd: 0.00009, accel_rw: 0.0004, gyro_rw: 0.00002}
+  turn_on_bias: {accel_sigma: [0.08, 0.08, 0.12], gyro_sigma: [0.01, 0.01, 0.01]}
+  scale: {accel_err_sigma: 0.01, gyro_err_sigma: 0.01, misalign_deg_sigma: 0.5}
+  temp: {start_c: 25.0, rise_c: 15.0, tau_s: 300.0, accel_coef: 0.002, gyro_coef: 0.0003}
+  vibration:
+    motor_hz_per_mps: 95.0
+    harmonics: [1, 2, 4]
+    amp_ms2: [0.9, 0.5, 0.3]
+    gear_mesh_hz: 0.0
+    surface:
+      carpet: {rms_per_mps: 1.2, fc_hz: 60}
+      slope: {rms_per_mps: 1.75, fc_hz: 50}
+      turf: {rms_per_mps: 1.9, fc_hz: 45}
+      rough: {rms_per_mps: 2.6, fc_hz: 25}
+      slip: {rms_per_mps: 1.2, fc_hz: 70}
+  latency: {base_ms: 4.0, jitter_ms: 2.0, drop_prob: 0.0}
+  domain_rand: {enable: true, seed_per_episode: true, scale: 1.0}

@@ -1,0 +1,74 @@
+# imu_sim (imu_sim_node が config_file として直接読む): SY-151 (MPU-6500 互換・6 軸) のセンサモデル。★Allan 分散・スペクトルの実測で置き換える (docs/calibration.md)
+imu_sim:
+  frame_id: imu_link
+  body_state_topic: /sim/body_state
+  imu_topic: /imu
+  seed: 0                   # /sim/episode が来ればそちらを優先 (エピソード毎に引き直す)
+  # ── 取付 (車両座標 x前・y左・z上、原点は重心)
+  mount:
+    xyz: [0.080, 0.000, 0.060]     # m 写真からの推定 ★要実測
+    rpy_deg: [180.0, 0.0, 90.0]    # 水平・部品面下・x が車の左 (確認済み) → センサ x=左 y=前 z=下
+    rpy_err_deg: [1.0, 1.0, 1.0]   # σ・エピソード毎に引き直す
+  # ── 3 つの時計
+  rate:
+    physics_hz: 100                # vehicle_sim。ここは触らない
+    internal_hz: 1000              # 振動と折り返しのため物理より速く回す
+    output_hz: 100                 # 実機の I2C 読み出し周期
+  # ── レンジと量子化 (実機の設定と必ず一致させる)
+  range:
+    accel_g: 4                     # ±2/4/8/16。実データは ±2 で飽和した → 4 に
+    gyro_dps: 500
+    bits: 16
+    saturate: true                 # 振り切りをクリップして残す
+  # ── DLPF (MPU-6500 の DLPF_CFG に対応。データシート要確認)
+  dlpf:
+    accel_bw_hz: 94.0
+    accel_delay_ms: 3.0
+    gyro_bw_hz: 98.0
+    gyro_delay_ms: 2.8
+  alpha_bw_hz: 30.0                # 角加速度の差分に通す一次遅れ
+  # ── 雑音 (★Allan 分散の実測で置き換える。下は暫定)
+  noise:
+    accel_nd: 0.0040               # m/s²/√Hz
+    gyro_nd: 0.00009               # rad/s/√Hz
+    accel_rw: 0.00040              # m/s²/√s  in-run 安定性
+    gyro_rw: 0.000020              # rad/s/√s
+  # ── ★ターンオンバイアス: エピソード毎に引き直す (固定しないこと)
+  turn_on_bias:
+    accel_sigma: [0.08, 0.08, 0.12]    # m/s²
+    gyro_sigma: [0.010, 0.010, 0.010]  # rad/s
+  # ── スケール誤差・軸ずれ
+  scale:
+    accel_err_sigma: 0.010
+    gyro_err_sigma: 0.010
+    misalign_deg_sigma: 0.5
+  # ── 温度 (起動後の昇温を一次遅れで)
+  temp:
+    start_c: 25.0
+    rise_c: 15.0
+    tau_s: 300.0
+    accel_coef: 0.0020             # m/s² / °C
+    gyro_coef: 0.00030             # rad/s / °C
+  # ── 振動 (★車体を持ち上げた実測スペクトルで置き換える)
+  vibration:
+    motor_hz_per_mps: 95.0         # 車速 → モータ基本周波数 ★要実測
+    harmonics: [1, 2, 4]
+    amp_ms2: [0.9, 0.5, 0.3]
+    gear_mesh_hz: 0.0              # 実測後に入れる
+    gyro_per_ms2: 0.02             # 路面振動 → 角速度の揺れ [rad/s per m/s²]
+    surface:                       # 路面別。rms = coef × 速度 [m/s] (★2026-09-12 実走の 15 Hz ログ。折り返し込み)
+      carpet: {rms_per_mps: 1.2, fc_hz: 60.0}
+      slope:  {rms_per_mps: 1.75, fc_hz: 50.0}
+      turf:   {rms_per_mps: 1.9, fc_hz: 45.0}
+      rough:  {rms_per_mps: 2.6, fc_hz: 25.0}
+      slip:   {rms_per_mps: 1.2, fc_hz: 70.0}   # 未計測。カーペットと同等と仮定
+  # ── 遅延とジッタ (画像 0.07〜0.10 s との相対関係を合わせる)
+  latency:
+    base_ms: 4.0
+    jitter_ms: 2.0                 # I2C 読み出しのばらつき (★2 ホスト接続後に実測)
+    drop_prob: 0.002
+  # ── 乱択化
+  domain_rand:
+    enable: true
+    seed_per_episode: true
+    scale: 1.0                     # 陽性対照では 0.0 と 3.0 を流す

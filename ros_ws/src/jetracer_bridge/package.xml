@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>jetracer_bridge</name>
+  <version>0.1.0</version>
+  <description>実機バックエンド: PCA9685 (サーボ/ESC) ＋ SY-151 (MPU-6500 互換) ＋ CSI カメラ。/actuator_cmd を受け /imu・/camera/image_raw を出す</description>
+  <maintainer email="mizuno0522@gmail.com">Hiroshi Mizuno</maintainer>
+  <license>MIT</license>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>minicar_msgs</exec_depend>
+  <exec_depend>jetracer_common</exec_depend>
+  <exec_depend>python3-smbus2-pip</exec_depend>
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

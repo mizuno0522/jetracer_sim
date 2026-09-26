@@ -1,0 +1,6 @@
+# lockstep モードのみ。1 回で 1/30 s ぶん進む (物理 10 ms ティックを 3,3,4,... で累積)
+minicar_msgs/ActuatorCmd action   # ★実機と同じ型。cmd_shaper を通した後の値
+---
+sensor_msgs/Image image           # この step の後に描画された画像 (timeout 内に来なければ直前のもの)
+sensor_msgs/Imu[] imu             # この step で生成された 3〜4 サンプル
+minicar_sim_msgs/StepInfo info

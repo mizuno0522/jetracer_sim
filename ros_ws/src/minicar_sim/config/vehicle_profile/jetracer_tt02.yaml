@@ -1,0 +1,46 @@
+# JetRacer 機 (Tamiya TT-02 4WD ＋ JetRacer 標準 BOM ＋ Jetson Orin Nano)。
+# ★ 車両の数値はここにだけ書く。vehicle_sim / cmd_shaper / jetracer_bridge / Unity 書き出しが同じ値を読む。
+# 「寸法は図面から、特性は実測から。推測で埋めない」── ★要実測 の欄は暫定値 (設計書 パラメータ タブ)。
+vehicle_profile:
+  name: jetracer_tt02
+  wheelbase_m: 0.257          # Tamiya 公称。確定
+  track_m: 0.157              # ★要確認 (ホイールオフセット次第)
+  mass_kg: 1.85               # ★要実測 (Orin Nano ＋ 電源込み、暫定)
+  cg_height_m: 0.050          # ★要実測
+  length_m: 0.43              # 全長 (ヨー慣性の見積りに使う)
+  width_m: 0.19               # 全幅 (規約 220 mm 以内)
+  delta_max_rad: 0.47         # ★要実測 (暫定 27°。R_min = 0.257/tan(0.47) = 0.506 m)
+  v_max_mps: 3.0              # cmd_shaper の s=1 に対応する車速。実走ログの最速 2.5 m/s より上
+  drive: 4wd_locked           # シャフト 4WD・センターデフ無し (既存 sim の想定は front)
+  drive_split: [0.5, 0.5]     # 前後の駆動力配分 (拘束下の名目値)
+  gear_ratio: 8.35            # 22T ピニオン標準 ★要確認 (ピニオン交換で 5〜11)
+  tire_dia_m: 0.064           # ★要実測
+  motor:
+    force_n: 8.0              # ★要実測: 直線で 0→2.0 m/s の到達時間 t から F = m·2.0/t
+    v_free_mps: 4.5           # 駆動力が 0 になる車速 (DC モータの特性) ★要実測
+    accel_time_constant_s: 0.35
+  servo:
+    tau_s: 0.06               # 一次遅れ ★要実測
+    rate_limit_rad_s: 6.0     # サーボ追従限界 ★要実測
+  esc:
+    type: tble_02s
+    deadband_mps: 0.15        # 不感帯 (±0.08 相当。実走ログはこの直上の敏感な領域を使っていた) ★要実測
+    reverse_via_neutral_ms: 120   # ★後退は中立を経由しないとブレーキになる (同系 ESC の実測値から始める)
+    brake_decel_mps2: 4.0     # ブレーキ帯の減速度上限 ★要実測
+    coast_decel_mps2: 0.35    # 惰行時の減速 (転がり抵抗)
+  drivetrain_lock:            # 4wd_locked の「突っ張り」★要較正 (小回りでの減速量を実測して合わせる)
+    windup_gain: 1.0
+    windup_drag: 0.5
+  suspension:                 # 準静的なロール/ピッチ。imu_sim の重力投影 (「加速度計側が高いのはロールの重力漏れ」) に効く
+    roll_per_ms2: 0.020       # rad / (m/s²)  ≈ 1.1°/(m/s²)  ★要実測
+    pitch_per_ms2: 0.012      # rad / (m/s²)  ★要実測
+  camera:
+    width: 224                # ★凍結値: 実機の取り込み 224×224・15 Hz に合わせた (設計書 較正タブの決定)
+    height: 224
+    rate_hz: 15.0
+    hfov_deg: 120.0           # ★要確認: 実機レンズは 120〜160° 級の広角 (魚眼ではない)。sim は 170° 未満のピンホール
+    mount_height_m: 0.12      # ★要実測
+    mount_x_m: 0.0            # base_link (後軸) からの前後位置 ★要実測
+    pitch_deg: 12.0           # 下向き正 ★要実測
+    crop_top_frac: 0.0        # 実機は切らない。車体の写り込みは camera_preproc で両系同じマスク
+    distortion: none          # ★未実装 (Brown 樽型。チェッカーボードで係数を測ってから Unity に入れる)

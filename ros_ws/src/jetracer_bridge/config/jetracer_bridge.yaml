@@ -1,0 +1,46 @@
+# jetracer_bridge の設定。★要実測 の欄は車体を持ち上げて目で確かめてから入れる (docs/calibration.md)
+jetracer_bridge:
+  ros__parameters:
+    vehicle_profile_file: jetracer_tt02
+    i2c:
+      bus: 1                    # ★Orin Nano: ピン 27/28 = bus 1、ピン 3/5 = bus 7。i2cdetect -y -r <bus> で 0x40 と 0x68 が見えるほう
+      pca9685_addr: 0x40
+      imu_addr: 0x68            # ⚠ 同一バス。tegra-i2c のタイムアウトが出たら別バス化を検討 (設計 未決①)
+      pca_freq_hz: 50.0
+    steering:
+      channel: 0
+      pulse_us: {min: 1000, center: 1500, max: 2000}   # ★サーボの実測端点で置換 (実走ログ: 機械中立は指令 −0.22 = 中立がずれていた)
+      invert: false
+      map: [0.0]                # 較正②の実現率カーブ [δ_rad, µs, ...]。空なら center と min/max の線形
+    throttle:
+      channel: 1
+      pulse_us: {min: 1000, neutral: 1500, max: 2000}  # TBLE-02S の設定手順で合わせた値
+      invert: false
+      map_v_us: [0.0, 1500.0, 0.3, 1560.0, 1.5, 1600.0, 3.0, 1660.0]   # ★要実測 (実走: スロットル 0.02 の差が 2 倍の速度差。不感帯の直上)
+      reverse_us: 1300
+      brake_us: 1350
+    failsafe:
+      cmd_timeout_ms: 300       # ★既存ブリッジの安全機構を必ず引き継ぐ
+      estop_hold_s: 1.0
+    publish:
+      imu_hz: 100.0
+      imu_frame: imu_link
+    imu:                        # ★imu_sim.yaml の range / dlpf と一致させる
+      accel_g: 4
+      gyro_dps: 500
+      accel_bw_hz: 92
+      gyro_bw_hz: 92
+      cov_accel: 0.02
+      cov_gyro: 0.0004
+    dry_run: false
+camera_node:
+  ros__parameters:
+    vehicle_profile_file: jetracer_tt02
+    sensor_id: 0
+    sensor_mode: 4
+    capture_width: 1280
+    capture_height: 720
+    capture_fps: 30
+    flip_method: 0
+    square_mode: crop           # ★meta.txt の「切り出しか縮小か」に合わせる。変えたら hfov_deg も
+    source: csi

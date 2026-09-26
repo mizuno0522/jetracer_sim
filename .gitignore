@@ -1,0 +1,10 @@
+ros_ws/build/
+ros_ws/install/
+ros_ws/log/
+bags/*
+!bags/.gitkeep
+runs/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/

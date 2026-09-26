@@ -1,0 +1,226 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /SimMarkers1
+      Splitter Ratio: 0.5
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: false
+      Cell Size: 0.5
+      Plane Cell Count: 40
+      Color: 160; 160; 160
+      Reference Frame: odom
+      Value: false
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: true
+      Show Names: true
+      Show Axes: true
+      Show Arrows: false
+      Marker Scale: 0.4
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Name: SimMarkers
+      Enabled: true
+      Topic:
+        Value: /sim/markers
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Value: true
+    # 走行軌跡は sim_viz が通過速度で色分けした LINE_STRIP (/sim/markers の trail)
+    # で表示する。単色の Odometry 矢印は既定で無効 (必要なら Enabled を true に)。
+    - Class: rviz_default_plugins/Odometry
+      Name: OdomArrows
+      Enabled: false
+      Topic:
+        Value: /odom
+        Reliability Policy: Reliable
+      Keep: 100
+      Position Tolerance: 0.1
+      Angle Tolerance: 0.1
+      Shape:
+        Value: Arrow
+        Color: 120; 160; 255
+        Alpha: 0.5
+      Covariance:
+        Value: false
+      Value: false
+    # 合成カメラ (use_camera:=true のときだけ流れる)。車載視点と、
+    # lane_detector が見ている BEV + 走行可能領域を並べて確認する。
+    - Class: rviz_default_plugins/Image
+      Name: CameraView
+      Enabled: true
+      Topic:
+        Value: /camera/image_raw
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+      Max Value: 1
+      Min Value: 0
+      Normalize Range: true
+      Value: true
+    - Class: rviz_default_plugins/Image
+      Name: LaneBEV
+      Enabled: true
+      Topic:
+        Value: /lane/debug_image
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Max Value: 1
+      Min Value: 0
+      Normalize Range: true
+      Value: true
+    # センサフュージョンのローカル占有格子 (LiDAR+ToF+超音波+カメラ)
+    - Class: rviz_default_plugins/Map
+      Name: FusionGrid
+      Enabled: true
+      Topic:
+        Value: /fusion/local_map
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Alpha: 0.55
+      Color Scheme: costmap
+      Draw Behind: false
+      Value: true
+    # 走行状況の文字表示 (HUD)。シムとは独立したノードが出す。
+    - Class: rviz_default_plugins/MarkerArray
+      Name: StatusHUD
+      Enabled: true
+      Topic:
+        Value: /hud/markers
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Value: true
+    # 大域走路 (route_guide が出す参照ライン)。プランナはこれを追う。
+    - Class: rviz_default_plugins/Path
+      Name: RouteReference
+      Enabled: true
+      Topic:
+        Value: /route/reference
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Color: 255; 210; 0
+      Line Style: Lines
+      Line Width: 0.02
+      Alpha: 0.9
+      Buffer Length: 1
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0.01
+      Pose Style: None
+      Value: true
+    # ローカルプランナが選んだ経路
+    - Class: rviz_default_plugins/Path
+      Name: LocalPlan
+      Enabled: true
+      Topic:
+        Value: /plan
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Color: 0; 255; 128
+      Line Style: Lines
+      Line Width: 0.03
+      Alpha: 1
+      Buffer Length: 1
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0.02
+      Pose Style: None
+      Value: true
+    # 車載カメラ映像 (デバッグ用。予選でも rosbag と併せて状況把握に使う)
+    - Class: rviz_default_plugins/Image
+      Name: Camera
+      Enabled: true
+      Topic:
+        Value: /camera/image_raw
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+      Max Value: 1
+      Min Value: 0
+      Normalize Range: true
+      Value: true
+    # MPPI が実際に出す指令列 (u_nom) の予測軌跡
+    - Class: rviz_default_plugins/Path
+      Name: MppiPredicted
+      Enabled: true
+      Topic:
+        Value: /mppi/predicted_path
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Color: 255; 80; 255
+      Line Style: Lines
+      Line Width: 0.03
+      Alpha: 1
+      Buffer Length: 1
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0.03
+      Pose Style: None
+      Value: true
+  Global Options:
+    Fixed Frame: odom
+    Background Color: 40; 40; 42
+    Frame Rate: 30
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+  Value: true
+  Views:
+    # 既定はコース全景 (コース中心 x=5.15, y=3.15 を画面中央に置く)。
+    # 車を追う視点は Saved の FollowCar に切り替えて使う。
+    Current:
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: WholeCourse
+      Target Frame: odom
+      Scale: 125
+      Angle: 0
+      X: 5.15
+      Y: 3.15
+      Invert Z Axis: false
+    Saved:
+      - Class: rviz_default_plugins/TopDownOrtho
+        Name: FollowCar
+        Target Frame: base_link
+        Scale: 120
+        X: 0
+        Y: 0
+Window Geometry:
+  Height: 900
+  Width: 1500
+  Displays:
+    collapsed: false
+  Views:
+    collapsed: false
+  CameraView:
+    collapsed: false
+  LaneBEV:
+    collapsed: false

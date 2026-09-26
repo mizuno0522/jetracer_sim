@@ -1,0 +1,12 @@
+<!-- 全ホスト共通の CycloneDDS 設定。NetworkInterface の name は ip link で確認して置き換える (有線だけ) -->
+<CycloneDDS>
+  <Domain id="any">
+    <General>
+      <Interfaces><NetworkInterface name="eth0"/></Interfaces>
+      <AllowMulticast>spdp</AllowMulticast>       <!-- 探索だけマルチキャスト。データはユニキャスト -->
+    </General>
+    <Internal>
+      <SocketReceiveBufferSize min="10MB"/>       <!-- 画像用。ホストの sysctl net.core.rmem_max と対で -->
+    </Internal>
+  </Domain>
+</CycloneDDS>

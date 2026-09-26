@@ -1,0 +1,46 @@
+# ベンチマークのシナリオ定義 (benchmark.py が読む)。
+#
+# 予選ラウンドの検証を主軸に置く:
+#   - 単独走行、⑤狭い道の中央仕切りあり (△3 p.30-31: 試走会/予選/決勝すべてで設置)、
+#     矢印は進行方向のみ
+#   - 成績 = タイム + 5秒 x 手動復帰 (3秒以上のスタック)
+# センサ構成を落とした条件を並べてあるのは、実機で「どれかが効かない」
+# 事態が普通に起きるため。全部そろった条件でしか走れない作りは弱い。
+
+defaults:
+  laps: 3
+  timeout: 200
+  repeats: 2
+  args:
+    fusion: "true"
+    qualify_laps: "99"      # 走行停止は bench_eval 側で管理する
+    rviz: "false"
+
+scenarios:
+  - name: qualify_full
+    desc: 予選・全センサ (LiDAR + カメラ)
+    args: {use_lidar: "true", use_camera: "true", narrow_divider: "true", arrow_dir: "center"}
+
+  - name: qualify_tof
+    desc: 予選・LiDAR なし (ToF + 超音波 + カメラ)
+    args: {use_lidar: "false", use_camera: "true", narrow_divider: "true", arrow_dir: "center"}
+
+  - name: qualify_nocam
+    desc: 予選・カメラなし (測距のみ。トンネル相当の視界喪失に耐えるか)
+    args: {use_lidar: "true", use_camera: "false", narrow_divider: "true", arrow_dir: "center"}
+
+  - name: qualify_outer
+    desc: 予選・外周ルート (③ライトかく乱ゾーンを通る)
+    args: {use_lidar: "true", use_camera: "true", narrow_divider: "true", arrow_dir: "center",
+           use_shortcut: "false"}
+    laps: 2
+
+  - name: qualify_stuck
+    desc: 予選・走行中にスタックを注入 (自動脱出が3秒以内に終わるか)
+    args: {use_lidar: "true", use_camera: "true", narrow_divider: "true", arrow_dir: "center",
+           inject_stuck_at_s: "18.0"}
+
+  - name: final_gate
+    desc: 決勝・中央仕切りあり + 矢印ランダム (優先度は低い。回帰確認用)
+    args: {use_lidar: "true", use_camera: "true", narrow_divider: "true", arrow_dir: "random"}
+    repeats: 1
