@@ -1,6 +1,6 @@
 # JetRacer sim
 
-> **他チームの方へ**: JetRacer ベースのソフトをこの sim で走らせる手順は [docs/for_teams.md](docs/for_teams.md) (v0.1.1・試用版。信頼度の表を先に読んでください)。
+> **他チームの方へ**: JetRacer ベースのソフトをこの sim で走らせる手順は [docs/for_teams.md](docs/for_teams.md) (v0.1.1・試用版。信頼度の表を先に読んでください)。ビルド済み Unity プレイヤーは [Release v0.1.1](https://github.com/mizuno0522/jetracer_sim/releases/tag/v0.1.1)。
 
 自動運転ミニカーバトル 2026 のコースを **JetRacer ベースの車両 (Tamiya TT-02 4WD ＋ Jetson Orin Nano ＋ CSI カメラ ＋ 6 軸 IMU)** で走らせるための、ROS 2 ＋ Unity シミュレータ。
 [minicarbattle2026](https://github.com/mizuno0522/minicarbattle2026) の既存 sim (物理 `vehicle_sim`・Unity 描画) を転用し、**差し替えたのはブリッジ 1 枚とセンサ合成 (`imu_sim`) だけ**。物理・描画・`/actuator_cmd` の境界は動かしていない。
@@ -108,6 +108,12 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 
 - 数値のうち ★要実測 は暫定値 (`vehicle_profile`・`imu_sim.yaml`・`jetracer_bridge.yaml` の各コメント)。**δmax を実測したら `make_route.py --delta-max <rad>` で参照線を引き直す**
 - 4WD 拘束 (windup) は飽和形に直したが係数は ★要較正 (フルロック旋回の減速量を実測して合わせる)
+
+## 開発の進め方 (このリポジトリを直す人向け)
+
+- Jetson (車両側・較正) と sim PC (Unity・学習) の 2 か所から同じ `main` に push する。**push の前に必ず `git pull --rebase`**。同じファイルを同時に直さないよう、担当を分ける (Jetson: `jetracer_common`・`minicar_sim`・`jetracer_bridge`・`jetracer_stack`・tools の較正系 / PC: `unity/`・`jetracer_compat`・`tools/sim2real`・Unity 系の scripts)
+- 他チームに渡す版はタグ (`v0.1.1` など) で固定し、Unity プレイヤーは同じ名前の GitHub Release に添付する。`main` を進めても他チームの手元は変わらない。版を上げるときはタグと Release を両方作る
+- 数値の定義元は 1 か所: 車両・カメラは `vehicle_profile/jetracer_tt02.yaml`、舵とスロットルの較正は `jetracer_bridge/config/jetracer_bridge.yaml`。値を変えたら `./scripts/test.sh` と `tools/lap_eval.py` で閉ループを確かめる
 
 ## ドキュメント
 

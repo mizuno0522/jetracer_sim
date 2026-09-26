@@ -21,7 +21,7 @@ NVIDIA JetRacer (https://github.com/NVIDIA-AI-IOT/jetracer) ベースの車両�
 
 - **sim を動かす PC**: Ubuntu 22.04 (x86_64)・ROS 2 Humble・GPU (内蔵 GPU で可。OpenGL/Vulkan)
 - **車両ソフトを動かすマシン**: 同じ PC でも、Jetson (JetPack 6・ROS 2 Humble) を LAN でつないでも可
-- Unity Editor は**不要** (ビルド済みプレイヤーを Release から取る)
+- Unity Editor は**不要** (ビルド済みプレイヤーを [Release v0.1.1](https://github.com/mizuno0522/jetracer_sim/releases/tag/v0.1.1) から取る。`scripts/get_unity_player.sh` が自動で取る)
 
 ## 手順 (sim PC)
 
