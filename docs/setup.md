@@ -94,6 +94,15 @@ sudo ./scripts/setup_vnc.sh          # 導入・ログイン不要の自動起�
 
 **モニターに映っている普段のデスクトップ**を見たいなら `sudo ./scripts/setup_vnc.sh --mirror` (x11vnc、port 5902)。X の画面データを直接読むので、モニターへの信号が途切れても影響しない。Mac からは上の 5901 を 5902 に替えるだけ。
 
+| 見たいもの | Jetson で 1 回 | Mac のトンネル | VNC Viewer |
+|---|---|---|---|
+| モニターの普段のデスクトップ | `sudo ./scripts/setup_vnc.sh --mirror` | `ssh -N -L 5902:localhost:5902 jetson@ubuntu.local` | `localhost:5902` |
+| 別の仮想デスクトップ | `sudo ./scripts/setup_vnc.sh` | `ssh -N -L 5901:localhost:5901 jetson@ubuntu.local` | `localhost:5901` |
+
+- Mac のターミナルに `channel 2: open failed: connect failed: Connection refused` と出たら、トンネルか VNC Viewer のポートが、Jetson で動いていない方 (5901 と 5902 の取り違え) を向いている。`./scripts/setup_vnc.sh status` で動いている方を確認する。
+- Jetson の Wi-Fi の IP は DHCP でよく変わる (.21 / .23 / .25 を観測)。IP ではなく `ubuntu.local` でつなぐ。
+- 仮想デスクトップが不要なら `systemctl --user disable --now jetracer-vnc`。
+
 既定は Jetson の中 (localhost) でしか待ち受けず、Mac からは SSH の暗号化トンネルで入る (VNC のパスワードは平文で流れるため)。家の LAN だけで直接つなぐなら `sudo ./scripts/setup_vnc.sh --lan` → VNC Viewer で `ubuntu.local:5901`。仮想ディスプレイの中の OpenGL (rviz など) はソフトウェア描画で遅い。
 
 ## 失敗の定番
