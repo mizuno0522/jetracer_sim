@@ -30,11 +30,12 @@
 
 | 項目 | やり方 | 入れる先 |
 |---|---|---|
-| 舵の端点 | µs を 1000 → 2000 まで刻んで、リンケージが当たる直前を min/max、直進を center に | `steering.pulse_us` |
+| 舵の端点 | µs を 1000 → 2000 まで刻んで、リンケージが当たる直前を min/max、直進を center に。**今の値 (min 1178・center 1681・max 2002) は 9/12 の実走ログからの推定** (gain −0.55・offset 0.12 で ±1 と、直線で当てていた −0.22 から) | `steering.pulse_us` |
 | 舵の実現率 | δ を数段階で与え、前輪の切れ角を分度器 (または上から写真) で測る。左右別々に | `steering.map: [δ_rad, µs, ...]`。空なら線形 |
 | **δmax** | 上の表の端。左右の小さいほう | `vehicle_profile.delta_max_rad` (暫定 0.47 = 27°)。決まったら `python3 tools/make_route.py --delta-max <rad>` で参照線を引き直し、`tools/corridor_check.py --route` と `tools/lap_eval.py` で確認 (設計 未決⑦) |
-| 中立 | 2026-09-12 のログでは直進時に運転者が左へ 0.22 当てていた = 機械中立がずれている | リンケージで合わせるか `center` を動かす。**直したら学習データは取り直し** |
-| ESC の中立と不感帯 | TBLE-02S の設定手順で neutral を合わせ、動き出す µs を前後で記録 | `throttle.pulse_us`・`vehicle_profile.esc.deadband_mps` |
+| 中立 | 2026-09-12 のログでは直進時に運転者が左へ 0.22 当てていた = 機械中立は 1681 µs (1500 からずれている) | 今は `center: 1681` で sim を実機に合わせてある。リンケージで 1500 に直すなら `center` も戻す。**直したら学習データは取り直し**。他チームの車は gain/offset をソフトで持っているので、そちらを変えたら sim も同じ値に |
+| ESC の向き | **この車は中立より下のパルスで前進する** (9/12 のログは 5 セッションとも throttle がマイナスで前進) | `throttle.invert: true` (設定済み)。map・brake・reverse は「中立より上 = 前進」の向きで書く |
+| ESC の中立と不感帯 | TBLE-02S の設定手順で neutral を合わせ、動き出す µs を前後で記録。今の `map_v_us` はログの周回時間からの平均車速 (−0.106 → 1.26 〜 −0.130 → 2.45 m/s、カーブの減速込み)。0 m/s と 3.0 m/s の点は外挿の仮値 | `throttle.pulse_us`・`throttle.map_v_us`・`vehicle_profile.esc.deadband_mps` |
 | 後退ロック | 前進中に後退を入れると中立を経由しないとブレーキになる。中立を挟む時間を測る | `esc.reverse_via_neutral_ms` (暫定 120) |
 
 ## 3. 走って測るもの (`vehicle_profile`)

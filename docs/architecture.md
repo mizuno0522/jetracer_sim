@@ -25,6 +25,17 @@
 
 **不変量**: 推論スタックのノードは `/sim/` を購読しない。`scripts/check_no_sim_topics.sh` で機械的に確かめる (`gt_teacher` は sim 専用の例外)。
 
+## sim を動かす車両ソフトは 2 通り
+
+どちらも最後は `/actuator_cmd` (凍結した境界) に出るので、sim 側は区別しない。
+
+| 車両ソフト | 中身 | 境界までの変換 |
+|---|---|---|
+| **他チームの JetRacer 標準コード** (実機で実際に走っているもの) | ROS を使わず、`NvidiaRacecar` に steering / throttle を −1〜1 で書き、`jetcam` の `CSICamera` から読む | `jetracer_compat` (先頭 2 行で差し替え): 値 × gain + offset → PCA9685 のパルス 1500 + 750u µs → `jetracer_bridge.yaml` の較正の逆 → `ActuatorCmd` を 30 Hz。**実機ブリッジと同じ較正ファイルを読む**ので、実機を較正すれば sim も揃う |
+| この repo の推論スタック (`jetracer_stack`) | `policy_net` → `cmd_shaper` → `failsafe`。下の 4 ノード | そのまま `ActuatorCmd` |
+
+較正ファイルの向きの約束: `throttle.map_v_us` などは「中立より上 = 前進」で書き、ESC が逆向き (この車は中立より下で前進) なら `throttle.invert: true` で折り返す。実機ブリッジ (`bridge_node`) と `jetracer_compat` の両方が同じ規則で解釈する。
+
 ## 推論スタックの 4 ノード (jetracer_stack)
 
 | ノード | 入力 | 出力 | やること |

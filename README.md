@@ -91,7 +91,7 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 
 | | |
 |---|---|
-| ✅ ビルド・単体テスト 14 件 | Jetson (Orin Nano・JetPack 6.2.1・Humble) と sim PC (Ubuntu 22.04.5・AMD GPU) の両方 |
+| ✅ ビルド・単体テスト 17 件 | Jetson (Orin Nano・JetPack 6.2.1・Humble) と sim PC (Ubuntu 22.04.5・AMD GPU) の両方 |
 | ✅ 閉ループ (1 台・Unity 無し) | realtime / lockstep とも。`scripts/run_sim_local.sh`・`scripts/smoke_test.sh` |
 | ✅ **2 ホスト接続 (P9)** | 1000BASE-T 直結で通った。画像 15 Hz・遅延 64 ms (Unity 描画) / 5 ms (OpenCV)、IMU 100 Hz・8 ms、往路 0.8 ms、教師で 24.0 s/周・衝突 0。[docs/setup.md](docs/setup.md) |
 | ✅ **参照線を TT-02 用に引き直した** | 中心線は坂道出口の右ヘアピンで R 0.42 m と δmax 27° の R_min 0.506 m を割っていた。最小曲率で引き直して最小 R 0.556 m・壁余裕 ≥ 0.18 m (`tools/make_route.py` → `config/route_jetracer_tt02.yaml`、launch の既定) |
@@ -99,8 +99,10 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 | ✅ 記録と録画 | `scripts/record.sh` (seed を変えて rosbag を N 本)・`record:=` (Unity 表示を mp4)・`tools/record_video.py` (車が見ている画を mp4) |
 | 🟡 sim→real 画像変換 | CUT (FastCUT) を PC の CPU で学習中。記録済みの bag を後から変換する方式で、変換した bag は学習データの一部だけに混ぜる ([tools/sim2real/README.md](tools/sim2real/README.md)) |
 | ✅ Jetson の画面をネット越しに | `scripts/setup_vnc.sh` (仮想ディスプレイ) / `--mirror` (普段の画面)。Mac からは SSH トンネル ([docs/setup.md](docs/setup.md)) |
+| ✅ **他チームの JetRacer 標準コードを sim で走らせる** | `jetracer_compat` (NvidiaRacecar / jetcam CSICamera の互換クラス)。先頭に 2 行足すだけで、元のコードは無改造。**v0.1.1** として公開 ([docs/for_teams.md](docs/for_teams.md)) |
+| 🟡 舵とスロットル | 9/12 の実走ログから推定: **スロットルはマイナスで前進** (中立より下のパルス)、steering −0.22 で直進 (中立 1681 µs)、平均車速 −0.106 → 1.26 〜 −0.130 → 2.45 m/s。車体を持ち上げた実測で確定させる |
 | 🟡 カメラの幾何 | 実走画像から推定して反映 (高さ 0.148 m・ピッチ 50.9°・水平 144°/垂直 120°・fy/fx 1.78)。旧値 (0.12 m・12°・120° 正方) は実機と大きくずれていた。**チェッカーボード較正 (`tools/camera_calib.py`) で確定させる** |
-| ⬜ **実機の較正** | δmax・サーボ端点・ESC の写像・IMU 5 測定・カメラ。**ここが全部の前提** ([docs/calibration.md](docs/calibration.md)) |
+| ⬜ **実機の較正** | δmax・舵の端点と実現率・ESC の写像・IMU 5 測定・カメラ。今の値はすべて実走ログや画像からの推定か仮値。**ここが全部の前提** ([docs/calibration.md](docs/calibration.md)) |
 | ⬜ policy_net の学習 | 記録 → 学習 → ONNX → TensorRT → sim で陽性対照 → 実機 A/B |
 | ⬜ 強化学習 | lockstep の IF はある。Gymnasium ラッパと N 台並列は未着手 ([docs/lockstep.md](docs/lockstep.md)) |
 
@@ -111,9 +113,12 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 
 | | |
 |---|---|
-| [docs/architecture.md](docs/architecture.md) | 境界と凍結するトピック・3 つの時計・ノードの契約・安全の層 |
+| [docs/for_teams.md](docs/for_teams.md) | **他チーム向け**: JetRacer 標準のコードをこの sim で走らせる手順と、各数値の信頼度 |
+| [docs/architecture.md](docs/architecture.md) | 境界と凍結するトピック・sim を動かす 2 通りの車両ソフト・カメラの幾何・3 つの時計・ノードの契約 |
 | [docs/setup.md](docs/setup.md) | 2 ホスト (sim PC ＋ Jetson) の環境構築。`sudo ./scripts/setup_host.sh {jetson\|pc}` で一気に作る → `p9_check.sh` → P9 接続手順 |
 | [docs/unity.md](docs/unity.md) | Unity 環境 (プロジェクトの場所・course.json・ビルド・接続・未実装の描画) |
 | [docs/docker.md](docs/docker.md) | sim PC の Docker (sim / learner) と踏みやすい 4 つ |
-| [docs/calibration.md](docs/calibration.md) | 走行ゼロで取る IMU 5 測定・サーボ/ESC の較正・陽性対照 |
+| [docs/calibration.md](docs/calibration.md) | 走行ゼロで取る IMU 5 測定・サーボ/ESC とカメラの較正・陽性対照 |
+| [ros_ws/src/jetracer_compat/README.md](ros_ws/src/jetracer_compat/README.md) | 互換クラスの変換 (値 → パルス → δ・v) |
+| [tools/sim2real/README.md](tools/sim2real/README.md) | sim→real 画像変換 (CUT) の学習と変換 |
 | [docs/lockstep.md](docs/lockstep.md) | 強化学習 IF (sim_mode:=lockstep・Reset/Step・StepInfo) |
