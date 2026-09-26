@@ -36,6 +36,8 @@ class Failsafe(Node):
         self._miss = {}
         self.t_img = self.t_imu = self.t_cmd = None
         self.tripped = None
+        self._last_reason = None     # ログ用 (掛け金ではない)
+        self._last_log_s = -1e9
         self.t0 = self.get_clock().now()
         qos = QoSProfile(reliability=QoSReliabilityPolicy.BEST_EFFORT,
                          history=QoSHistoryPolicy.KEEP_LAST, depth=1)
@@ -90,9 +92,17 @@ class Failsafe(Node):
             m.header.stamp = self.get_clock().now().to_msg()
             m.mode = ActuatorCmd.MODE_ESTOP
             self.pub.publish(m)
-            if self.tripped != reason:
+            # ログは理由が変わったときと 1 s に 1 回だけ (途絶が続く間に毎ティック 30 Hz で出さない)。
+            # self.tripped は cmd_invalid だけを掛け金にする (途絶は回復したら自動で解除)
+            now_s = self.get_clock().now().nanoseconds * 1e-9
+            if self._last_reason != reason or now_s - self._last_log_s >= 1.0:
                 self.get_logger().error(f"ESTOP: {reason}")
+                self._last_log_s = now_s
+            self._last_reason = reason
             self.tripped = reason if reason == 'cmd_invalid' else None
+        elif self._last_reason is not None:
+            self.get_logger().info(f"ESTOP 解除 ({self._last_reason})")
+            self._last_reason = None
         self.pub_state.publish(String(data=reason or 'ok'))
 
 
