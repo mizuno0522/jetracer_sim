@@ -30,18 +30,20 @@ Material:
     m_Ints: []
     m_Floats:
     - _BlurPx: 1
+    - _Distort: 0
     - _Exposure: 1
     - _Gamma: 1
-    - _K1: -0.08
-    - _K2: 0
     - _MotionPx: 0
     - _Noise: 0.012
     - _PostDark: 0.15
     - _Seed: 0
     - _Vignette: 0.15
-    - _Zoom: 1
     m_Colors:
+    - _Dist: {r: 0, g: 0, b: 1000000, a: 0}
+    - _Intr: {r: 64.66, g: 64.66, b: 112, a: 112}
+    - _OutSize: {r: 224, g: 224, b: 0, a: 0}
     - _Post0: {r: 0.24, g: 0.26, b: 0.93, a: 0.01}
     - _Post1: {r: 0.54, g: 0.56, b: 0.93, a: 0.01}
+    - _Tan: {r: -1.732, g: 1.732, b: -1.732, a: 1.732}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

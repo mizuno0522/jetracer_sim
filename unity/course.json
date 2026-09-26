@@ -431,9 +431,6 @@
  "realism": {
   "enable": true,
   "supersample": 2,
-  "k1": 0.0,
-  "k2": 0.0,
-  "zoom": 1.0,
   "vignette": 0.16,
   "blur_px": 0.8,
   "motion_px_per_rad_s": 2.0,

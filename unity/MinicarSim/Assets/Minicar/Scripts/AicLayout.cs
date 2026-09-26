@@ -240,6 +240,8 @@ namespace Minicar
 
         // 画面の構成。[V] で切替: 上 = 追従視点・下 = カメラ映像 (既定) → 追従視点のみ → カメラ映像のみ
         public enum View { Both, Chase, Onboard }
+        /// P1 の下段に出す実際のセンサ画像 (/camera/image_raw と同じもの)。null なら表示用カメラで描く
+        public Texture SensorTexture;
         public View ViewMode = View.Both;
 
         public bool Enabled
@@ -289,10 +291,24 @@ namespace Minicar
                 bool on = m_Enabled && (i == 0 || split);
                 float x = split ? 0.5f * i : 0f, w = split ? 0.5f : 1f;
                 m_Chase[i].enabled = on && ViewMode != View.Onboard;
-                m_Onboard[i].enabled = on && ViewMode != View.Chase;
+                m_Onboard[i].enabled = on && ViewMode != View.Chase && !(i == 0 && SensorTexture != null);
                 m_Chase[i].rect = ViewMode == View.Both ? new Rect(x, 0.5f, w, 0.5f) : new Rect(x, 0f, w, 1f);
                 m_Onboard[i].rect = ViewMode == View.Both ? new Rect(x, 0f, w, 0.5f) : new Rect(x, 0f, w, 1f);
             }
+        }
+
+        // P1 のカメラ枠に実際のセンサ画像を縦横比を保って描く (224×224 は正方形なので左右は黒)
+        void DrawSensorPane(bool split)
+        {
+            if (SensorTexture == null || ViewMode == View.Chase) return;
+            float w = split ? Screen.width * 0.5f : Screen.width;
+            float y0 = ViewMode == View.Both ? Screen.height * 0.5f : 0f;
+            float h = ViewMode == View.Both ? Screen.height * 0.5f : Screen.height;
+            var r = new Rect(0f, y0, w, h);
+            GUI.color = Color.black;
+            GUI.DrawTexture(r, m_White);
+            GUI.color = Color.white;
+            GUI.DrawTexture(r, SensorTexture, ScaleMode.ScaleToFit, false);
         }
 
         // 同じ位置から数えた道のり (順位用)。P2 は P1 のスタートとの前後差を足す
@@ -316,6 +332,7 @@ namespace Minicar
             float k = Screen.height / kRefHeight;
             BuildStyles(k);
             bool split = m_Alive[1];
+            if (ViewMode == View.Onboard) DrawSensorPane(split);
 
             if (split)
             {
@@ -328,14 +345,17 @@ namespace Minicar
                 GUI.color = Color.black;
                 GUI.DrawTexture(new Rect(0, Screen.height * 0.5f - 1f, Screen.width, 2f), m_White);
                 GUI.color = Color.white;
+                DrawSensorPane(split);
                 // 下段の見出し (カメラ映像 = センサカメラと同じ取付・画角)
                 for (int i = 0; i < (split ? 2 : 1); i++)
                 {
                     float px = (split ? Screen.width * 0.5f * i : 0f) + 8f * k;
                     GUI.color = new Color(0.05f, 0.07f, 0.10f, 0.7f);
-                    GUI.DrawTexture(new Rect(px, Screen.height * 0.5f + 6f * k, 66f * k, 18f * k), m_White);
+                    string label = i == 0 && SensorTexture != null ? "CAMERA  /camera/image_raw (実配信)" : "CAMERA";
+                    float lw = (i == 0 && SensorTexture != null ? 230f : 66f) * k;
+                    GUI.DrawTexture(new Rect(px, Screen.height * 0.5f + 6f * k, lw, 18f * k), m_White);
                     GUI.color = Color.white;
-                    GUI.Label(new Rect(px, Screen.height * 0.5f + 6f * k, 66f * k, 18f * k), "CAMERA", m_Top);
+                    GUI.Label(new Rect(px, Screen.height * 0.5f + 6f * k, lw, 18f * k), label, m_Top);
                 }
             }
 

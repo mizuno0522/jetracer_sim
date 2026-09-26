@@ -167,6 +167,8 @@ namespace Minicar
             // -laps N: N 周でゴール (結果画面を出す)。既定 3 = 予選 (3 周の合計タイム)。0 = 出さない
             m_Aic = new AicLayout(m_Course.Data, Arg("-route", "shortcut") == "long", int.Parse(Arg("-laps", "3")),
                                   m_OwnLabel, m_RivalLabel, m_OwnCar.Root, m_Rival.Root, new[] { kOwnCarLayer, kRivalLayer });
+            // 下段の「CAMERA」は表示用カメラではなく、実際に配信している画像 (後処理後・224×224) をそのまま見せる
+            m_Aic.SensorTexture = SensorOutput;
             // -aicview both (既定: 上 = 追従視点・下 = カメラ映像) | chase | camera
             string view = Arg("-aicview", "both");
             m_Aic.ViewMode = view == "chase" ? AicLayout.View.Chase : view == "camera" ? AicLayout.View.Onboard : AicLayout.View.Both;
@@ -262,12 +264,9 @@ namespace Minicar
             { name = name + "RT", antiAliasing = 1 };
             var go = new GameObject(name);
             var cam = go.AddComponent<Camera>();
-            // vehicle_sim と同じピンホール: 水平画角 fov → 焦点距離 f → 垂直画角
-            float f = (c.width * 0.5f) / Mathf.Tan(c.fov_deg * 0.5f * Mathf.Deg2Rad);
-            cam.fieldOfView = 2f * Mathf.Atan((c.height * 0.5f) / f) * Mathf.Rad2Deg;
-            cam.aspect = (float)c.width / c.height;
             cam.nearClipPlane = 0.02f;
             cam.farClipPlane = 30f;
+            ApplyIntrinsics(cam, c);
             cam.clearFlags = CameraClearFlags.SolidColor;
             // 背景: realism.background_gray が負なら Unity 既定のスカイボックス (水色)、それ以外は単色
             float bgv = (m_Real != null && m_Real.enable) ? m_Real.background_gray : 110f;
@@ -282,13 +281,57 @@ namespace Minicar
             return cam;
         }
 
+        /// <summary>
+        /// センサカメラの投影を vehicle_profile のカメラ幾何に合わせる (vehicle_sim の OpenCV 描画と同じ)。
+        /// 歪みありのときは、歪みの逆写像が参照する範囲 render_tan_* をピンホールで描き (非対称・非正方の off-axis 透視)、
+        /// SensorPost が出力画素ごとに歪みを解いてサンプルする。古い course.json は fov_deg の正方ピンホール。
+        /// </summary>
+        public static void ApplyIntrinsics(Camera cam, CameraData c)
+        {
+            if (c.HasIntrinsics)
+            {
+                float n = cam.nearClipPlane;
+                // 正規化 y は下向き、Unity のビュー空間は上向きなので上下を入れ替える
+                cam.projectionMatrix = Matrix4x4.Frustum(
+                    c.render_tan_x0 * n, c.render_tan_x1 * n,
+                    -c.render_tan_y1 * n, -c.render_tan_y0 * n, n, cam.farClipPlane);
+                return;
+            }
+            // vehicle_sim と同じピンホール: 水平画角 fov → 焦点距離 f → 垂直画角
+            float f = (c.width * 0.5f) / Mathf.Tan(c.fov_deg * 0.5f * Mathf.Deg2Rad);
+            cam.fieldOfView = 2f * Mathf.Atan((c.height * 0.5f) / f) * Mathf.Rad2Deg;
+            cam.aspect = (float)c.width / c.height;
+        }
+
+        /// 歪み r(1 + k1 r² + k2 r⁴) が単調に増える最大の r² (cam_geom.r_max と同じ)。単調なら大きな値
+        static float MonotonicR2(float k1, float k2)
+        {
+            // d/dr = 1 + 3 k1 s + 5 k2 s² (s = r²) が 0 になる最小の正の s
+            const float kInf = 1e6f;
+            if (Mathf.Abs(k2) < 1e-12f) return k1 < 0f ? -1f / (3f * k1) : kInf;
+            float a = 5f * k2, b = 3f * k1, disc = b * b - 4f * a;
+            if (disc < 0f) return kInf;
+            float sq = Mathf.Sqrt(disc), s1 = (-b - sq) / (2f * a), s2 = (-b + sq) / (2f * a);
+            float best = kInf;
+            if (s1 > 0f) best = Mathf.Min(best, s1);
+            if (s2 > 0f) best = Mathf.Min(best, s2);
+            return best;
+        }
+
         void ApplyRealismParams()
         {
             var r = m_Real;
             int ss = Mathf.Max(1, r.supersample);
-            m_PostMat.SetFloat("_K1", r.k1);
-            m_PostMat.SetFloat("_K2", r.k2);
-            m_PostMat.SetFloat("_Zoom", r.zoom);
+            var c = m_Course.Data.camera;
+            if (c.HasIntrinsics)
+            {
+                m_PostMat.SetFloat("_Distort", 1f);
+                m_PostMat.SetVector("_Intr", new Vector4(c.fx, c.fy, c.cx, c.cy));
+                m_PostMat.SetVector("_Dist", new Vector4(c.k1, c.k2, MonotonicR2(c.k1, c.k2), 0f));
+                m_PostMat.SetVector("_Tan", new Vector4(c.render_tan_x0, c.render_tan_x1, c.render_tan_y0, c.render_tan_y1));
+                m_PostMat.SetVector("_OutSize", new Vector4(c.width, c.height, 0f, 0f));
+            }
+            else m_PostMat.SetFloat("_Distort", 0f);
             m_PostMat.SetFloat("_Vignette", r.vignette);
             m_PostMat.SetFloat("_BlurPx", r.blur_px * ss);
             m_PostMat.SetFloat("_Gamma", r.gamma);

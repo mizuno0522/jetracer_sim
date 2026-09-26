@@ -1,14 +1,18 @@
 // 車載カメラの後処理。Unity のピンホール描画を実カメラの見た目に寄せる。
-//   樽型歪み (Brown k1,k2) → 周辺減光 → ぼかし/モーションブラー → 露出 → ノイズ → 車体の柱 (画面下)
-// 数値は course.json の realism (定義元は vehicle_profile.camera.realism)。
+//   レンズ歪み (OpenCV plumb_bob k1,k2) → 周辺減光 → ぼかし/モーションブラー → 露出 → ノイズ → 車体の柱 (画面下)
+// 歪み: 出力画素 (u,v) → 正規化 (xd,yd) = ((u-cx)/fx, (v-cy)/fy) → 不動点反復で歪みを解いて (x,y) →
+//       ピンホールで描いた RT (正規化範囲 _Tan = x0,x1,y0,y1) の uv をサンプル。式は jetracer_common/cam_geom.py と同じ。
+// 幾何の数値は course.json の camera (定義元は vehicle_profile.camera)、見た目の数値は realism。
 Shader "Minicar/SensorPost"
 {
     Properties
     {
         _MainTex ("Source", 2D) = "white" {}
-        _K1 ("Distortion k1", Float) = -0.08
-        _K2 ("Distortion k2", Float) = 0.0
-        _Zoom ("Zoom after distortion", Float) = 1.0
+        _Distort ("Use camera intrinsics (0/1)", Float) = 0
+        _Intr ("fx fy cx cy [px]", Vector) = (64.66, 64.66, 112, 112)
+        _Dist ("k1 k2 rmax^2 -", Vector) = (0, 0, 1000000, 0)
+        _Tan ("render tan x0 x1 y0 y1", Vector) = (-1.732, 1.732, -1.732, 1.732)
+        _OutSize ("output W H", Vector) = (224, 224, 0, 0)
         _Vignette ("Vignette strength", Float) = 0.15
         _BlurPx ("Blur radius [src px]", Float) = 1.0
         _MotionPx ("Horizontal motion blur [src px]", Float) = 0.0
@@ -32,7 +36,9 @@ Shader "Minicar/SensorPost"
 
             sampler2D _MainTex;
             float4 _MainTex_TexelSize;
-            float _K1, _K2, _Zoom, _Vignette, _BlurPx, _MotionPx, _Exposure, _Gamma, _Noise, _Seed, _PostDark;
+            float _Distort;
+            float4 _Intr, _Dist, _Tan, _OutSize;
+            float _Vignette, _BlurPx, _MotionPx, _Exposure, _Gamma, _Noise, _Seed, _PostDark;
             float4 _Post0, _Post1;
 
             float hash(float2 p)
@@ -52,11 +58,24 @@ Shader "Minicar/SensorPost"
 
             fixed4 frag(v2f_img i) : SV_Target
             {
-                // --- 樽型歪み: 出力画素 → 歪んだ入力座標 (Brown、正規化半径) ---
-                float2 c = (i.uv - 0.5) * 2.0 / _Zoom;
+                // --- レンズ歪み: 出力画素 → 歪んだ正規化座標 → 反復で歪みを解く → ピンホール RT の uv ---
+                float2 uv = i.uv;
+                if (_Distort > 0.5)
+                {
+                    float u = i.uv.x * _OutSize.x;              // 左上原点・画素中心 +0.5 (uv は画素中心で評価される)
+                    float v = (1.0 - i.uv.y) * _OutSize.y;
+                    float xd = (u - _Intr.z) / _Intr.x, yd = (v - _Intr.w) / _Intr.y;
+                    float x = xd, y = yd;
+                    [unroll] for (int it = 0; it < 8; it++)
+                    {
+                        float rr = min(x * x + y * y, _Dist.z);
+                        float g = 1.0 + _Dist.x * rr + _Dist.y * rr * rr;
+                        x = xd / g; y = yd / g;
+                    }
+                    uv = float2((x - _Tan.x) / (_Tan.y - _Tan.x), 1.0 - (y - _Tan.z) / (_Tan.w - _Tan.z));
+                }
+                float2 c = (i.uv - 0.5) * 2.0;                  // 周辺減光は出力画像の座標で
                 float r2 = dot(c, c);
-                float2 d = c * (1.0 + _K1 * r2 + _K2 * r2 * r2);
-                float2 uv = d * 0.5 + 0.5;
                 float inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
 
                 // --- ぼかし (5 タップ) + 横方向のモーションブラー (3 タップ) ---
@@ -77,7 +96,7 @@ Shader "Minicar/SensorPost"
                 }
 
                 // --- 周辺減光 (cos^4 風) と露出 ---
-                float vig = 1.0 - _Vignette * saturate(r2 * _Zoom * _Zoom);
+                float vig = 1.0 - _Vignette * saturate(r2);
                 col = pow(saturate(col * vig * _Exposure), _Gamma);
 
                 // --- センサノイズ ---

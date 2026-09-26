@@ -54,9 +54,7 @@ vehicle_profile:
     realism:
       enable: true
       supersample: 2              # 2 倍で描いて縮小 (実画像の柔らかさと AA)
-      k1: 0.0                     # ★0 で無効。SensorPost は「出力画素→サンプル位置 r(1+k1 r²)」なので樽型は k1>0 (-0.08 は糸巻き型だった)。カメラ幾何の推定 (Jetson 側) の結果で置き換える
-      k2: 0.0
-      zoom: 1.0
+      # (レンズ歪みは上の camera.k1/k2。realism には持たない)
       vignette: 0.16              # 端で 16 % 暗い
       blur_px: 0.8
       motion_px_per_rad_s: 2.0    # ヨーレート 1 rad/s あたり横 2 px のブラー

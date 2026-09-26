@@ -43,6 +43,13 @@ namespace Minicar
     {
         public int width, height;
         public float fov_deg, mount_height_m, pitch_deg, crop_top_frac, rate_hz;
+        // カメラ幾何 (OpenCV plumb_bob。定義元は vehicle_profile.camera、式は jetracer_common/cam_geom.py)。
+        // fx <= 0 (古い course.json) なら fov_deg の正方ピンホールで描く
+        public float fx, fy, cx, cy, k1, k2;
+        // ピンホールで描く正規化座標の範囲 (x = X/Z 右、y = Y/Z 下)。歪みの逆写像がこの範囲を参照する
+        public float render_tan_x0, render_tan_x1, render_tan_y0, render_tan_y1;
+        public float true_hfov_deg, true_vfov_deg;
+        public bool HasIntrinsics => fx > 0f && fy > 0f && render_tan_x1 > render_tan_x0 && render_tan_y1 > render_tan_y0;
     }
 
     /// <summary>実カメラの見た目に寄せる後処理と会場の演出。定義元は vehicle_profile.camera.realism。
@@ -52,7 +59,8 @@ namespace Minicar
     {
         public bool enable = false;
         public int supersample = 2;              // センサカメラをこの倍率で描いてから縮小 (ぼけと AA)
-        public float k1 = -0.08f, k2 = 0f, zoom = 1f;   // Brown 樽型歪み (正規化半径)
+        // (旧) k1/k2/zoom は使わない。歪みは camera の fx, fy, cx, cy, k1, k2 から描く
+        public float k1 = 0f, k2 = 0f, zoom = 1f;
         public float vignette = 0.15f;
         public float blur_px = 1.0f;             // 描画解像度の画素
         public float motion_px_per_rad_s = 2.0f; // ヨーレート比例の横ブラー
