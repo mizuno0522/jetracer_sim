@@ -82,6 +82,18 @@ ros2 launch jetracer_stack vehicle_stack.launch.py teacher:=true auto_run:=true
 
 **確認**: sim PC で `ros2 topic hz /actuator_cmd` が 30 Hz (Jetson の指令が届いている)、`python3 tools/lap_eval.py --seconds 60` で周回・衝突 0。通ったら `camera_backend:=unity unity_player:=~/jetracer/unity/player/MinicarSim.x86_64` で同じことをし、`ros2 topic delay /camera/image_raw` を記録する (IMU との相対遅れが学習の当たり外れを決める。設計 IMU 合成タブ)。
 
+## Jetson の画面をネットワーク越しに見る (VNC の仮想ディスプレイ)
+
+物理モニターとは別の画面を Jetson に作り、Mac (VNC Viewer か標準の「画面共有」) から見る。モニターがちらつく・外したいときに。
+
+```bash
+sudo ./scripts/setup_vnc.sh          # 導入・ログイン不要の自動起動・パスワード設定 (1 回だけ)
+# Mac のターミナル (開いたまま):  ssh -N -L 5901:localhost:5901 jetson@ubuntu.local
+# Mac の VNC Viewer:  localhost:5901
+```
+
+既定は Jetson の中 (localhost) でしか待ち受けず、Mac からは SSH の暗号化トンネルで入る (VNC のパスワードは平文で流れるため)。家の LAN だけで直接つなぐなら `sudo ./scripts/setup_vnc.sh --lan` → VNC Viewer で `ubuntu.local:5901`。仮想ディスプレイの中の OpenGL (rviz など) はソフトウェア描画で遅い。
+
 ## 失敗の定番
 
 | 症状 | 原因 | 直し方 |
