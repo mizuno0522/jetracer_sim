@@ -5,7 +5,7 @@
 自動運転ミニカーバトル 2026 のコースを **JetRacer ベースの車両 (Tamiya TT-02 4WD ＋ Jetson Orin Nano ＋ CSI カメラ ＋ 6 軸 IMU)** で走らせるための、ROS 2 ＋ Unity シミュレータ。
 [minicarbattle2026](https://github.com/mizuno0522/minicarbattle2026) の既存 sim (物理 `vehicle_sim`・Unity 描画) を転用し、**差し替えたのはブリッジ 1 枚とセンサ合成 (`imu_sim`) だけ**。物理・描画・`/actuator_cmd` の境界は動かしていない。
 
-- 設計書 (詳細版・全タブ): **https://claude.ai/artifact/NBkzJSj8s61NLonsNQwBUG** ← まずこれを読む。この README は実装側の案内
+- 設計書 (詳細版・全タブ): **https://claude.ai/artifact/NBkzJSj8s61NLonsNQwBUG** ← まずこれを読む。2026-09-26 に実装の結果を反映 (全体像タブ先頭の「実装の進捗」、未決とリスクの ⑦〜⑩)。この README は実装側の案内
 - 判断は CNN (画像 ＋ IMU)。出力は **先行注視点 (u, v) と速度係数 s**。操舵角は `cmd_shaper` が車両諸元から作る
 - **IMU は指令からではなく `vehicle_sim` の物理状態から合成する** (設計 P8)。指令から作ると、学習したネットワークが実機で外れる
 
@@ -128,3 +128,4 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 | [ros_ws/src/jetracer_compat/README.md](ros_ws/src/jetracer_compat/README.md) | 互換クラスの変換 (値 → パルス → δ・v) |
 | [tools/sim2real/README.md](tools/sim2real/README.md) | sim→real 画像変換 (CUT) の学習と変換 |
 | [docs/lockstep.md](docs/lockstep.md) | 強化学習 IF (sim_mode:=lockstep・Reset/Step・StepInfo) |
+| [docs/status_pc.md](docs/status_pc.md) | sim PC 側の現状 (Unity・互換クラス・画像変換の学習状況・PC で踏んだ落とし穴) |
