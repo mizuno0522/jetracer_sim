@@ -27,7 +27,7 @@ if ros2 pkg list 2>/dev/null | grep -q rmw_cyclonedds_cpp; then pass "rmw_cyclon
 XML="${CYCLONEDDS_URI#file://}"
 if [ -f "$XML" ]; then
   NIC=$(grep -o 'NetworkInterface name="[^"]*"' "$XML" | cut -d'"' -f2)
-  [ "$NIC" = "$IF" ] && pass "cyclonedds.xml の NIC = $NIC" || fail "cyclonedds.xml の NIC が $NIC (有線は $IF)"
+  [ "$NIC" = "$IF" ] && pass "$(basename "$XML") の NIC = $NIC" || fail "$(basename "$XML") の NIC が '${NIC:-指定なし}' (有線は $IF)。source scripts/sim_env.sh で有線版に切り替わる (リンク UP のとき)"
 else
   fail "CYCLONEDDS_URI のファイルが無い ($XML)"
 fi

@@ -105,9 +105,14 @@ CHRONY
 fi
 
 # ---- 5. ユーザー側: cyclonedds.xml と .bashrc --------------------------------
-echo "== $USER_HOME/cyclonedds.xml (NIC ${NIC:-未設定})"
-sed "s/name=\"eth0\"/name=\"${NIC:-eth0}\"/" "$HERE/../config/cyclonedds.xml" > "$USER_HOME/cyclonedds.xml"
-chown "$USER_NAME:" "$USER_HOME/cyclonedds.xml"
+# 2 枚作る: 有線限定 (直結用) と、インターフェース指定なし (1 台用。有線がリンク DOWN だと限定版は探索に失敗する)。
+# どちらを使うかは scripts/sim_env.sh が有線のリンク状態 (carrier) で自動で選ぶ。
+echo "== $USER_HOME/cyclonedds-wired.xml (NIC ${NIC:-未設定}) / cyclonedds-local.xml"
+sed "s/name=\"eth0\"/name=\"${NIC:-eth0}\"/" "$HERE/../config/cyclonedds.xml" > "$USER_HOME/cyclonedds-wired.xml"
+sed '/<Interfaces>/d' "$HERE/../config/cyclonedds.xml" > "$USER_HOME/cyclonedds-local.xml"
+cp "$USER_HOME/cyclonedds-local.xml" "$USER_HOME/cyclonedds.xml"      # .bashrc の既定 (sim_env.sh が上書き選択)
+echo "${NIC:-}" > "$USER_HOME/.jetracer_wired_nic"
+chown "$USER_NAME:" "$USER_HOME/cyclonedds-wired.xml" "$USER_HOME/cyclonedds-local.xml" "$USER_HOME/cyclonedds.xml" "$USER_HOME/.jetracer_wired_nic"
 if ! grep -q "jetracer_sim env" "$USER_HOME/.bashrc"; then
   cat >> "$USER_HOME/.bashrc" <<'BASHRC'
 # jetracer_sim env (setup_host.sh)

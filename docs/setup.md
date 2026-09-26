@@ -19,6 +19,7 @@ source ~/.bashrc
 
 - 有線 NIC は自動検出 (`nmcli device status` の最初の ethernet)。違うときは `--nic enp5s0`。
 - 固定 IP と chrony を触りたくないとき (1 台で使うだけ) は `--no-net`。
+- DDS 設定は `~/cyclonedds-wired.xml` (有線限定) と `~/cyclonedds-local.xml` (指定なし) の 2 枚を作り、`source scripts/sim_env.sh` が有線のリンク状態で自動で選ぶ。有線限定のままケーブルを抜くと 1 台構成でも探索が失敗するため。
 - 接続名は `jetracer-link`。既存の「有線接続 1」は残るが、autoconnect の優先度で `jetracer-link` が勝つ。戻すには `nmcli con delete jetracer-link`。
 - 手で 1 つずつやる場合の内容はスクリプトの先頭コメント (旧 Step 0〜1 と同じ)。ROS の apt ソース登録が公式の変更で詰まったら docs.ros.org の Humble のページを見る。
 
