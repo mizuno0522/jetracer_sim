@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>jetracer_compat</name>
+  <version>0.1.0</version>
+  <description>NVIDIA JetRacer 標準の NvidiaRacecar / jetcam CSICamera と同じ使い方で sim につなぐ互換クラス (他チームの JetRacer ソフトを無改造で sim 評価する)</description>
+  <maintainer email="mizuno0522@gmail.com">Hiroshi Mizuno</maintainer>
+  <license>MIT</license>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>minicar_msgs</exec_depend>
+  <exec_depend>jetracer_common</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>python3-traitlets</exec_depend>
+  <export><build_type>ament_python</build_type></export>
+</package>
