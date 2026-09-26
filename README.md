@@ -61,7 +61,7 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 
 | 起動 | コマンド |
 |---|---|
-| sim PC (Unity 描画) | `ros2 launch minicar_sim sim_host.launch.py` (`unity_player:=<Build/MinicarSim.x86_64>`) |
+| sim PC (Unity 描画) | `ros2 launch minicar_sim sim_host.launch.py` (`unity_player:=<Build/MinicarSim.x86_64>`。既存 sim と同居なら `tcp_port:=10001`・[docs/unity.md](docs/unity.md)) |
 | sim PC (Unity 無し) | `ros2 launch minicar_sim sim_host.launch.py camera_backend:=opencv unity_player:=none` |
 | sim PC (強化学習) | `ros2 launch minicar_sim sim_host.launch.py sim_mode:=lockstep` → `/sim/reset`・`/sim/step` |
 | Jetson (sim 接続・教師) | `ros2 launch jetracer_stack vehicle_stack.launch.py teacher:=true` |

@@ -43,6 +43,7 @@ def generate_launch_description():
     arrow_dir = LaunchConfiguration('arrow_dir')
     seed = LaunchConfiguration('seed')
     route_file = LaunchConfiguration('route_file')
+    tcp_port = LaunchConfiguration('tcp_port')
     use_unity = PythonExpression(["'", camera_backend, "' == 'unity'"])
     lockstep = PythonExpression(["'", sim_mode, "' == 'lockstep'"])
 
@@ -56,6 +57,8 @@ def generate_launch_description():
         DeclareLaunchArgument('unity_player',
                               default_value=os.path.expanduser('~/minicarbattle2026/unity/MinicarSim/Build/MinicarSim.x86_64'),
                               description='Unity プレイヤー。none で起動しない (手動起動やエディタ Play のとき)'),
+        DeclareLaunchArgument('tcp_port', default_value='10000',
+                              description='ros_tcp_endpoint のポート。同じ PC で既存 sim (M-05・10000) も動かすなら 10001 等に'),
         DeclareLaunchArgument('rviz', default_value='false'),
         DeclareLaunchArgument('rviz_config', default_value='sim.rviz'),
         DeclareLaunchArgument('viz', default_value='false'),
@@ -97,10 +100,11 @@ def generate_launch_description():
 
         # Unity: ROS ⇔ Unity の TCP 中継 (同じ PC。DDS ではない) とプレイヤー
         Node(package='ros_tcp_endpoint', executable='default_server_endpoint', name='ros_tcp_endpoint',
-             output='screen', parameters=[{'ROS_IP': '127.0.0.1', 'ROS_TCP_PORT': 10000}],
+             output='screen', parameters=[{'ROS_IP': '127.0.0.1',
+                                           'ROS_TCP_PORT': ParameterValue(tcp_port, value_type=int)}],
              condition=IfCondition(use_unity)),
         ExecuteProcess(
-            cmd=[unity_player, '-rosip', '127.0.0.1', '-rosport', '10000', '-layout', 'aic', '-laps', '0',
+            cmd=[unity_player, '-rosip', '127.0.0.1', '-rosport', tcp_port, '-layout', 'aic', '-laps', '0',
                  '-logFile', os.path.expanduser('~/.ros/log/jetracer_unity_player.log')],
             name='unity_player', output='screen',
             condition=IfCondition(PythonExpression(

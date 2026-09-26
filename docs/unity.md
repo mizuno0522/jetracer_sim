@@ -40,6 +40,29 @@ ros2 launch minicar_sim sim_host.launch.py unity_player:=~/minicarbattle2026/uni
 
 エディタの Play で繋ぐとき (スクリプトを直しながら見る): `unity_player:=none` で起動し、Unity Hub からプロジェクトを開いて `Assets/Scenes/Minicar.unity` を Play。プレイヤーのログは `~/.ros/log/minicar_unity_player.log`。
 
+## 同じ PC で既存 sim (M-05) と並行して動かす
+
+sim PC に既存の ROS-Unity 版 (`~/ros_ws`) と JetRacer sim (`~/jetracer/jetracer_sim`) が同居する前提。**4 つを分ける**。
+
+| 衝突するもの | 既存 sim | JetRacer sim | 分け方 |
+|---|---|---|---|
+| `ROS_DOMAIN_ID` | 既定 (race2.sh は 81/82) | **42** (`scripts/sim_env.sh`) | 同じ ID だと `/actuator_cmd` の型が違う (DriveCommand vs ActuatorCmd) ので型不一致エラーが出る |
+| `minicar_msgs` パッケージ | `~/ros_ws/install` | `~/jetracer/jetracer_sim/ros_ws/install` | **同じ端末で両方を source しない**。片方の端末は片方だけ |
+| `ros_tcp_endpoint` の TCP ポート | 10000 | `tcp_port:=10001` | 両方 Unity を同時に上げるときだけ。片方ずつなら 10000 のまま |
+| Unity プロジェクト / `course.json` | 既存の `MinicarSim` (320×216・30 Hz) | **複製** して 224×224 用にする | `export_course.sh` を既存プロジェクトに向けると M-05 の描画が 224×224 になる |
+
+```bash
+# JetRacer 用に Unity プロジェクトを複製 (初回のみ。Build/ と Logs/ は除く)
+rsync -a --exclude Build --exclude Logs --exclude Library ~/ros_ws/../unity/MinicarSim/ ~/jetracer/unity/MinicarSim/   # 既存の場所に合わせる
+UNITY_PROJ=~/jetracer/unity/MinicarSim ./scripts/export_course.sh jetracer_tt02
+"$UNITY" -batchmode -nographics -projectPath ~/jetracer/unity/MinicarSim -executeMethod Minicar.EditorTools.MinicarBuild.SetupAndBuild -logFile /tmp/build_jetracer.log
+# 起動 (既存 sim も同時に上げるなら tcp_port を変える)
+source scripts/sim_env.sh
+ros2 launch minicar_sim sim_host.launch.py unity_player:=~/jetracer/unity/MinicarSim/Build/MinicarSim.x86_64 tcp_port:=10001
+```
+
+`Library/` を除くと初回の Unity 起動でインポートが走る (数分)。GPU は 1 枚を 2 つの Unity が分け合うので、両方同時はフレームレートが落ちる。
+
 ## 確認
 
 ```bash
