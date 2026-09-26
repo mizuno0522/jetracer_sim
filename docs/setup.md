@@ -54,7 +54,10 @@ cat /etc/nv_tegra_release                       # R36 (release), REVISION: 4.x
 
 **確認** (Jetson で): `chronyc tracking` の Reference が 192.168.10.2、System time のずれが 1 ms 未満。数十 ms 以上ずれていると鮮度判定が全部弾く (既存記録で確認済みの構図)。起動直後は数分待つ。
 
-## Step 3 — 2 ホスト接続 (P9)。★まだ誰も通していない
+## Step 3 — 2 ホスト接続 (P9)
+
+**2026-09-26 に通った** (sim PC: Ryzen/AMD GPU・Humble 素、Jetson Orin Nano、1000BASE-T 直結、cyclonedds 有線限定、DOMAIN 42): PC の sim (OpenCV 描画) → Jetson で /imu 99 Hz・/camera/image_raw 14.4〜15 Hz・/sim/ground_truth 99 Hz を受信、Jetson の教師スタック → PC で /actuator_cmd 30 Hz。閉ループは 1 台のときと同じ 24.0 s/周・衝突 0・cte p95 0.10 m (`tools/lap_eval.py` を Jetson で実行)。画像の受信間隔は平均 70 ms だが最大 0.67 s の抜けが 10 s に 1 回あった (PC のベンチ sweep との同居が疑わしい。要再測)。遅延の絶対値は chrony 同期後に `ros2 topic delay` で取る。
+
 
 ```bash
 # sim PC
@@ -75,6 +78,7 @@ ros2 launch jetracer_stack vehicle_stack.launch.py teacher:=true auto_run:=true
 | 別ホストのトピックが見えない | `ROS_LOCALHOST_ONLY=1` / RMW が両ホストで違う / `cyclonedds.xml` の NIC が無線のまま | `p9_check.sh`。Fast DDS と Cyclone を混ぜない |
 | `/imu` は来るが画像だけ来ない | `net.core.rmem_max` が既定 (212992) | `setup_host.sh` の sysctl。Docker の中では効かないのでホストで |
 | 走り出してすぐ ESTOP | chrony のずれで鮮度判定が弾く | `chronyc tracking`。ずれ 1 ms 未満まで待つ |
+| chrony が同期しない (`chronyc sources` で reach 0) | 相手の ufw が UDP 123 を落としている | `sudo ufw allow from 192.168.10.0/24` (`setup_host.sh` が ufw 有効時に入れる) |
 | `rosidl` / `cv2` が壊れる | `~/.local` の pip empy 4.x / numpy 2.x | `PYTHONNOUSERSITE=1` (`.bashrc` に入れてある)。pip 側は消さない |
 | Unity 有りで launch ごと止まる | `ros_tcp_endpoint` が無い | sim PC で `./scripts/setup_ws.sh` (deps.repos) |
 | インターネットが切れた | 有線にゲートウェイが付いた | `jetracer-link` は `never-default`。`ip route` で default が無線であること |

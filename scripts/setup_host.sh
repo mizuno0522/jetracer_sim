@@ -11,7 +11,7 @@
 #      colcon・rosdep・numpy/scipy/yaml/opencv・chrony・(pc のみ) python3-vcstool
 #   2. sysctl: net.core.rmem_max / rmem_default = 16 MB (画像の取りこぼし対策)
 #   3. 固定 IP: 有線 NIC に 192.168.10.{2|3}/24、ゲートウェイ・DNS 無し (インターネットは無線のまま)
-#   4. chrony: pc = server (allow 192.168.10.0/24)、jetson = client (server 192.168.10.2)
+#   4. chrony: pc = server (allow 192.168.10.0/24)、jetson = client (server 192.168.10.2)。ufw が有効なら直結サブネットを許可
 #   5. 呼び出したユーザーの ~/cyclonedds.xml (NIC 名入り) と ~/.bashrc の環境変数 (無ければ追記)
 # やらないこと: Docker・Unity・NVIDIA Container Toolkit (docs/docker.md・docs/unity.md)、ワークスペースのビルド (scripts/build.sh)。
 set -euo pipefail
@@ -102,6 +102,12 @@ CHRONY
   fi
   systemctl enable --now chrony >/dev/null 2>&1 || systemctl enable --now chronyd >/dev/null 2>&1
   systemctl restart chrony 2>/dev/null || systemctl restart chronyd
+
+  # ufw が有効だと NTP (UDP 123) と DDS のユニキャストが落ちる。直結サブネットだけ丸ごと許可する
+  if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q "^Status: active"; then
+    echo "== ufw: 192.168.10.0/24 からの受信を許可 (NTP・DDS)"
+    ufw allow from 192.168.10.0/24 >/dev/null
+  fi
 fi
 
 # ---- 5. ユーザー側: cyclonedds.xml と .bashrc --------------------------------
