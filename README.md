@@ -32,7 +32,7 @@ jetracer_sim/
 ├── docker/                  sim PC の ROS 側 (sim.Dockerfile / docker-compose.yml) と学習器 (learner.Dockerfile)
 ├── config/cyclonedds.xml    2 ホスト用 DDS 設定
 ├── tools/                   make_route.py (参照線の引き直し)・corridor_check.py (机上判定)・lap_eval.py (周回評価)・imu_allan.py・imu_spectrum.py (IMU 5 測定の解析)
-├── scripts/                 build.sh・test.sh・run_sim_local.sh・export_course.sh・check_no_sim_topics.sh・sim_env.sh
+├── scripts/                 setup_host.sh (★環境を一気に作る: apt・sysctl・固定 IP・chrony)・p9_check.sh (2 ホスト直結の起動前チェック)・build.sh・test.sh・run_sim_local.sh・smoke_test.sh・setup_ws.sh・setup_unity_player.sh・export_course.sh・check_no_sim_topics.sh・sim_env.sh
 └── docs/                    architecture (境界・トピック)・setup (2 ホスト構築)・unity・docker・calibration・lockstep (強化学習 IF)
 ```
 
@@ -95,7 +95,7 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 | | |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | 境界と凍結するトピック・3 つの時計・ノードの契約・安全の層 |
-| [docs/setup.md](docs/setup.md) | 2 ホスト (sim PC ＋ Jetson) の環境構築。ROS 2 Humble・固定 IP・chrony・cyclonedds |
+| [docs/setup.md](docs/setup.md) | 2 ホスト (sim PC ＋ Jetson) の環境構築。`sudo ./scripts/setup_host.sh {jetson\|pc}` で一気に作る → `p9_check.sh` → P9 接続手順 |
 | [docs/unity.md](docs/unity.md) | Unity 環境 (プロジェクトの場所・course.json・ビルド・接続・未実装の描画) |
 | [docs/docker.md](docs/docker.md) | sim PC の Docker (sim / learner) と踏みやすい 4 つ |
 | [docs/calibration.md](docs/calibration.md) | 走行ゼロで取る IMU 5 測定・サーボ/ESC の較正・陽性対照 |
