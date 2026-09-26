@@ -9,9 +9,9 @@ Unity の `/camera/image_raw` を、実カメラ (2026-09-12 MEC の手動走行
 PY=~/jetracer/venv_sim2real/bin/python
 
 # 1. 学習データ (A = sim)。Unity 描画で教師を走らせて記録し、画像を抜く
-./scripts/record.sh 8 60 --unity --seed0 201
+./scripts/record.sh 8 60 --unity --seed0 301
 source scripts/sim_env.sh
-$PY tools/sim2real/extract_frames.py "bags/ep_20*" -o ~/jetracer/data/sim_frames --every 2
+$PY tools/sim2real/extract_frames.py "bags/ep_30*" -o ~/jetracer/data/sim_frames --every 2
 # B = 実画像: ~/jetracer/data/real_260912 (zip を展開したもの)
 
 # 2. 学習 (CPU。標準 CUT・176 切り出しで約 0.56 s/反復 → 16,000 反復で約 2.5 時間。--resume で続きから)
@@ -23,7 +23,7 @@ $PY tools/sim2real/train_cut.py --sim ~/jetracer/data/sim_frames --real ~/jetrac
 $PY tools/sim2real/eval_geometry.py --model ~/jetracer/runs/cut_002/G.onnx --sim ~/jetracer/data/sim_frames --grid /tmp/s2r.png
 
 # 4. bag を変換 (画像だけ差し替え、stamp とほかのトピックはそのまま) → bags/<元>_s2r/
-$PY tools/sim2real/convert_bag.py "bags/ep_20*" --model ~/jetracer/runs/cut_002/G.onnx
+$PY tools/sim2real/convert_bag.py "bags/ep_30*" --model ~/jetracer/runs/cut_002/G.onnx
 ```
 
 - 画面下端の柱は学習させない: 入力の柱を両ドメインとも同じ色で塗り、変換後は入力の画素で上書き (`common.py`)。
