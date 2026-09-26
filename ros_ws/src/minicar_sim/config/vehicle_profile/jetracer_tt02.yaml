@@ -56,7 +56,7 @@ vehicle_profile:
       vignette: 0.16              # 端で 16 % 暗い
       blur_px: 0.8
       motion_px_per_rad_s: 2.0    # ヨーレート 1 rad/s あたり横 2 px のブラー
-      exposure_target: 110        # 自動露出の目標平均輝度 (実画像の平均 112)
+      exposure_target: 125        # 自動露出の目標。飽和 (空・白壁) のぶん到達平均は目標の約 0.88 倍 → 実画像の平均 ~110 に合う
       exposure_tau_s: 0.4
       gamma: 1.0
       noise: 0.02
@@ -70,12 +70,14 @@ vehicle_profile:
       backdrop_z0_m: -0.3
       spectators: 24              # 壁の外に立つ観戦者 (雑音として)。0 で無し
       spectator_seed: 1
-      wall_white_r: 215             # 実測 195 だが自動露出後の p95 (220) に合わせて明るめ
-      wall_white_g: 213
-      wall_white_b: 211
-      wall_red_r: 141
-      wall_red_g: 70
-      wall_red_b: 67
+      # 壁の板はレギュレーション p.24 のとおり 1 枚ごとに赤か白の単色 (配色は course.py の WALL_COLORS)。
+      # 色は流用元の値 (2025 車載画像で合わせたもの)。実画像の測定値 (赤 BGR 66,70,141) は露出で暗いので使わない
+      wall_white_r: 226
+      wall_white_g: 222
+      wall_white_b: 212
+      wall_red_r: 196
+      wall_red_g: 38
+      wall_red_b: 36
       carpet_r: 117               # carpet.png が無いときの単色
       carpet_g: 115
       carpet_b: 112

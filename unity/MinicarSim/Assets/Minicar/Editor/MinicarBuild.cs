@@ -1,0 +1,92 @@
+// バッチモードでシーン・マテリアル・Linux プレイヤーを作る。
+//
+//   Unity -batchmode -nographics -projectPath unity/MinicarSim \
+//         -executeMethod Minicar.EditorTools.MinicarBuild.SetupAndBuild -quit
+//
+// 出力: unity/MinicarSim/Build/MinicarSim.x86_64
+// (unity/build_player.sh がコースの書き出しからここまでをまとめて行う)
+using System.IO;
+using UnityEditor;
+using UnityEditor.Build;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+
+namespace Minicar.EditorTools
+{
+    public static class MinicarBuild
+    {
+        const string kScene = "Assets/Scenes/Minicar.unity";
+        const string kResDir = "Assets/Minicar/Resources";
+        const string kOut = "Build/MinicarSim.x86_64";
+
+        [MenuItem("Minicar/Setup Scene")]
+        public static void Setup()
+        {
+            // ROS-TCP-Connector を ROS 2 の配線 (Header に seq が無い等) でコンパイルする
+            PlayerSettings.SetScriptingDefineSymbols(NamedBuildTarget.Standalone, "ROS2");
+
+            PlayerSettings.productName = "MinicarSim";
+            PlayerSettings.companyName = "minicarbattle2026";
+            PlayerSettings.runInBackground = true;       // 端末にフォーカスがあっても描き続ける
+            PlayerSettings.visibleInBackground = true;
+            PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
+            PlayerSettings.defaultScreenWidth = 1280;
+            PlayerSettings.defaultScreenHeight = 720;
+            PlayerSettings.resizableWindow = true;
+            PlayerSettings.usePlayerLog = true;
+
+            MakeMaterials();
+            MakeScene();
+        }
+
+        static void MakeMaterials()
+        {
+            Directory.CreateDirectory(kResDir);
+            // 実行時に Resources.Load で複製して色を付ける。シェーダを
+            // ビルドに確実に含めるため、アセットとして持っておく。
+            Save(new Material(Shader.Find("Standard")), "Mat_Lit");
+            Save(new Material(Shader.Find("Unlit/Texture")), "Mat_Unlit");
+            // 頂点色で塗る (走行軌跡・凡例バー)。Sprites/Default は両面・ライティングなし
+            Save(new Material(Shader.Find("Sprites/Default")), "Mat_VertexColor");
+            // 車載カメラの後処理 (Assets/Minicar/Shaders/SensorPost.shader)。course.json の realism.enable で使う
+            var post = Shader.Find("Minicar/SensorPost");
+            if (post == null) Debug.LogError("[MinicarBuild] Minicar/SensorPost shader not found");
+            else Save(new Material(post), "Mat_SensorPost");
+        }
+
+        static void Save(Material m, string name)
+        {
+            string path = $"{kResDir}/{name}.mat";
+            if (AssetDatabase.LoadAssetAtPath<Material>(path) != null)
+                AssetDatabase.DeleteAsset(path);
+            AssetDatabase.CreateAsset(m, path);
+        }
+
+        static void MakeScene()
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(kScene));
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var go = new GameObject("MinicarSim");
+            go.AddComponent<CourseBuilder>();
+            go.AddComponent<SimBridge>();
+            EditorSceneManager.SaveScene(scene, kScene);
+            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(kScene, true) };
+            AssetDatabase.SaveAssets();
+        }
+
+        public static void SetupAndBuild()
+        {
+            Setup();
+            var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+            {
+                scenes = new[] { kScene },
+                locationPathName = kOut,
+                target = BuildTarget.StandaloneLinux64,
+                options = BuildOptions.None,
+            });
+            Debug.Log($"[MinicarBuild] result={report.summary.result} errors={report.summary.totalErrors} out={kOut}");
+            if (Application.isBatchMode)
+                EditorApplication.Exit(report.summary.result == UnityEditor.Build.Reporting.BuildResult.Succeeded ? 0 : 1);
+        }
+    }
+}

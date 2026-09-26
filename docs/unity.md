@@ -15,7 +15,7 @@ vehicle_sim ──/sim/render_state (sim 時刻 stamp, step_id, car_id)──▶
 
 | もの | 場所 | 備考 |
 |---|---|---|
-| Unity プロジェクト | `minicarbattle2026/unity/MinicarSim` (Unity 6000.0.83f1・ROS-TCP-Connector 0.7.0) | **このリポジトリには Unity プロジェクトを持たない**。既存のものをそのまま使う |
+| Unity プロジェクト | **`unity/MinicarSim`** (このリポジトリ。`minicarbattle2026/unity/MinicarSim` の複製 + JetRacer 向けの変更。Unity 6000.0.83f1・ROS-TCP-Connector 0.7.0) | Assets / Packages / ProjectSettings だけを管理。Library は初回ビルドで生成 (数分)。複製元との差分: `Scripts/LabelTexture.cs` (P1/P2/P3 のドット文字)、`Shaders/SensorPost.shader` (実カメラ風の後処理)、`CourseBuilder.cs` (駐車枠ラベル・実画像カーペット・観戦者・realism の色)、`CourseData.cs` (`RealismData`)、`SimBridge.cs` (後処理・自動露出・frame_id `camera_link`)、`Editor/MinicarBuild.cs` (Mat_SensorPost)。ビルドは `scripts/build_unity.sh` |
 | コースとカメラ幾何の定義元 | `ros_ws/src/minicar_sim/scripts/course.py`・`config/sim.yaml`・`config/vehicle_profile/jetracer_tt02.yaml` | Unity 側に数値を書かない (P11) |
 | 書き出し | `./scripts/export_course.sh` → `unity/course.json` | `UNITY_PROJ=<path>` を付けたときだけ `Assets/StreamingAssets/course.json` へコピー |
 | プレイヤーのビルド | `minicarbattle2026/unity/build_player.sh` → `Build/MinicarSim.x86_64` | ★既存スクリプトは `jetson/ros_ws/.../export_unity_course.py` (M-05 用) を呼ぶ。JetRacer 用は先に `export_course.sh` でコピーしてから Unity 部分だけ実行する (下) |
@@ -85,6 +85,27 @@ ros2 topic echo /camera/camera_info --once  # camera_info_pub が vehicle_profil
 
 `/sim/render_state` の stamp は sim 時刻。`/sim/step` は、この step で画像が来る予定 (15 Hz なので 2 step に 1 枚) のときだけ、直前より新しい stamp の画像が返るまで `step_image_timeout_s` (既定 0.5 s) 待つ。Unity が遅ければ step がその分遅くなるだけで、物理は進まない。`step_id`・`car_id` は `/sim/render_state` に予約済みで、Unity 側は当面無視してよい (N 台並列のときに使う)。
 
+## 実カメラの見た目に寄せる (JetRacer 用複製プロジェクト・`vehicle_profile.camera.realism`)
+
+複製プロジェクト `unity/MinicarSim` にだけ入っている。数値の定義元は
+`ros_ws/src/minicar_sim/config/vehicle_profile/jetracer_tt02.yaml` の `camera.realism` で、
+`export_course.sh` が `course.json` の `realism` に書き出す (無ければ Unity 側の既定 = オフ)。
+根拠は 2026-09-12 の手動走行ログ (`tools/make_real_textures.py` が統計と床タイルを作る)。
+
+| 項目 | 実装 | 実画像との比較 (`tools/compare_images.py`) |
+|---|---|---|
+| 床のカーペット | 実画像の近景から作ったタイル `StreamingAssets/textures/carpet.png` | 床 BGR (120,117,113) vs 実 (116,123,118) |
+| 壁の色 | 白 (215,213,211)・赤帯 (141,70,67) | p95 210 vs 220 |
+| 樽型歪み | 後処理シェーダ `SensorPost` (Brown k1=-0.08)。★係数はチェッカーボードで測ってから置換 | — |
+| 周辺減光・ぼけ・ノイズ | 同シェーダ (vignette 0.16・blur 0.8 px・noise 0.02)。2 倍で描いて縮小 | 周辺減光 1.1 vs 1.2、鮮鋭度 (Laplacian 分散) 371 vs 345 |
+| 自動露出 | 平均輝度を目標 (110) に一次遅れ (τ 0.4 s) で寄せる | 中央値 104 vs 105 |
+| モーションブラー | ヨーレート比例の横ブラー (2 px per rad/s) | — |
+| 車体の柱 | 画面下の 2 本を実機と同じ列 (54–57・121–124、行 209〜) に描く (`posts`) | ★**両系同値**: 実機側 `camera_preproc` (stack.yaml `policy_net.mask_bottom_frac`、現在 0.0) でマスクするなら、その領域と `posts` を同じ値にすること。片方だけだと sim-to-real の穴 |
+| 観戦者 | 壁の外に 24 人 (seed 固定)。壁の上に見える雑音として | — |
+| 背景 | Unity 既定のスカイボックス (`background_gray: -1`)。実画像を並べた背景円筒は平面的で不採用 | 上半分が実画像より 10〜15 暗い (未調整) |
+
+描画そのもの (C#・シェーダ) を変えたときだけ `scripts/build_unity.sh`。数値だけなら `setup_unity_player.sh` (course.json 差し替え) で足りる。
+
 ## 未実装 (設計 未決タブ「決める順番」)
 
 実データ (2026-09-12 の手動走行ログ) で必要と分かったが、Unity に入れていないもの。
@@ -94,7 +115,7 @@ ros2 topic echo /camera/camera_info --once  # camera_info_pub が vehicle_profil
 | レンズ歪み | 樽型 (魚眼ではない・120〜160° 級) | ピンホール描画 ＋ 後処理の Brown モデル。係数はチェッカーボードで測ってから `vehicle_profile.camera.distortion` に |
 | 露出変動 | 暗幕付近は全体が灰色に潰れる | 自動露出の模擬 (平均輝度への一次遅れ) |
 | モーションブラー | 旋回中のフレームに強いブレ | ヨーレート比例のブラー |
-| 車体の写り込み | 画面下に黒い 4 本の柱が全フレーム同位置 | Unity で描くか、`camera_preproc` で**両系とも同じ領域をマスク** (片方だけだと sim-to-real の穴) |
+| 車体の写り込み | 画面下に黒い柱 (実画像では 2 本: 列 54–57・121–124、行 209〜223) | Unity では `realism.posts` で描いた (上の表)。`camera_preproc` でマスクするなら**両系とも同じ領域** (片方だけだと sim-to-real の穴) |
 | 壁の浮き | 規約では床から 30 mm 浮いて上端 120 mm | `course.json` の `wall_base_m` は書き出し済み (0.03)。Unity 側の反映は未確認 |
 
 既存 sim の RViz 風・AI チャレンジ風レイアウト、2 台レース (`race2.sh`) はそのまま使える。JetRacer 機は LiDAR が無いので占有格子は表示されない。
