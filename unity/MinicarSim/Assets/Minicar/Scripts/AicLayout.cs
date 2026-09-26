@@ -690,7 +690,20 @@ namespace Minicar
             }
             // 中心線
             for (int s = 0; s < m_Center.Length - 1; s++) Line(m_Center[s], m_Center[s + 1], 1.6f);
+
             Flush(Color.white);
+            // 参照線 (route.yaml)。中心線と別色 (橙) で重ねる。無ければ描かない
+            var rl = m_Data.reference_line;
+            if (rl != null && rl.Length >= 6)
+            {
+                int m = rl.Length / 2;
+                for (int s = 0; s < m; s++)
+                {
+                    int t = (s + 1) % m;
+                    Line(new Vector2(rl[s * 2], rl[s * 2 + 1]), new Vector2(rl[t * 2], rl[t * 2 + 1]), 1.4f);
+                }
+                Flush(new Color(1f, 0.70f, 0.25f, 0.95f));
+            }
             // スタートライン (中心線の始点を横切る)
             Vector2 dir = (m_Center[1] - m_Center[0]).normalized, nrm = new Vector2(-dir.y, dir.x);
             Line(m_Center[0] - nrm * 0.30f, m_Center[0] + nrm * 0.30f, 2.6f);

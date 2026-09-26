@@ -8,9 +8,13 @@ set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PROFILE="${1:-jetracer_tt02}"
 UNITY_PROJ="${UNITY_PROJ:-}"
+# 参照線 (ミニマップ表示用)。ROUTE=<route.yaml> で指定。未指定なら config/route_${PROFILE}.yaml があればそれ
+ROUTE="${ROUTE:-}"
+[ -z "$ROUTE" ] && [ -f "$HERE/../ros_ws/src/minicar_sim/config/route_${PROFILE}.yaml" ] && ROUTE="$HERE/../ros_ws/src/minicar_sim/config/route_${PROFILE}.yaml"
+ROUTE_ARG=(); [ -n "$ROUTE" ] && ROUTE_ARG=(-r "$ROUTE")
 export PYTHONNOUSERSITE=1
 export PYTHONPATH="$HERE/../ros_ws/src/jetracer_common:$PYTHONPATH"
-python3 "$HERE/../ros_ws/src/minicar_sim/scripts/export_unity_course.py" -p "$PROFILE" -o "$HERE/../unity/course.json"
+python3 "$HERE/../ros_ws/src/minicar_sim/scripts/export_unity_course.py" -p "$PROFILE" -o "$HERE/../unity/course.json" "${ROUTE_ARG[@]}"
 if [ -n "$UNITY_PROJ" ] && [ -d "$UNITY_PROJ/Assets" ]; then
   mkdir -p "$UNITY_PROJ/Assets/StreamingAssets"
   cp "$HERE/../unity/course.json" "$UNITY_PROJ/Assets/StreamingAssets/course.json"

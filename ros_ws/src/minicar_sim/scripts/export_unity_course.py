@@ -44,7 +44,7 @@ def _profile_camera(name):
     return load_profile(find_profile(name))['camera']
 
 
-def build(profile=DEFAULT_PROFILE):
+def build(profile=DEFAULT_PROFILE, route=None):
     p = _sim_yaml()
     v = _sim_yaml('sim_viz')
     cam = _profile_camera(profile)
@@ -94,7 +94,21 @@ def build(profile=DEFAULT_PROFILE):
         # 周回・ラップタイム・セクタ表示に使う。-route long で外周経路を選ぶ
         centerline_shortcut=_centerline(True),
         centerline_long=_centerline(False),
+        # 参照線 (make_route.py の route.yaml)。Unity はミニマップに描くだけ (無ければ描かない)。
+        # 周回・セクタの判定は従来どおり中心線で行う
+        reference_line=_reference_line(route),
+        reference_line_name=os.path.basename(route) if route else '',
     )
+
+
+def _reference_line(route, name='shortcut'):
+    if not route:
+        return []
+    from jetracer_common.reference_line import ReferenceLine
+    with open(route) as f:
+        d = yaml.safe_load(f)
+    rl = ReferenceLine(d[name]['waypoints'], resample_m=0.06)
+    return [round(float(v), 3) for xy in rl.pts for v in xy]
 
 
 def _centerline(use_shortcut):
@@ -107,10 +121,12 @@ def main():
     ap.add_argument('-o', '--out', default=DEFAULT_OUT)
     ap.add_argument('-p', '--profile', default=DEFAULT_PROFILE,
                     help='vehicle_profile の名前かパス (カメラ幾何の定義元)')
+    ap.add_argument('-r', '--route', default=None,
+                    help='参照線 route.yaml (make_route.py の出力)。ミニマップ用に course.json の reference_line へ書き出す')
     a = ap.parse_args()
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     with open(a.out, 'w') as f:
-        json.dump(build(a.profile), f, indent=1, ensure_ascii=False)
+        json.dump(build(a.profile, route=a.route), f, indent=1, ensure_ascii=False)
     print(f'wrote {a.out}')
 
 

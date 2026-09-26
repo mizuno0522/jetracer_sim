@@ -101,5 +101,8 @@ namespace Minicar
         public VizData viz;
         // コース中心線 (閉ループ, [x0, y0, x1, y1, ...])。ミニマップと周回・セクタ表示用
         public float[] centerline_shortcut, centerline_long;
+        // 参照線 (make_route.py の route.yaml、[x0, y0, x1, y1, ...])。ミニマップに描くだけ。無ければ空
+        public float[] reference_line;
+        public string reference_line_name;
     }
 }
