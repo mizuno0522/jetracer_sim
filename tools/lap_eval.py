@@ -39,6 +39,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--seconds', type=float, default=90.0)
     ap.add_argument('--csv', default='')
+    # 合否判定 (smoke_test.sh 用)。指定した条件を 1 つでも満たさなければ終了コード 1
+    ap.add_argument('--min-laps', type=int, default=None, help='この周回数以上')
+    ap.add_argument('--max-cte-p95', type=float, default=None, help='走行中の |cte| p95 [m] がこれ以下')
+    ap.add_argument('--no-collision', action='store_true', help='衝突・コース外が 0 回')
     a = ap.parse_args()
     rclpy.init()
     n = Eval()
@@ -70,12 +74,27 @@ def main():
     i = int(np.argmin(clear))
     print(f'壁余裕 最小 {clear[i]:.3f} m @ ({r[i, 1]:.2f},{r[i, 2]:.2f}) s={r[i, 5]:.1f} m, '
           f'衝突 {int(np.diff(col).clip(0).sum())} 回, コース外 {int(np.diff(off).clip(0).sum())} 回')
+    fails = []
+    n_laps = int(lap[-1] - lap[0])
+    if a.min_laps is not None and n_laps < a.min_laps:
+        fails.append(f'周回 {n_laps} < {a.min_laps}')
+    if a.max_cte_p95 is not None:
+        p95 = float(np.percentile(np.abs(cte[moving]), 95)) if moving.any() else float('inf')
+        if p95 > a.max_cte_p95:
+            fails.append(f'|cte| p95 {p95:.3f} > {a.max_cte_p95}')
+    if a.no_collision and (np.diff(col).clip(0).sum() > 0 or np.diff(off).clip(0).sum() > 0):
+        fails.append('衝突またはコース外あり')
     if a.csv:
         with open(a.csv, 'w', newline='') as f:
             w = csv.writer(f)
             w.writerow(['t', 'x', 'y', 'yaw', 'v', 's', 'cte', 'herr', 'steer', 'clear', 'col', 'off', 'lap', 'zone', 'kappa'])
             w.writerows(rows)
         print('csv', a.csv)
+    if fails:
+        print('NG  ' + ' / '.join(fails))
+        sys.exit(1)
+    if a.min_laps is not None or a.max_cte_p95 is not None or a.no_collision:
+        print('OK  判定条件を満たした')
 
 
 if __name__ == '__main__':

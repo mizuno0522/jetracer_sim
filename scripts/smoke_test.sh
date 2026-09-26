@@ -1,5 +1,5 @@
 #!/bin/bash
-# 走行ゼロ・Unity 無しの動作確認: 単体テスト → 閉ループ起動 → レートと走行の検査 → /sim/ 購読禁止。
+# 走行ゼロ・Unity 無しの動作確認: 単体テスト → 閉ループ起動 → レート → 教師で 1 周 (lap_eval) → /sim/ 購読禁止。
 #   ./scripts/smoke_test.sh
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -36,12 +36,12 @@ rate() {  # topic 期待Hz 許容%
 rate /imu 100 10
 rate /camera/image_raw 15 10
 rate /actuator_cmd 30 10
-s0=$(timeout 5 ros2 topic echo /sim/ground_truth --once --no-arr 2>/dev/null | awk '/^s_m:/{print $2}')
-sleep 10
-s1=$(timeout 5 ros2 topic echo /sim/ground_truth --once --no-arr 2>/dev/null | awk '/^s_m:/{print $2}')
-cte=$(timeout 5 ros2 topic echo /sim/ground_truth --once --no-arr 2>/dev/null | awk '/^cte_m:/{print $2}')
-awk -v a="$s0" -v b="$s1" -v c="$cte" 'BEGIN{d=b-a; if(d<-10)d+=26.24; ok=(d>3 && (c<0.3&&c>-0.3)); printf("%s  教師で走行: 10 s で Δs=%.2f m, cte=%.3f m\n", ok?"OK ":"NG ", d, c); exit ok?0:1}' || fail=1
-grep -E "process has died" "$LOG/smoke_sim.log" "$LOG/smoke_stack.log" | grep -v "exit code 0" | head -3 && { echo "NG  起動中に死んだノードがある (上)"; fail=1; } || true
+# 教師で 1 周以上走らせて、周回・|cte| p95・衝突を tools/lap_eval.py で判定 (1 周 ≈ 23 s + スタート)
+python3 "$HERE/../tools/lap_eval.py" --seconds 50 --min-laps 1 --max-cte-p95 0.30 --no-collision || fail=1
+if grep -E "process has died" "$LOG/smoke_sim.log" "$LOG/smoke_stack.log" | grep -qv "exit code 0"; then
+  grep -E "process has died" "$LOG/smoke_sim.log" "$LOG/smoke_stack.log" | grep -v "exit code 0" | head -3
+  echo "NG  起動中に死んだノードがある (上)"; fail=1
+fi
 
 echo "=== 3/3 /sim/ 購読禁止 ==="
 "$HERE/check_no_sim_topics.sh" /cmd_shaper /failsafe || fail=1
