@@ -42,18 +42,26 @@ ros2 launch minicar_sim sim_host.launch.py unity_player:=~/minicarbattle2026/uni
 
 ## 同じ PC で既存 sim (M-05) と並行して動かす
 
-sim PC に既存の ROS-Unity 版 (`~/ros_ws`) と JetRacer sim (`~/jetracer/jetracer_sim`) が同居する前提。**4 つを分ける**。
+sim PC に既存の ROS-Unity 版 (`~/minicarbattle2026/jetson/ros_ws`) と JetRacer sim (`~/jetracer/jetracer_sim`) が同居する前提。既存 sim のベンチ sweep が `ROS_DOMAIN_ID` 未設定 (=0) で動いていることがあり、42 で分離できるが CPU 負荷は共有する。**4 つを分ける**。
 
 | 衝突するもの | 既存 sim | JetRacer sim | 分け方 |
 |---|---|---|---|
-| `ROS_DOMAIN_ID` | 既定 (race2.sh は 81/82) | **42** (`scripts/sim_env.sh`) | 同じ ID だと `/actuator_cmd` の型が違う (DriveCommand vs ActuatorCmd) ので型不一致エラーが出る |
-| `minicar_msgs` パッケージ | `~/ros_ws/install` | `~/jetracer/jetracer_sim/ros_ws/install` | **同じ端末で両方を source しない**。片方の端末は片方だけ |
+| `ROS_DOMAIN_ID` | 0 (未設定)・race2.sh は 81/82 | **42** (`scripts/sim_env.sh`) | 同じ ID だと `/actuator_cmd` の型が違う (DriveCommand vs ActuatorCmd) ので型不一致エラーが出る |
+| `minicar_msgs` パッケージ | `~/minicarbattle2026/jetson/ros_ws/install` | `~/jetracer/jetracer_sim/ros_ws/install` | **同じ端末で両方を source しない**。片方の端末は片方だけ |
 | `ros_tcp_endpoint` の TCP ポート | 10000 | `tcp_port:=10001` | 両方 Unity を同時に上げるときだけ。片方ずつなら 10000 のまま |
 | Unity プロジェクト / `course.json` | 既存の `MinicarSim` (320×216・30 Hz) | **複製** して 224×224 用にする | `export_course.sh` を既存プロジェクトに向けると M-05 の描画が 224×224 になる |
 
+**再ビルドは要らない (sim PC で確認済み)**: ビルド済みプレイヤーは `Build/MinicarSim_Data/StreamingAssets/course.json` を実行時に読む。プレイヤーのフォルダをコピーして course.json だけ差し替えれば JetRacer 用になる。Unity プロジェクトの複製とビルドは、描画そのもの (駐車枠の P1/P2/P3 マーク・レンズ歪みなど) を変えるときだけ。
+
 ```bash
-# JetRacer 用に Unity プロジェクトを複製 (初回のみ。Build/ と Logs/ は除く)
-rsync -a --exclude Build --exclude Logs --exclude Library ~/ros_ws/../unity/MinicarSim/ ~/jetracer/unity/MinicarSim/   # 既存の場所に合わせる
+# 最短: ビルド済みプレイヤーをコピーして course.json を差し替える (Unity Editor 不要)
+cp -a ~/minicarbattle2026/unity/MinicarSim/Build ~/jetracer/unity/player
+./scripts/export_course.sh jetracer_tt02
+cp unity/course.json ~/jetracer/unity/player/MinicarSim_Data/StreamingAssets/course.json
+ros2 launch minicar_sim sim_host.launch.py unity_player:=~/jetracer/unity/player/MinicarSim.x86_64 tcp_port:=10001
+
+# 描画を変えるとき: JetRacer 用に Unity プロジェクトを複製 (初回のみ。Build/ と Logs/ は除く)
+rsync -a --exclude Build --exclude Logs --exclude Library ~/minicarbattle2026/unity/MinicarSim/ ~/jetracer/unity/MinicarSim/
 UNITY_PROJ=~/jetracer/unity/MinicarSim ./scripts/export_course.sh jetracer_tt02
 "$UNITY" -batchmode -nographics -projectPath ~/jetracer/unity/MinicarSim -executeMethod Minicar.EditorTools.MinicarBuild.SetupAndBuild -logFile /tmp/build_jetracer.log
 # 起動 (既存 sim も同時に上げるなら tcp_port を変える)

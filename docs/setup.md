@@ -2,7 +2,7 @@
 
 | ホスト | OS / ROS | 役割 | IP (有線直結・ゲートウェイ無し) | chrony |
 |---|---|---|---|---|
-| sim PC | Ubuntu 22.04 (★24.04 にしない。Jazzy になって揃わない) / Humble | Unity (素) ＋ Docker (物理・imu_sim・endpoint・学習器) | 192.168.10.2 | server |
+| sim PC | Ubuntu 22.04.5・AMD Ryzen・**AMD GPU (CUDA 無し)** / Humble (desktop 導入済み・`rmw_cyclonedds_cpp` は apt で追加) | Unity (素) ＋ Docker (物理・imu_sim・endpoint)。学習器は別 PC | 192.168.10.2 (有線 enp5s0) | server |
 | Jetson Orin Nano | JetPack 6.2.1 (L4T 36.x・Ubuntu 22.04) / Humble | 推論・ブリッジ・カメラ | 192.168.10.3 | client |
 
 各ステップの最後の「確認」が通らないうちは次へ進まない。**P9 (Jetson ↔ PC の実接続) はまだ誰も試していない**ので、Step 5 を最初に通す半日を取ること。
