@@ -15,7 +15,7 @@ sim PC (Ubuntu 22.04.5・Humble desktop・AMD 内蔵 GPU = CUDA 無し・Unity 6
 | Unity プレイヤー | ソースはリポジトリの `unity/MinicarSim`、ビルドは `scripts/build_unity.sh` → `~/jetracer/unity/player`。他チーム向けはビルド済みを [Release v0.1.1](https://github.com/mizuno0522/jetracer_sim/releases/tag/v0.1.1) に置き `scripts/get_unity_player.sh` で取る |
 | カメラ幾何 (Unity) | `course.json` の `fx, fy, cx, cy, k1, k2`・`render_tan_*` で描く (下の節)。推定値 (高さ 0.148 m・下向き 50.9°・水平 144°/垂直 120°・fy/fx 1.78) で OpenCV 描画と一致 |
 | 他チームの JetRacer 標準コード | `jetracer_compat` で無改造のまま sim で走る (下の節)。v0.1.1 として公開 |
-| sim→real 画像変換 | 1 回目 (FastCUT)・2 回目 (標準 CUT) は不合格、形を保つ損失を足して 3 回目を学習中 (下の節) |
+| sim→real 画像変換 | 3 回目 (標準 CUT + 形を保つ損失) で合格。F 値 0.832 (下の節・[sim2real.md](sim2real.md)) |
 
 ## カメラ幾何の Unity 実装と確認
 
@@ -50,7 +50,9 @@ sim PC (Ubuntu 22.04.5・Humble desktop・AMD 内蔵 GPU = CUDA 無し・Unity 6
   128 の切り出しも推論時の 224 全体と構図が合わなかった。
 - 2 回目 `cut_002` (標準 CUT・176 切り出し・0.56 s/反復・16,000 反復) は**不合格**。色と質感は実画像に近づいたが、床の奥に実物に無い明るい塊を描き、
   水色の滑り板や壁の縁が消えることがある。変換前後のエッジ F 値 0.559 (目安 0.6、未学習モデル 0.856)。
-- 3 回目 `cut_003` を学習中: cut_002 の重みから、形を保つ損失 (1/4 に縮めた輝度の勾配を揃える `--lambda-struct 10`) と λ_NCE 2 で 8,000 反復 (約 1.2 時間)。
+- 3 回目 `cut_003` は**合格**: cut_002 の重みから、形を保つ損失 (1/4 に縮めた輝度の勾配を揃える `--lambda-struct 10`) と λ_NCE 2 で 8,000 反復 (約 1.2 時間)。
+  エッジ F 値 0.832 (下半分 0.676)。滑り板の色・壁と床の位置が保たれた。学習データ 8 本を変換して `bags/ep_30*_s2r` に。
+- 自分の実画像で作り直す手順は [sim2real.md](sim2real.md)。
 - 推論は ONNX で約 57 ms/枚 (CPU)。走行中に挟むと画像の遅れが増えるので、記録済み bag を後から変換する (`convert_bag.py`)。
 - 変換した bag は学習データの一部だけに混ぜる (9/12 の会場に寄せきらない)。
 

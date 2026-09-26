@@ -97,7 +97,7 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 | ✅ **参照線を TT-02 用に引き直した** | 中心線は坂道出口の右ヘアピンで R 0.42 m と δmax 27° の R_min 0.506 m を割っていた。最小曲率で引き直して最小 R 0.556 m・壁余裕 ≥ 0.18 m (`tools/make_route.py` → `config/route_jetracer_tt02.yaml`、launch の既定) |
 | ✅ Unity 描画 | JetRacer 用の複製プロジェクト (`unity/MinicarSim`)。224×224・15 Hz、カメラの幾何は profile の 1 か所から (fx≠fy・樽型歪み)、実カメラ寄せの後処理 (周辺減光・ブラー・自動露出・柱)、駐車枠の P1/P2/P3、エピソード乱択化 (照明・床・観戦者・床の白テープ)、参照線のミニマップ表示 |
 | ✅ 記録と録画 | `scripts/record.sh` (seed を変えて rosbag を N 本)・`record:=` (Unity 表示を mp4)・`tools/record_video.py` (車が見ている画を mp4) |
-| 🟡 sim→real 画像変換 | CUT (FastCUT) を PC の CPU で学習中。記録済みの bag を後から変換する方式で、変換した bag は学習データの一部だけに混ぜる ([tools/sim2real/README.md](tools/sim2real/README.md)) |
+| ✅ sim→real 画像変換 | CUT を PC の CPU で学習 (3 回目で合格、形の一致 F 値 0.83)。記録済みの bag を後から変換し、学習データの一部だけに混ぜる。自分の実画像で作り直す手順は [docs/sim2real.md](docs/sim2real.md) |
 | ✅ Jetson の画面をネット越しに | `scripts/setup_vnc.sh` (仮想ディスプレイ) / `--mirror` (普段の画面)。Mac からは SSH トンネル ([docs/setup.md](docs/setup.md)) |
 | ✅ **他チームの JetRacer 標準コードを sim で走らせる** | `jetracer_compat` (NvidiaRacecar / jetcam CSICamera の互換クラス)。先頭に 2 行足すだけで、元のコードは無改造。**v0.1.1** として公開 ([docs/for_teams.md](docs/for_teams.md)) |
 | 🟡 舵とスロットル | 9/12 の実走ログから推定: **スロットルはマイナスで前進** (中立より下のパルス)、steering −0.22 で直進 (中立 1681 µs)、平均車速 −0.106 → 1.26 〜 −0.130 → 2.45 m/s。車体を持ち上げた実測で確定させる |
@@ -126,6 +126,7 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 | [docs/docker.md](docs/docker.md) | sim PC の Docker (sim / learner) と踏みやすい 4 つ |
 | [docs/calibration.md](docs/calibration.md) | 走行ゼロで取る IMU 5 測定・サーボ/ESC とカメラの較正・陽性対照 |
 | [ros_ws/src/jetracer_compat/README.md](ros_ws/src/jetracer_compat/README.md) | 互換クラスの変換 (値 → パルス → δ・v) |
-| [tools/sim2real/README.md](tools/sim2real/README.md) | sim→real 画像変換 (CUT) の学習と変換 |
+| [docs/sim2real.md](docs/sim2real.md) | **sim→real 画像変換を自分の実画像で作る手順** (実画像の集め方・sim 画像の撮り方・学習・検証・bag の変換・混ぜ方・うまくいかないとき) |
+| [tools/sim2real/README.md](tools/sim2real/README.md) | sim→real 画像変換の道具と、この PC での学習の記録 |
 | [docs/lockstep.md](docs/lockstep.md) | 強化学習 IF (sim_mode:=lockstep・Reset/Step・StepInfo) |
 | [docs/status_pc.md](docs/status_pc.md) | sim PC 側の現状 (Unity・互換クラス・画像変換の学習状況・PC で踏んだ落とし穴) |

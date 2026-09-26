@@ -15,12 +15,15 @@ import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, '..', '..'))
-PROFILE = os.path.join(REPO, 'ros_ws', 'src', 'minicar_sim', 'config', 'vehicle_profile', 'jetracer_tt02.yaml')
+# 柱の位置を読む vehicle_profile。自分の車の profile を使うときは環境変数 SIM2REAL_PROFILE にパスか名前を入れる
+_PDIR = os.path.join(REPO, 'ros_ws', 'src', 'minicar_sim', 'config', 'vehicle_profile')
+_P = os.environ.get('SIM2REAL_PROFILE', 'jetracer_tt02')
+PROFILE = _P if os.path.isfile(_P) else os.path.join(_PDIR, _P if _P.endswith('.yaml') else _P + '.yaml')
 POST_FILL = 48          # 柱を塗る色 (実画像の柱 ≈ 40〜60)
 
 
 def load_posts(profile=PROFILE):
-    """[(x0, x1, y0), ...] (正規化座標)。profile に無ければ空。"""
+    """[(x0, x1, y0), ...] (正規化座標)。profile に無ければ空 (柱の無いカメラは realism.posts: [] にする)。"""
     with open(profile) as f:
         vp = yaml.safe_load(f)['vehicle_profile']
     p = vp.get('camera', {}).get('realism', {}).get('posts', []) or []
