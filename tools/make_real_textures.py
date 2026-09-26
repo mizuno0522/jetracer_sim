@@ -39,6 +39,9 @@ def carpet_tile(imgs, size=256):
             m = p.reshape(-1, 3).mean(0)
             if not (80 < m.mean() < 150) or (m.max() - m.min()) > 12 or p.std() > 22:
                 continue
+            # 白いテープ・壁の下端・反射が入ったパッチは捨てる (タイルを敷き詰めると白い破線の模様になる)
+            if (p.mean(axis=2) > m.mean() + 45).mean() > 0.002:
+                continue
             p = cv2.resize(p, (40, 100), interpolation=cv2.INTER_LINEAR)
             # 露出差と周辺減光の傾き (パッチ内の低周波) を抜き、粒だけ残して平均 115 に揃える
             low = cv2.GaussianBlur(p, (0, 0), 12.0)

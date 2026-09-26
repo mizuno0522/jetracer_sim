@@ -43,3 +43,26 @@ Jetson の教師スタック → PC の物理で 3 周 (24.0 s/周・衝突 0・
 
 `scripts/record.sh [本数] [秒/本] [--unity]`: seed を変えながら教師で走らせ、7 トピック (画像・camera_info・/imu・/actuator_cmd・/lookahead・/sim/ground_truth・/sim/episode) を mcap で `bags/ep_<seed>_<日時>/` に。同名 .json に seed・秒数・git rev。
 Unity は `/sim/episode` で照明・床の色味・観戦者を引き直す (`camera.realism.episode_*`)。
+
+## Unity 画面の録画 (`record:=`) — PC で確認 2026-09-26
+
+`ros2 launch minicar_sim sim_host.launch.py camera_backend:=unity unity_player:=... tcp_port:=10001 record:=~/Videos/run.mp4`
+で、Jetson の教師で走らせながら録画。mp4 は再生可 (断片化 mp4 なので `stop_sim.sh` の SIGINT で止めても壊れない)。
+`record:=` 無し (空文字) のときは録画しない (ffmpeg も起動しない) ことも確認。
+
+録画中の `/camera/image_raw` (PC ローカル 30 s、`tools/rate_probe.py`):
+
+| 条件 | 画像 | 間隔 最大 | 遅延 (sim 時刻 → 受信) 平均 / 最大 | /imu |
+|---|---|---|---|---|
+| 録画なし | 15.0 Hz | 71 ms | 59.7 / 90.0 ms | 99.6 Hz |
+| record_width 1280 | 15.0 Hz | 72 ms | 59.8 / 83.3 ms | 99.6 Hz |
+| record_width 1920 | 15.0 Hz | 72 ms | 61.0 / 72.7 ms | 99.6 Hz |
+
+224×224 配信では録画による劣化は無い。**record_width の既定 1280 のままでよい**。
+注意: 録画サイズは `min(record_width, ウィンドウ幅)` なので、既定のウィンドウ (1024×768) では 1280 でも 1920 でも 1024×768 になる。
+大きく録るならプレイヤーに `-screen-width 1920 -screen-height 1080` を足す。約 90 s で 30 MB。
+
+## 床のカーペット (白い破線の修正)
+
+`tools/make_real_textures.py` が作るタイルに、白いテープ・壁の下端・反射を含むパッチが混ざっていて、
+床に敷き詰めると規則的な白い破線に見えていた。パッチ内に平均 +45 を超える画素が 0.2 % 以上あるものを捨てるようにした。
