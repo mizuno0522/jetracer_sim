@@ -61,6 +61,9 @@ def generate_launch_description():
                               description='Unity の画面を録画する mp4 のパス (例 ~/Videos/run.mp4)。空なら録画しない。'
                                           'ffmpeg が要る。camera_backend:=unity のときだけ効く'),
         DeclareLaunchArgument('record_fps', default_value='30'),
+        DeclareLaunchArgument('window_width', default_value='1024',
+                              description='Unity のウィンドウ幅。録画サイズは min(record_width, ウィンドウ幅) なので大きく録るならここも上げる'),
+        DeclareLaunchArgument('window_height', default_value='768'),
         DeclareLaunchArgument('record_width', default_value='1280',
                               description='録画の幅 [px]。フル解像度のままだと符号化が重く、画像配信のレートが落ちる'),
         DeclareLaunchArgument('tcp_port', default_value='10000',
@@ -122,6 +125,8 @@ def generate_launch_description():
                  '-record', LaunchConfiguration('record'),
                  '-recordfps', LaunchConfiguration('record_fps'),
                  '-recordwidth', LaunchConfiguration('record_width'),
+                 '-screen-width', LaunchConfiguration('window_width'),
+                 '-screen-height', LaunchConfiguration('window_height'),
                  '-logFile', os.path.expanduser('~/.ros/log/jetracer_unity_player.log')],
             name='unity_player', output='screen',
             condition=IfCondition(PythonExpression(
