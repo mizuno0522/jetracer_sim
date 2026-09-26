@@ -8,6 +8,8 @@
 | sim PC の Unity プレイヤー | 素 | Linux ヘッドレス描画の設定が Unity 6 では面倒で得るものが少ない。ビルド済みプレイヤーは依存が自己完結。同じマシンの Docker 内 endpoint に 127.0.0.1:10000 で届く (`network_mode: host`) |
 | Jetson 走行スタック | 素 | I2C・CSI・SCHED_FIFO・mlockall を使う。Docker でもできるが `--privileged --ulimit rtprio` が増えるだけ |
 
+**実装での結果 (2026-09-26)**: sim PC も Docker を使わず、ROS 側を素 (Humble をホストに直接) で動かしている。`PYTHONNOUSERSITE=1` (`scripts/sim_env.sh`・`build.sh` が設定) で `~/.local` の混入は防げていて、2 ホスト接続・Unity・記録まで素で通った。sim→real の学習も PC の CPU で素の venv (`scripts/setup_sim2real.sh`)。このページは「Docker で固めたくなったとき」の手順として残す。
+
 ★ **現在の sim PC は AMD GPU (Renoir 内蔵)**。CUDA も NVIDIA Container Toolkit も使えないので、`learner` コンテナ (PyTorch CUDA) はこの PC では動かない。学習は NVIDIA GPU のある別 PC か、Jetson 上で小さく回す (Orin Nano の GPU で ONNX 書き出しまでは可能)。`sim` コンテナは CPU だけで動く。Unity プレイヤーは AMD の Vulkan/OpenGL で描ける (確認済み)。
 
 ## ファイル
