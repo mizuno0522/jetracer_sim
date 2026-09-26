@@ -101,6 +101,10 @@ def main():
     ap.add_argument('--threads', type=int, default=max(1, (os.cpu_count() or 4) - 2))
     ap.add_argument('--sample-every', type=int, default=500)
     ap.add_argument('--save-every', type=int, default=1000)
+    ap.add_argument('--lambda-struct', type=float, default=0.0,
+                    help='形を保つ損失の重み: 入力と出力を 1/4 に縮めた輝度の勾配の大きさの L1。細かい質感は変えてよく、壁の縁・床の境目の位置を守らせる (0 で無効)')
+    ap.add_argument('--struct-pool', type=int, default=4)
+    ap.add_argument('--init', default='', help='別の ckpt.pt から G/D/MLP の重みだけ読んで始める (反復数は 0 から)')
     ap.add_argument('--crop', type=int, default=0, help='学習時の切り出し [px] (0 = 全体)。見本と推論は全体')
     ap.add_argument('--fast', action='store_true', help='FastCUT: 恒等 NCE を省き λ_NCE=10 (速い。CPU 向け)')
     ap.add_argument('--resume', action='store_true')
@@ -134,6 +138,10 @@ def main():
     if a.export:
         export_onnx(G.cpu(), os.path.join(out, 'G.onnx'), a.size)
         return
+    if a.init and it0 == 0:
+        s0 = torch.load(os.path.expanduser(a.init), map_location=dev)
+        G.load_state_dict(s0['G']); D.load_state_dict(s0['D']); H.load_state_dict(s0['H'])
+        print(f'init weights from {a.init} (it {s0["it"]})')
 
     posts = load_posts()
     mask = post_mask(a.size, a.size, posts)
@@ -153,6 +161,14 @@ def main():
         return a.lr * (1.0 if i < start else max(0.0, 1.0 - (i - start) / max(1.0, a.iters - start)))
 
     mse = torch.nn.MSELoss()
+
+    def structure(x):
+        # 輝度を 1/pool に平均で縮めてから勾配の大きさ。縮めることで質感 (カーペットの粒) は消え、大きな縁だけ残る
+        y = 0.299 * x[:, 0:1] + 0.587 * x[:, 1:2] + 0.114 * x[:, 2:3]
+        y = torch.nn.functional.avg_pool2d(y, a.struct_pool)
+        gx = y[:, :, :, 1:] - y[:, :, :, :-1]
+        gy = y[:, :, 1:, :] - y[:, :, :-1, :]
+        return torch.sqrt(gx[:, :, :-1, :] ** 2 + gy[:, :, :, :-1] ** 2 + 1e-6)
     logf = open(os.path.join(out, 'log.csv'), 'a', newline='')
     lw = csv.writer(logf)
     if it0 == 0:
@@ -198,6 +214,9 @@ def main():
         else:
             l_idt = nce(real_b, idt_b)
             lossG = l_gan + a.lambda_nce * 0.5 * (l_nce + l_idt)
+        if a.lambda_struct > 0:
+            l_struct = torch.nn.functional.l1_loss(structure(fake_b), structure(real_a))
+            lossG = lossG + a.lambda_struct * l_struct
         lossG.backward()
         optG.step()
 
