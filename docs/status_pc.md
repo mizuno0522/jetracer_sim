@@ -1,4 +1,4 @@
-# sim PC 側の状況 (2026-09-27 時点)
+# sim PC 側の状況 (2026-09-27 夜 時点)
 
 sim PC (Ubuntu 22.04.5・Humble desktop・AMD 内蔵 GPU = CUDA 無し・Unity 6000.0.83f1) で確かめたことと、PC 側の担当
 (`unity/`・`jetracer_compat`・`tools/sim2real`・Unity 系の scripts) の現状。環境構築の手順そのものは [setup.md](setup.md)・[unity.md](unity.md)。結果の画像と動画は [results/2026-09-26](results/2026-09-26/README.md)・[results/2026-09-27](results/2026-09-27/README.md) (方策)。
@@ -16,6 +16,8 @@ sim PC (Ubuntu 22.04.5・Humble desktop・AMD 内蔵 GPU = CUDA 無し・Unity 6
 | カメラ幾何 (Unity) | `course.json` の `fx, fy, cx, cy, k1, k2`・`render_tan_*` で描く (下の節)。推定値 (高さ 0.148 m・下向き 50.9°・水平 144°/垂直 120°・fy/fx 1.78) で OpenCV 描画と一致 |
 | 他チームの JetRacer 標準コード | `jetracer_compat` で無改造のまま sim で走る (下の節)。v0.1.1 として公開 |
 | sim→real 画像変換 | 3 回目 (標準 CUT + 形を保つ損失) で合格。F 値 0.832 (下の節・[sim2real.md](sim2real.md)) |
+| sim の物理 (壁・車どうし) | **壁は剛体** (押し戻し・法線衝撃・摩擦、通り抜けの修正込み)。2 台走行の相手 (`/sim/rival_state`) とは車体どうしの剛体衝突 (下の節) |
+| 2 台走行・ゴースト | 相手の走りを記録して再生する `tools/race/ghost_replay.py`。2 台の位置の CSV (`RACE_POSE_LOG`)。M-05 の 2 台レースは minicarbattle2026 の `unity/race2.sh`・`race_ghost.sh` |
 | policy_net の学習 | **sim の閉ループで合格**。画像 (＋IMU) だけで、学習に使っていない 7 seed を全部完走・衝突 0 (下の節・[tools/policy](../tools/policy/README.md))。実機は未確認 |
 
 ## カメラ幾何の Unity 実装と確認
@@ -70,6 +72,26 @@ sim PC (Ubuntu 22.04.5・Humble desktop・AMD 内蔵 GPU = CUDA 無し・Unity 6
 - モデル: `~/jetracer/runs/policy_00{1,3}/policy.onnx` ＋ `policy.onnx.data` (2 つで 1 組、opset 18)。git には入れていない。
 - 前夜の評価が 0 % だった原因: 評価スクリプトが launch に `model_file:=` (空) を渡し、launch 全体が引数エラーで起動していなかった。引数を外して直した。
 
+## sim の修正 (2026-09-27 夜、M-05 の 2 台レースと並行)
+
+M-05 (minicarbattle2026) の MPPI 対 Pure Pursuit の 2 台レースを PC ⇔ Jetson で回しながら見つけた sim の問題を、
+両方の sim に入れた。M-05 側の詳細は minicarbattle2026 の `docs/unity_sim.md`「2 台レース」。
+
+| 修正 | JetRacer (このリポジトリ) | M-05 (minicarbattle2026) |
+|---|---|---|
+| 壁を剛体に (以前は余裕 < 0.10 m で衝突の印を立てるだけで、壁を突き抜けた) | 8473c5b。TT-02 の車体 3 円 (後軸から 0 / 0.13 / 0.26 m、半径 0.11)。壁に触れている間も collision | 9/27 昼に Jetson 側で導入済み |
+| 壁の通り抜け (角に斜めに速く当たる・薄い仕切りで円の中心が壁の線を越えると、押し戻す向きが逆になり向こうへ抜けた) | c712d47 | 7c33cb2 (Jetson 側) |
+| スタートライン 1/2/3 を常設 (p.21 の図の位置 2.56 / 4.36 / 6.16 m) | ef68f0f | 38fe480 |
+| 車体の見た目のロール・ピッチを実物並みに (横 1 g で約 1.5°) | ef68f0f | 38fe480 |
+| 車どうしの衝突 (車体に収まる円どうしの剛体衝突、同じ質量として半分ずつ) | 8384f20 (相手の姿勢が届いたときだけ) | 38fe480 (`race_physics:=true`) |
+| 相手を測距センサに写す (LiDAR・超音波・ToF の仕様の視野・遮蔽) と LiDAR 検出からの `/opponent_info` | 対象外 (カメラと IMU だけ。相手は Unity がカメラに描く) | 38fe480 |
+| ゴースト (記録した相手の走りを再生) | `tools/race/ghost_replay.py` | `unity/race_ghost.sh` |
+| レース表示では乱択化の白テープを出さない | 対象外 (学習データ用に残す) | 04f8156 |
+
+- 乱択化の白テープは走路を横切る向きで 0〜6 本置く (実会場の床のテープをまねた学習用)。スタートラインと見分けがつかないので、レース表示 (M-05) では 0 本にした。
+- 確認: smoke test PASS (2 周・衝突 0)。画像を消した方策で壁に当て続けても、コース外 2 回 → 0 回 (以前は実際に壁を抜けていた)。
+  教師で走る JetRacer に M-05 の記録のゴーストが後ろから追いつき、接触して押された (v 1.80 → 2.50)。
+
 ## 踏んだ落とし穴 (PC)
 
 | 症状 | 原因 | 対処 |
@@ -79,6 +101,7 @@ sim PC (Ubuntu 22.04.5・Humble desktop・AMD 内蔵 GPU = CUDA 無し・Unity 6
 | `git pull --rebase` が「unstaged changes」で止まる | Unity のビルドが `Assets/Scenes/Minicar.unity` を毎回書き換える | ビルド後は `git checkout -- unity/MinicarSim/Assets/Scenes/Minicar.unity` |
 | venv が作れない | `python3.10-venv` が未導入 (sudo が要る) | `setup_sim2real.sh` が virtualenv に切り替える |
 | Unity の白い板が灰色に沈む | 影側の壁には環境光しか当たらない | `realism.ambient_gain` 1.8 |
+| Unity がちらつく・白線が増えて見える | 起動に失敗した sim と Unity が残り、同じドメインで 2 つ動いていた | 起動前に `ps` で残りを確かめる。レーススクリプトは後始末で名前で止める |
 
 ## P9 (2 ホスト直結) — 2026-09-26 完了
 
