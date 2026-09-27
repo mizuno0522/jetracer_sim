@@ -87,8 +87,8 @@ vehicle_profile:
       tape_angle_deg: 10
       tape_len_min_m: 0.6
       tape_len_max_m: 0.9
-      start_line_prob: 0.0          # 旧: 規約のスタートラインを確率で描いていた。いまは course.py の START_LINES で常設 (p.24: 2.50/4.30/6.10 m)
-      start_line_x: [2.50, 4.30, 6.10]
+      start_line_prob: 0.0          # 旧: 規約のスタートラインを確率で描いていた。いまは course.py の START_LINES で常設 (2.56/4.36/6.16 m)
+      start_line_x: [2.56, 4.36, 6.16]
       start_line_y0: 0.5
       start_line_y1: 1.9
       # 壁の板はレギュレーション p.24 のとおり 1 枚ごとに赤か白の単色 (配色は course.py の WALL_COLORS)。

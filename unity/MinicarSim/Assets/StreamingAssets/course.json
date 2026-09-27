@@ -390,21 +390,21 @@
  "start_lines": [
   {
    "name": "start1",
-   "x": 2.5,
+   "x": 2.56,
    "y0": 0.5,
    "y1": 1.9,
    "width": 0.05
   },
   {
    "name": "start2",
-   "x": 4.3,
+   "x": 4.36,
    "y0": 0.5,
    "y1": 1.9,
    "width": 0.05
   },
   {
    "name": "start3",
-   "x": 6.1,
+   "x": 6.16,
    "y0": 0.5,
    "y1": 1.9,
    "width": 0.05
@@ -490,9 +490,9 @@
   "tape_len_max_m": 0.9,
   "start_line_prob": 0.0,
   "start_line_x": [
-   2.5,
-   4.3,
-   6.1
+   2.56,
+   4.36,
+   6.16
   ],
   "start_line_y0": 0.5,
   "start_line_y1": 1.9,

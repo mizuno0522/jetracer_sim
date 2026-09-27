@@ -15,8 +15,12 @@ namespace Minicar
         const float TireRadius = 0.030f;      // hw_params.yaml tire_diameter_m 0.060
         const float TireWidth = 0.026f;
         const float TireSink = 0.0015f;       // 接地面のつぶれ (わずかに床へ沈めて接地感を出す)
-        const float RollDegPerMs2 = 0.55f;    // 見た目のロール量 (実測ではない)
-        const float PitchDegPerMs2 = 0.45f;
+        // 見た目のロール量 (実測ではない)。1/10 ツーリングは重心が低くサスが硬く、横 1 g でも 1〜2° 程度。
+        // 旧値 0.55°/(m/s²)・上限 6° はコーナーで 4° 以上傾き、大きすぎた (2026-09-27)
+        const float RollDegPerMs2 = 0.15f;
+        const float RollMaxDeg = 2f;
+        const float PitchDegPerMs2 = 0.15f;   // 旧 0.45・上限 4°
+        const float PitchMaxDeg = 1.5f;
 
         public Transform Root { get; }
         readonly Transform m_Body;
@@ -164,8 +168,8 @@ namespace Minicar
 
             // 旋回外側へロール、加速でノーズアップ・減速でノーズダウン。サスの遅れを一次遅れで
             float a = 1f - Mathf.Exp(-dt / 0.12f);
-            m_Roll = Mathf.Lerp(m_Roll, Mathf.Clamp(aLat * RollDegPerMs2, -6f, 6f), a);
-            m_Pitch = Mathf.Lerp(m_Pitch, Mathf.Clamp(-aLong * PitchDegPerMs2, -4f, 4f), a);
+            m_Roll = Mathf.Lerp(m_Roll, Mathf.Clamp(aLat * RollDegPerMs2, -RollMaxDeg, RollMaxDeg), a);
+            m_Pitch = Mathf.Lerp(m_Pitch, Mathf.Clamp(-aLong * PitchDegPerMs2, -PitchMaxDeg, PitchMaxDeg), a);
             m_Body.localRotation = Quaternion.Euler(m_Pitch, 0f, m_Roll);
         }
 
