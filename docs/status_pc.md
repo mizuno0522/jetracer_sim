@@ -84,7 +84,8 @@ M-05 (minicarbattle2026) の MPPI 対 Pure Pursuit の 2 台レースを PC ⇔ 
 | スタートライン 1/2/3 を常設 (p.21 の図の位置 2.56 / 4.36 / 6.16 m) | ef68f0f | 38fe480 |
 | 車体の見た目のロール・ピッチを実物並みに (横 1 g で約 1.5°) | ef68f0f | 38fe480 |
 | 車どうしの衝突 (車体に収まる円どうしの剛体衝突、同じ質量として半分ずつ) | 8384f20 (相手の姿勢が届いたときだけ) | 38fe480 (`race_physics:=true`) |
-| 相手を測距センサに写す (LiDAR・超音波・ToF の仕様の視野・遮蔽) と LiDAR 検出からの `/opponent_info` | 対象外 (カメラと IMU だけ。相手は Unity がカメラに描く) | 38fe480 |
+| 相手を測距センサに写す (LiDAR・超音波・ToF の仕様の視野・遮蔽) と LiDAR 検出からの `/opponent_info` | 対象外 (カメラと IMU だけ。相手は Unity がカメラに描く) | 38fe480。`/opponent_info` は 54534ac から既定で出さない (実機は Jetson の検出ノードが `/scan` から作る。`RIVAL_OPPONENT_INFO=1` で出す) |
+| ゴーストの再生開始の判定 | 自車の `/sim/render_state` の速度 | 115f5a3 から同じ (`/odom` は車両側の推定なので読まない) |
 | ゴースト (記録した相手の走りを再生) | `tools/race/ghost_replay.py` | `unity/race_ghost.sh` |
 | レース表示では乱択化の白テープを出さない | 対象外 (学習データ用に残す) | 04f8156 |
 
