@@ -1,7 +1,7 @@
 # sim PC 側の状況 (2026-09-27 夜 時点)
 
 sim PC (Ubuntu 22.04.5・Humble desktop・AMD 内蔵 GPU = CUDA 無し・Unity 6000.0.83f1) で確かめたことと、PC 側の担当
-(`unity/`・`jetracer_compat`・`tools/sim2real`・Unity 系の scripts) の現状。環境構築の手順そのものは [setup.md](setup.md)・[unity.md](unity.md)。結果の画像と動画は [results/2026-09-26](results/2026-09-26/README.md)・[results/2026-09-27](results/2026-09-27/README.md) (方策)。
+(`unity/`・`jetracer_compat`・`tools/sim2real`・Unity 系の scripts) の現状。環境構築の手順そのものは [setup.md](setup.md)・[unity.md](unity.md)。結果の画像と動画は [results/2026-09-26](results/2026-09-26/README.md)・[results/2026-09-27](results/2026-09-27/README.md) (方策)・[results/2026-09-27/real_log.md](results/2026-09-27/real_log.md) (実機ログ)。
 
 ## いまの状態
 
@@ -12,10 +12,11 @@ sim PC (Ubuntu 22.04.5・Humble desktop・AMD 内蔵 GPU = CUDA 無し・Unity 6
 | 2 ホスト直結 (P9) | 完了 (下の節)。PC の enp5s0 は NetworkManager の `jetracer-link` (192.168.10.2)。既存 sim 用の `sim_link` (192.168.0.20) とは排他で、戻すときは `sudo nmcli con up sim_link` |
 | DDS | `rmw_cyclonedds_cpp` 導入済み。`scripts/sim_env.sh` が有線のリンク状態で `~/cyclonedds-wired.xml` / `~/cyclonedds-local.xml` を自動で選ぶ |
 | Unity 中継 | `scripts/setup_ws.sh` が `ros_ws/src/ros_tcp_endpoint` に取り込む (この PC は `~/ros2_unity_ws` の checkout を symlink) |
-| Unity プレイヤー | ソースはリポジトリの `unity/MinicarSim`、ビルドは `scripts/build_unity.sh` → `~/jetracer/unity/player`。他チーム向けはビルド済みを [Release v0.1.1](https://github.com/mizuno0522/jetracer_sim/releases/tag/v0.1.1) に置き `scripts/get_unity_player.sh` で取る |
+| Unity プレイヤー | ソースはリポジトリの `unity/MinicarSim`、ビルドは `scripts/build_unity.sh` → `~/jetracer/unity/player`。他チーム向けはビルド済みを [Release v0.2.0](https://github.com/mizuno0522/jetracer_sim/releases/tag/v0.2.0) に置き `scripts/get_unity_player.sh` で取る |
 | カメラ幾何 (Unity) | `course.json` の `fx, fy, cx, cy, k1, k2`・`render_tan_*` で描く (下の節)。推定値 (高さ 0.148 m・下向き 50.9°・水平 144°/垂直 120°・fy/fx 1.78) で OpenCV 描画と一致 |
 | 他チームの JetRacer 標準コード | `jetracer_compat` で無改造のまま sim で走る (下の節)。v0.1.1 として公開 |
-| sim→real 画像変換 | 3 回目 (標準 CUT + 形を保つ損失) で合格。F 値 0.832 (下の節・[sim2real.md](sim2real.md)) |
+| sim→real 画像変換 | 3 回目 (標準 CUT + 形を保つ損失) で合格。F 値 0.832 (下の節・[sim2real.md](sim2real.md))。9/27 の実画像を足した追加学習 (cut_004・005) は sim に無い赤い壁を描いて不合格。A 側に壁に寄った場面が無いのが原因で、カメラ較正のあと撮り直す。当面は cut_003 |
+| 実機ログ 9/27 | 8 本・約 7 分 (画像 60 fps・IMU 120 Hz 独立・ジャイロ付き)。IMU の静止雑音・ゼロ点・駆動系の振動振幅が実測に。2 本で末尾欠け (1 本は電源断型)、±2 g・±250 dps で飽和あり ([results/2026-09-27/real_log.md](results/2026-09-27/real_log.md)) |
 | sim の物理 (壁・車どうし) | **壁は剛体** (押し戻し・法線衝撃・摩擦、通り抜けの修正込み)。2 台走行の相手 (`/sim/rival_state`) とは車体どうしの剛体衝突 (下の節) |
 | 2 台走行・ゴースト | 相手の走りを記録して再生する `tools/race/ghost_replay.py`。2 台の位置の CSV (`RACE_POSE_LOG`)。M-05 の 2 台レースは minicarbattle2026 の `unity/race2.sh`・`race_ghost.sh` |
 | policy_net の学習 | **sim の閉ループで合格**。画像 (＋IMU) だけで、学習に使っていない 7 seed を全部完走・衝突 0 (下の節・[tools/policy](../tools/policy/README.md))。実機は未確認 |

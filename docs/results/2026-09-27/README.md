@@ -3,6 +3,8 @@
 sim で学習した policy_net (画像 224×224 ＋ IMU → 注視点と速度係数) を、sim の閉ループと実画像で確かめた。
 手順と表は [../../../tools/policy/README.md](../../../tools/policy/README.md)。
 
+同じ日の**実機ログ** (224×224・60 fps・IMU 120 Hz、静止と持ち上げ回転を含む 8 本) の確認結果は [real_log.md](real_log.md)。
+
 ## 動画
 
 - [`policy_001_closed_loop.mp4`](policy_001_closed_loop.mp4) (45 s・960 幅): **学習した方策が画像で走っている様子** (seed 907、学習に使っていない照明・床)。

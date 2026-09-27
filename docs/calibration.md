@@ -2,27 +2,30 @@
 
 設計書「較正と検証」「パラメータ」タブ。★要実測 の暫定値は `config/vehicle_profile/jetracer_tt02.yaml`・`config/imu_sim.yaml`・`jetracer_bridge/config/jetracer_bridge.yaml` の各コメントにある。**「寸法は図面から、特性は実測から。推測で埋めない」**。
 
+**2026-09-27 の実機ログ ([results/2026-09-27/real_log.md](results/2026-09-27/real_log.md))** で 1 の #1 (35 s のみ) と #2 (2 段・120 Hz) が取れた。下の表の「9/27」列。
+
 順番: 走らせずに測れるもの (IMU 5 測定・6 面静置・サーボ端点) → 持ち上げて測れるもの (振動・舵の実現率) → 走って測るもの (モータ力・δmax・車速写像)。
 
 ## 1. IMU の 5 測定 (実機・車を走らせない)
 
 実機の `/imu` を rosbag に取る (`ros2 launch jetracer_bridge bridge.launch.py` を上げた状態で `ros2 bag record -s mcap /imu`)。CSV (`t,ax,ay,az,gx,gy,gz`) でもよい。
 
-| # | 測定 | やり方 | 出るパラメータ (`imu_sim.yaml`) | 所要 | ツール |
-|---|---|---|---|---|---|
-| 1 | 静止ログ | 電源を入れて動かさず **10 分以上** | `noise.accel_nd / gyro_nd / accel_rw / gyro_rw` | 10 分 | `tools/imu_allan.py <bag>` → yaml を印字するので貼る |
-| 2 | 持ち上げ回転 | タイヤを浮かせ、スロットル数段階で回す。**ファンだけ** (モータ停止) も 1 本 | `vibration.motor_hz_per_mps / harmonics / amp_ms2 / gear_mesh_hz` | 15 分 | `tools/imu_spectrum.py <bag> --speed <指令車速>` を段階ごとに |
-| 3 | 6 面静置 | 各面を下にして静置し重力ベクトルの読みを取る | `scale.accel_err_sigma / misalign_deg_sigma`・ゼロ点 (mount.rpy_deg の確認) | 10 分 | 手計算 (‖a‖ と 9.81 の差がスケール、直交からのずれが軸ずれ) |
-| 4 | ターンオンばらつき | 電源の入れ直し **10 回以上**、起動直後 10 s の平均の分布 | `turn_on_bias.accel_sigma / gyro_sigma` | 20 分 | 静止ログの先頭を切って標準偏差 |
-| 5 | 昇温 | 起動から 30 分、温度レジスタと出力を同時記録 | `temp.rise_c / tau_s / accel_coef / gyro_coef` | 30 分 | 温度と出力の直線あてはめ |
+| # | 測定 | やり方 | 出るパラメータ (`imu_sim.yaml`) | 所要 | ツール | 9/27 |
+|---|---|---|---|---|---|---|
+| 1 | 静止ログ | 電源を入れて動かさず **10 分以上** | `noise.accel_nd / gyro_nd / accel_rw / gyro_rw` | 10 分 | `tools/imu_allan.py <bag>` → yaml を印字するので貼る | **35 s のみ**。白色雑音 accel 0.0026〜0.0043 m/s²/√Hz (yaml 0.0040 と同程度)・gyro 2.7×10⁻⁴ rad/s/√Hz (**yaml 0.00009 の約 3 倍**)。rw は 10 分要る |
+| 2 | 持ち上げ回転 | タイヤを浮かせ、スロットル数段階で回す。**ファンだけ** (モータ停止) も 1 本 | `vibration.motor_hz_per_mps / harmonics / amp_ms2 / gear_mesh_hz` | 15 分 | `tools/imu_spectrum.py <bag> --speed <指令車速>` を段階ごとに | **2 段 (−0.12・−0.80)・120 Hz**。rms 0.6〜0.7 / 1.5〜3.1 m/s²。周波数は折り返すので **1 kHz で取り直し** |
+| 3 | 6 面静置 | 各面を下にして静置し重力ベクトルの読みを取る | `scale.accel_err_sigma / misalign_deg_sigma`・ゼロ点 (mount.rpy_deg の確認) | 10 分 | 手計算 (‖a‖ と 9.81 の差がスケール、直交からのずれが軸ずれ) | 未 (1 面だけで \|g\| 0.978・ax −0.053 g) |
+| 4 | ターンオンばらつき | 電源の入れ直し **10 回以上**、起動直後 10 s の平均の分布 | `turn_on_bias.accel_sigma / gyro_sigma` | 20 分 | 静止ログの先頭を切って標準偏差 | 未 (1 回分のゼロ点 gyro −1.29 / +2.54 / +0.47 dps) |
+| 5 | 昇温 | 起動から 30 分、温度レジスタと出力を同時記録 | `temp.rise_c / tau_s / accel_coef / gyro_coef` | 30 分 | 温度と出力の直線あてはめ | 未 |
 
 `imu_allan.py` は τ=1 s の Allan 偏差を雑音密度 N、最小点 / 0.664 をバイアス不安定性、τ=3 s の傾き +1/2 からランダムウォーク K として出す。**サンプルは 100 Hz で独立に取る** (2026-09-12 のログは画像に従属した 15 Hz で、折り返しを含む。`vibration.surface` の値はその 15 Hz ログ由来なので 100 Hz で取り直すと帯域の内訳が出る)。
 
 先に確定させておくこと:
 - **WHO_AM_I**: 0x68 なら MPU-6050、0x70 なら MPU-6500。雑音特性が違う。`jetracer_bridge` が起動ログに出す。
-- **レンジ**: 実データは ±2 g で `az` が飽和した (5 セッションで 130 フレーム)。`accel_g: 4` にし、`imu_sim.yaml` の `range` と `jetracer_bridge.yaml` の `imu` を**必ず一致**させる。
+- **レンジ**: 実データは ±2 g で `az` が飽和した (5 セッションで 130 フレーム。9/27 も ±2 g のままで全サンプルの 1.3〜2.2 %、ジャイロも ±250 dps で速い走行の 0.5 % が飽和)。実機のロガーを ±4 g・±500 dps に。`accel_g: 4` にし、`imu_sim.yaml` の `range` と `jetracer_bridge.yaml` の `imu` を**必ず一致**させる。
 - **取付**: 基板は水平・部品面が下・x 軸が車の左 (確認済み)。センサ軸 x=左・y=前・z=下 → `mount.rpy_deg: [180, 0, 90]`。位置 (`mount.xyz`) は重心から前 5〜10 cm・上 5〜8 cm の推定で、てこ腕の項が横加速度の 15 % 程度になる。**実測して固定する**。
-- 配線はジャンパ線のピン差し。振動で I2C が瞬断する典型なので短く結束 (tegra-i2c タイムアウトの候補・設計 未決①)。
+- 配線はジャンパ線のピン差し。振動で I2C が瞬断する典型なので短く結束 (tegra-i2c タイムアウトの候補・設計 未決①)。9/27 は PCA9685 と同じバスで IMU 120 Hz の間隔 p99 ≤ 10.3 ms・欠け 0、読み失敗は 1 本で 6 回 (他 7 本は 0)。`latency.jitter_ms` は約 2 ms で今の値と合う。
+- **記録の欠け**: 9/27 は 8 本中 2 本で末尾が欠けた (1 本は CSV 末尾 NUL・画像 0 byte の電源断型)。ロガーは停止時に flush＋`os.fsync`、電源を切る前に `sync`。読み込み側は 0 byte の画像と NUL 行を捨てる。
 
 ## 2. サーボと ESC (`jetracer_bridge.yaml`)
 
@@ -33,7 +36,7 @@
 | 舵の端点 | µs を 1000 → 2000 まで刻んで、リンケージが当たる直前を min/max、直進を center に。**今の値 (min 1178・center 1681・max 2002) は 9/12 の実走ログからの推定** (gain −0.55・offset 0.12 で ±1 と、直線で当てていた −0.22 から) | `steering.pulse_us` |
 | 舵の実現率 | δ を数段階で与え、前輪の切れ角を分度器 (または上から写真) で測る。左右別々に | `steering.map: [δ_rad, µs, ...]`。空なら線形 |
 | **δmax** | 上の表の端。左右の小さいほう | `vehicle_profile.delta_max_rad` (暫定 0.47 = 27°)。決まったら `python3 tools/make_route.py --delta-max <rad>` で参照線を引き直し、`tools/corridor_check.py --route` と `tools/lap_eval.py` で確認 (設計 未決⑦) |
-| 中立 | 2026-09-12 のログでは直進時に運転者が左へ 0.22 当てていた = 機械中立は 1681 µs (1500 からずれている) | 今は `center: 1681` で sim を実機に合わせてある。リンケージで 1500 に直すなら `center` も戻す。**直したら学習データは取り直し**。他チームの車は gain/offset をソフトで持っているので、そちらを変えたら sim も同じ値に |
+| 中立 | 2026-09-12 のログでは直進時に運転者が左へ 0.22 当てていた = 機械中立は 1681 µs (1500 からずれている)。**9/27 は直進時 −0.01〜−0.11** (`newstr_*` はほぼ 0) と中立に寄った (offset は 0.12 のまま = リンケージで調整したと読める)。δmax 実測のときに中立の µs も測り直す | 今は `center: 1681` で sim を実機に合わせてある。リンケージで 1500 に直すなら `center` も戻す。**直したら学習データは取り直し**。他チームの車は gain/offset をソフトで持っているので、そちらを変えたら sim も同じ値に |
 | ESC の向き | **この車は中立より下のパルスで前進する** (9/12 のログは 5 セッションとも throttle がマイナスで前進) | `throttle.invert: true` (設定済み)。map・brake・reverse は「中立より上 = 前進」の向きで書く |
 | ESC の中立と不感帯 | TBLE-02S の設定手順で neutral を合わせ、動き出す µs を前後で記録。今の `map_v_us` はログの周回時間からの平均車速 (−0.106 → 1.26 〜 −0.130 → 2.45 m/s、カーブの減速込み)。0 m/s と 3.0 m/s の点は外挿の仮値 | `throttle.pulse_us`・`throttle.map_v_us`・`vehicle_profile.esc.deadband_mps` |
 | 後退ロック | 前進中に後退を入れると中立を経由しないとブレーキになる。中立を挟む時間を測る | `esc.reverse_via_neutral_ms` (暫定 120) |
