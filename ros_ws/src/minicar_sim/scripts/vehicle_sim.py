@@ -1106,7 +1106,7 @@ class VehicleSim(Node):
         dmin = d[rows, i]
         nx, ny = ex[rows, i], ey[rows, i]
         nrm = np.where(dmin < 1e-9, 1.0, dmin)
-        return dmin, nx / nrm, ny / nrm
+        return dmin, nx / nrm, ny / nrm, i
 
     def _cb_rival(self, m):
         d = m.data
@@ -1247,10 +1247,23 @@ class VehicleSim(Node):
         offs = self.wall_offsets
         px = [self.x + c * d for d in offs]
         py = [self.y + s * d for d in offs]
-        dist, nx, ny = self._nearest_walls(px, py)
+        dist, nx, ny, iw = self._nearest_walls(px, py)
         pen = self.wall_r - dist
+        # 円の中心が壁の線を越えるほど食い込むと (角に斜めに速く当たる・薄い仕切り)、「中心 → 最寄りの壁の点」の
+        # 向きが壁の向こうを向き、向こう側へ押し出されて通り抜けた。前のステップの中心と壁の同じ側に戻す
+        # (minicarbattle2026 の vehicle_sim と同じ直し、2026-09-27)
+        prev = getattr(self, '_disc_prev', None)
+        if prev is not None and len(prev) == len(offs):
+            w = np.asarray(self.segs, float)
+            for k in range(len(offs)):
+                x0, y0, x1, y1 = w[iw[k]]
+                side = lambda qx, qy: (x1 - x0) * (qy - y0) - (y1 - y0) * (qx - x0)
+                if side(*prev[k]) * side(px[k], py[k]) < 0.0 and dist[k] < self.wall_r * 2.0:
+                    nx[k], ny[k] = -nx[k], -ny[k]
+                    pen[k] = self.wall_r + dist[k]
         if not np.any(pen > 0.0):
             self._wall_contact = False
+            self._disc_prev = list(zip(px, py))
             return
         k_i = max(1e-6, (self.veh_len ** 2 + (2.0 * self.half_w) ** 2) / 12.0)
         x_cg = self.L * self.drive_load             # 後軸から見た重心位置
@@ -1289,7 +1302,7 @@ class VehicleSim(Node):
                     w += self.wall_couple * rt * jt / k_i
             px = [self.x + c * d for d in offs]
             py = [self.y + s * d for d in offs]
-            dist, nx, ny = self._nearest_walls(px, py)
+            dist, nx, ny, iw = self._nearest_walls(px, py)
             pen = self.wall_r - dist
             if not np.any(pen > 1e-4):
                 break
@@ -1298,6 +1311,7 @@ class VehicleSim(Node):
         self.vy = -vbx * s + vby * c
         self._wall_w += w - self.yaw_rate
         self.yaw_rate = w
+        self._disc_prev = [(self.x + c * d, self.y + s * d) for d in offs]   # 押し戻した後の中心
         if not self._wall_contact:
             self._wall_contact = True
             if vn_first >= 0.0:
