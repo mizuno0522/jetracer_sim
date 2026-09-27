@@ -387,6 +387,29 @@
   }
  ],
  "parking_tape_m": 0.05,
+ "start_lines": [
+  {
+   "name": "start1",
+   "x": 2.5,
+   "y0": 0.5,
+   "y1": 1.9,
+   "width": 0.05
+  },
+  {
+   "name": "start2",
+   "x": 4.3,
+   "y0": 0.5,
+   "y1": 1.9,
+   "width": 0.05
+  },
+  {
+   "name": "start3",
+   "x": 6.1,
+   "y0": 0.5,
+   "y1": 1.9,
+   "width": 0.05
+  }
+ ],
  "arrow_sign": {
   "x": 4.914,
   "post_y0": 4.7,
@@ -465,11 +488,11 @@
   "tape_angle_deg": 10,
   "tape_len_min_m": 0.6,
   "tape_len_max_m": 0.9,
-  "start_line_prob": 0.5,
+  "start_line_prob": 0.0,
   "start_line_x": [
-   2.7,
-   4.6,
-   6.5
+   2.5,
+   4.3,
+   6.1
   ],
   "start_line_y0": 0.5,
   "start_line_y1": 1.9,

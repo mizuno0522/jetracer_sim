@@ -22,7 +22,7 @@ import os
 import yaml
 
 from course import (WALLS_M, WALL_COLORS, NARROW_DIVIDER_INDEX, GIMMICK_AREAS,
-                    PARKING_SLOTS, ARROW_SIGN, LIGHT_POS, LIGHT_RIG, default_course)
+                    PARKING_SLOTS, START_LINES, START_LINE_TAPE_M, ARROW_SIGN, LIGHT_POS, LIGHT_RIG, default_course)
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, '..', '..', '..', '..'))
@@ -88,6 +88,8 @@ def build(profile=DEFAULT_PROFILE, route=None):
         areas=areas,
         parking_slots=slots,
         parking_tape_m=0.05,             # レギュレーション: テープ幅 5cm
+        # スタートライン 1/2/3 (常設の白テープ。規約 p.24)
+        start_lines=[dict(name=n, x=x, y0=y0, y1=y1, width=START_LINE_TAPE_M) for n, x, y0, y1 in START_LINES],
         arrow_sign=dict(x=ARROW_SIGN['x'],
                         post_y0=ARROW_SIGN['post_y'][0],
                         post_y1=ARROW_SIGN['post_y'][1],

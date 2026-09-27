@@ -67,6 +67,7 @@ namespace Minicar
             BuildWalls();
             BuildAreas();
             BuildParking();
+            BuildStartLines();
             BuildArrowSign();
             BuildLightRig();
             BuildVenueLighting();
@@ -401,6 +402,18 @@ namespace Minicar
             }
         }
 
+        // スタートライン 1/2/3 (規約 p.21・p.24)。下段レーンを横切る常設の白テープ。乱択化の床テープとは別
+        void BuildStartLines()
+        {
+            if (Data.start_lines == null) return;
+            var mat = Lit(new Color32(236, 236, 230, 255), null, 0.35f);
+            foreach (var l in Data.start_lines)
+            {
+                float hw = 0.5f * (l.width > 0f ? l.width : 0.05f);
+                FloorRect(l.name, l.x - hw, l.y0, l.x + hw, l.y1, 0.006f, mat);
+            }
+        }
+
         // 駐車枠の番号 (P1 / P2 / P3) を枠内の床に描く。テープと同じ色のドット文字。
         // 走路 (+y 側) から読める向き: 文字の右 = -x、文字の上 = -y。
         void FloorLabel(SlotData s, Color32 col)
@@ -503,7 +516,7 @@ namespace Minicar
         }
 
         // 床の白テープ (幅 5 cm)。走路の中心線上のランダムな位置に、走路にほぼ直交して 0〜N 本。
-        // 規約のスタートライン (下段レーン x ≈ 2.7 / 4.6 / 6.5 m) はそれぞれ確率 start_line_prob で。
+        // (旧) 規約のスタートラインを確率 start_line_prob で描く。常設は BuildStartLines (course.json の start_lines) なので既定 0。
         void BuildTapes(System.Random rng)
         {
             if (m_Tapes != null) Destroy(m_Tapes.gameObject);

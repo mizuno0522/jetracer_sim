@@ -20,6 +20,13 @@ namespace Minicar
     }
 
     [Serializable]
+    public class StartLineData
+    {
+        public string name;
+        public float x, y0, y1, width;      // x の位置で y0〜y1 を横切る白テープ (幅 width)
+    }
+
+    [Serializable]
     public class SlotData
     {
         public string name, color;
@@ -115,6 +122,7 @@ namespace Minicar
         public float wall_base_m;
         public AreaData[] areas;
         public SlotData[] parking_slots;
+        public StartLineData[] start_lines;      // スタートライン 1/2/3 (規約 p.24)。古い course.json は null
         public float parking_tape_m;
         public ArrowSignData arrow_sign;
         public LightData light;
