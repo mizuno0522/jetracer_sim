@@ -43,6 +43,6 @@ if grep -E "process has died" "$LOG/smoke_sim.log" "$LOG/smoke_stack.log" | grep
   echo "NG  起動中に死んだノードがある (上)"; fail=1
 fi
 
-echo "=== 3/3 /sim/ 購読禁止 ==="
+echo "=== 3/3 実機に無い入力の購読禁止 ==="
 "$HERE/check_no_sim_topics.sh" /cmd_shaper /failsafe || fail=1
 [ $fail -eq 0 ] && echo "smoke test PASS" || { echo "smoke test FAIL (ログ: $LOG)"; exit 1; }

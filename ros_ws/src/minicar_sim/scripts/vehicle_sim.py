@@ -991,6 +991,16 @@ class VehicleSim(Node):
         a_motor = self.motor.force_cap(v) / max(0.1, self.mass)
         a_x_cap_accel = min(a_x_cap, a_motor)
         a_x = max(-a_x_cap, min(a_x_cap_accel, a_cmd))
+        # ★ 制動中に前後＋横の要求が摩擦円を超えたら、横優先をやめて要求を同じ比で縮める
+        #   (楕円の飽和)。横優先のままだと、旋回で横が限界に張り付くと util_y=1 → a_x_cap=0 で
+        #   ブレーキが全く効かず、一定速度のまま外へ膨らんで壁に当たる (M-05 の坂道ヘアピン出口で発見)。
+        #   実車は滑っているタイヤの摩擦が滑る向きに働くので、ブレーキを掛ければ減速し、そのぶん曲がらなくなる。
+        if a_cmd < 0.0 and not stuck:
+            a_y_lim = 0.5 * (mu_f + mu_r) * g
+            r = math.hypot(a_cmd / max(1e-6, a_x_pure), a_y_req / max(1e-6, a_y_lim))
+            if r > 1.0 and a_cmd / r < a_x:
+                a_x = a_cmd / r
+                a_y_tire = a_y_req / r
         self._a_x_prev = a_x
         # 重力と転がり抵抗はグリップと無関係にかかる
         self._pitch = self._slope_pitch()

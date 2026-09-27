@@ -23,7 +23,7 @@
 | `/sim/reset`・`/sim/step` | srv | — | lockstep (docs/lockstep.md) |
 | `/odom`・`/tf` (odom→base_link)・`/imu/*`・`/sensors/*` | 旧 sim の互換出力 | — | 推論は購読しない。`odom → base_link` は sim の真値であり実機には無い |
 
-**不変量**: 推論スタックのノードは `/sim/` を購読しない。`scripts/check_no_sim_topics.sh` で機械的に確かめる (`gt_teacher` は sim 専用の例外)。
+**不変量**: 推論スタックのノードは実機にもある入力 (`/camera/image_raw`・`/imu`・`/lookahead`・`/run`・`/actuator_cmd`) しか購読しない。sim は `/sim/` 以外の名前 (`/odom`・`/lane_info`・`/imu/yaw` など) にも真値を出すので、`/sim/` を避けるだけでは足りない。`scripts/check_no_sim_topics.sh` が許可一覧で機械的に確かめる (`gt_teacher` は sim 専用の例外)。
 
 ## sim を動かす車両ソフトは 2 通り
 
@@ -73,7 +73,7 @@
 
 ```
 /actuator_cmd → サーボ模型 (τ・レート制限) / ESC 模型 (不感帯・ブレーキ帯・後退は中立 120 ms 経由) / モータ上限 F(v)
-             → vehicle_sim 摩擦円 (4 輪 μ・荷重移動・4WD 拘束の突っ張り・横滑り・でこぼこ・坂)
+             → vehicle_sim 摩擦円 (4 輪 μ・荷重移動・4WD 拘束の突っ張り・横滑り・でこぼこ・坂。制動中は前後＋横を同じ比で飽和)
              → /sim/body_state (a_kin・ω・roll・pitch・路面)
              → imu_sim: 重力投影 → てこ腕 → 振動 (モータ高調波＋路面 rms×速度) → DLPF → 100 Hz 間引き (遅延・ジッタ・欠落)
                         → ターンオンバイアス＋ランダムウォーク＋温度 → スケール・軸ずれ → 白色雑音 → 飽和・16 bit 量子化
