@@ -156,6 +156,19 @@ class VehicleSim(Node):
         self.declare_parameter('rough_yaw_noise', 0.12)    # ⑦のヨー外乱 (rad/s)
         self.declare_parameter('slope_grade', 0.08)        # ②の勾配 (dz/dx)
         self.declare_parameter('vehicle_half_width_m', 0.11)
+        # --- 壁の剛体衝突 (minicarbattle2026 の vehicle_sim 2026-09-27 と同じ式) ---
+        # 以前は壁が車体の運動に作用せず、余裕が collision_clear_m 未満で「衝突」の印を立てるだけで
+        # 壁を突き抜けられた。車体を 3 枚のディスク (後軸から wall_disc_offsets_m、半径 wall_disc_radius_m)
+        # で表し、壁に達したら押し戻して法線速度を消し、接線速度はクーロン摩擦 (μ=wall_friction ×
+        # 法線衝撃) で減らす。接触点が重心から外れていれば回転も受ける (wall_yaw_couple)。
+        # 失った速度は v・vy の変化として /sim/body_state に出るので、imu_sim の加速度に衝撃が乗る。
+        self.declare_parameter('wall_collision', True)
+        self.declare_parameter('wall_friction', 0.5)
+        self.declare_parameter('wall_restitution', 0.0)
+        self.declare_parameter('wall_disc_radius_m', 0.11)             # TT-02 (M-05 は 0.095)
+        self.declare_parameter('wall_disc_offsets_m', [0.0, 0.13, 0.26])  # TT-02 (M-05 は -0.05/0.13/0.30)
+        self.declare_parameter('wall_yaw_couple', 1.0)
+        self.declare_parameter('wall_yaw_tau_s', 0.15)     # 接触で受けた回転の減衰時定数
         # 車輪スリップ率。ゴムタイヤは限界でも 10〜15% 程度しか滑らず、
         # 限界を超えたところで急に空転する。elastic が限界時のスリップ率、
         # runaway が限界超過ぶんの空転係数。
@@ -365,6 +378,16 @@ class VehicleSim(Node):
         self.rough_yaw_noise = float(p('rough_yaw_noise').value)
         self.slope_grade = float(p('slope_grade').value)
         self.half_w = float(p('vehicle_half_width_m').value)
+        self.wall_collision = bool(p('wall_collision').value)
+        self.wall_mu = float(p('wall_friction').value)
+        self.wall_e = float(p('wall_restitution').value)
+        self.wall_r = float(p('wall_disc_radius_m').value)
+        self.wall_offsets = [float(v) for v in p('wall_disc_offsets_m').value]
+        self.wall_couple = float(p('wall_yaw_couple').value)
+        self.wall_w_tau = max(1e-3, float(p('wall_yaw_tau_s').value))
+        self._wall_w = 0.0         # 壁接触で受けた回転 (ヨーレートに足す、減衰)
+        self._wall_contact = False
+        self._wall_hits = 0        # 接触が始まった回数
         # 左右μ差のヨーモーメント係数 = (トレッド/2) / (Iz/m)。
         # Iz/m ≒ (長さ² + 幅²)/12 なので、車体寸法から出す
         # (TT-02 で 4.9、M-05 は小さいぶん大きくなる)。
@@ -1006,12 +1029,21 @@ class VehicleSim(Node):
         self.v = v + a_x * dt
         if not self.armed:
             self.v = max(0.0, self.v)
+        if self._wall_w != 0.0:
+            self._wall_w *= max(0.0, 1.0 - dt / self.wall_w_tau)
+            if abs(self._wall_w) < 1e-4:
+                self._wall_w = 0.0
+            yaw_rate += self._wall_w
         self.yaw_rate = yaw_rate
         self.yaw += yaw_rate * dt
         self.yaw = math.atan2(math.sin(self.yaw), math.cos(self.yaw))
         c, s = math.cos(self.yaw), math.sin(self.yaw)
         self.x += (self.v * c - self.vy * s) * dt
         self.y += (self.v * s + self.vy * c) * dt
+
+        # --- 壁の剛体衝突 ---
+        if self.wall_collision:
+            self._resolve_wall_contact(dt)
 
         # --- 車輪スリップ率 (オドメトリに乗る誤差) ---
         util_x = abs(a_cmd) / max(1e-6, a_x_pure)
@@ -1022,6 +1054,101 @@ class VehicleSim(Node):
         return math.hypot(self.v, self.vy) * dt * (1.0 if self.v >= 0 else -1.0)
 
     # =================================================================
+    def _nearest_walls(self, px, py):
+        """各点 (配列) から最も近い壁までの距離と、壁から点へ向く単位法線。"""
+        w = np.asarray(self.segs, float)
+        x0, y0, x1, y1 = w[:, 0], w[:, 1], w[:, 2], w[:, 3]
+        dx, dy = x1 - x0, y1 - y0
+        L2 = np.where(dx * dx + dy * dy < 1e-12, 1e-12, dx * dx + dy * dy)
+        px = np.asarray(px, float)[:, None]
+        py = np.asarray(py, float)[:, None]
+        t = np.clip(((px - x0) * dx + (py - y0) * dy) / L2, 0.0, 1.0)
+        qx, qy = x0 + t * dx, y0 + t * dy
+        ex, ey = px - qx, py - qy
+        d = np.hypot(ex, ey)
+        i = np.argmin(d, axis=1)
+        rows = np.arange(len(i))
+        dmin = d[rows, i]
+        nx, ny = ex[rows, i], ey[rows, i]
+        nrm = np.where(dmin < 1e-9, 1.0, dmin)
+        return dmin, nx / nrm, ny / nrm
+
+    def _resolve_wall_contact(self, dt):
+        """
+        壁を剛体として扱う (minicarbattle2026 の vehicle_sim と同じ式)。
+        車体の 3 ディスクのどれかが壁に食い込んでいたら、
+          1. 車体ごと法線方向へ押し戻す
+          2. 接触点の法線速度が壁へ向いていれば、それを消す衝撃を与える (反発係数 wall_restitution)
+          3. 接線速度をクーロン摩擦 |J_t| ≤ μ J_n で減らす
+        衝撃は重心まわりの剛体として並進と回転に配る (単位質量、Iz/m = (長さ²+幅²)/12)。
+        回転は _wall_w として次ステップ以降のヨーレートに乗り、wall_yaw_tau_s で減衰する。
+        """
+        c, s = math.cos(self.yaw), math.sin(self.yaw)
+        v0 = self.v
+        offs = self.wall_offsets
+        px = [self.x + c * d for d in offs]
+        py = [self.y + s * d for d in offs]
+        dist, nx, ny = self._nearest_walls(px, py)
+        pen = self.wall_r - dist
+        if not np.any(pen > 0.0):
+            self._wall_contact = False
+            return
+        k_i = max(1e-6, (self.veh_len ** 2 + (2.0 * self.half_w) ** 2) / 12.0)
+        x_cg = self.L * self.drive_load             # 後軸から見た重心位置
+        w = self.yaw_rate
+        vbx, vby = self.v * c - self.vy * s, self.v * s + self.vy * c
+        rcx, rcy = x_cg * c, x_cg * s
+        vcx, vcy = vbx - w * rcy, vby + w * rcx
+        vn_first = 0.0
+        for _ in range(3):                          # 逐次衝撃法 (複数ディスク)
+            for k, d in enumerate(offs):
+                if pen[k] <= 0.0:
+                    continue
+                n_x, n_y = float(nx[k]), float(ny[k])
+                self.x += n_x * pen[k]
+                self.y += n_y * pen[k]
+                p_x, p_y = self.x + c * d, self.y + s * d
+                rx, ry = p_x - (self.x + rcx), p_y - (self.y + rcy)
+                vpx, vpy = vcx - w * ry, vcy + w * rx
+                vn = vpx * n_x + vpy * n_y
+                if vn < 0.0:
+                    if vn_first == 0.0:
+                        vn_first = vn
+                    rn = rx * n_y - ry * n_x
+                    jn = -(1.0 + self.wall_e) * vn / (1.0 + self.wall_couple * rn * rn / k_i)
+                    vcx += jn * n_x
+                    vcy += jn * n_y
+                    w += self.wall_couple * rn * jn / k_i
+                    t_x, t_y = -n_y, n_x
+                    vpx, vpy = vcx - w * ry, vcy + w * rx
+                    vt = vpx * t_x + vpy * t_y
+                    rt = rx * t_y - ry * t_x
+                    jt = -vt / (1.0 + self.wall_couple * rt * rt / k_i)
+                    jt = max(-self.wall_mu * jn, min(self.wall_mu * jn, jt))
+                    vcx += jt * t_x
+                    vcy += jt * t_y
+                    w += self.wall_couple * rt * jt / k_i
+            px = [self.x + c * d for d in offs]
+            py = [self.y + s * d for d in offs]
+            dist, nx, ny = self._nearest_walls(px, py)
+            pen = self.wall_r - dist
+            if not np.any(pen > 1e-4):
+                break
+        vbx, vby = vcx + w * rcy, vcy - w * rcx
+        self.v = vbx * c + vby * s
+        self.vy = -vbx * s + vby * c
+        self._wall_w += w - self.yaw_rate
+        self.yaw_rate = w
+        if not self._wall_contact:
+            self._wall_contact = True
+            if vn_first >= 0.0:
+                return                    # 壁に触れているだけ (後退中など)。衝突には数えない
+            self._wall_hits += 1
+            self.get_logger().info(
+                f"壁接触 #{self._wall_hits}: v={v0:.2f} m/s 法線速度 {-vn_first:.2f} m/s"
+                f" → v={self.v:.2f} (x={self.x:.2f}, y={self.y:.2f})",
+                throttle_duration_sec=0.5)
+
     def step(self):
         """realtime: タイマーから 1 ティック。"""
         self._tick()
@@ -1285,7 +1412,8 @@ class VehicleSim(Node):
         self._s_prev = s
         self._track = (s, d, psi)
         self._min_clear = self.course.clearance(self.x, self.y)
-        self._collision = self._min_clear < self.collision_clear
+        # 壁が剛体になったので余裕は collision_clear_m まで縮まないことがある。壁に接触している間も衝突とする
+        self._collision = self._min_clear < self.collision_clear or self._wall_contact
         self._off_track = abs(d) > self.course.half + self.off_track_margin
 
     def publish_ground_truth(self):
@@ -1425,6 +1553,8 @@ class VehicleSim(Node):
         self.y = py + lat * math.cos(psi)
         self.yaw = psi
         self.v = self.vy = 0.0
+        self._wall_w = 0.0
+        self._wall_contact = False
         self.yaw_rate = 0.0
         self.steer = 0.0
         self.servo.reset()
