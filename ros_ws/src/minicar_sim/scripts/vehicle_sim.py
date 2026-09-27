@@ -169,6 +169,19 @@ class VehicleSim(Node):
         self.declare_parameter('wall_disc_offsets_m', [0.0, 0.13, 0.26])  # TT-02 (M-05 は -0.05/0.13/0.30)
         self.declare_parameter('wall_yaw_couple', 1.0)
         self.declare_parameter('wall_yaw_tau_s', 0.15)     # 接触で受けた回転の減衰時定数
+        # --- 2 台走行の相手 (minicarbattle2026 の vehicle_sim_race.py と同じ考え方、2026-09-27) ---
+        # 相手の姿勢 /sim/rival_state (相手の /sim/render_state の中継、またはゴースト tools/ghost_replay.py) が
+        # 届いているときだけ効く。1 台で走るときは何も変わらない。
+        #   車どうしの衝突: 車体に収まる円 (TT-02: 全長 0.43 m・幅 0.20 m) どうしの剛体衝突。2 台は同じ質量として
+        #   衝撃の半分ずつを各 sim が受け持つ。失った速度は body_state に出るので imu_sim の加速度に衝撃が乗る。
+        #   相手はカメラ (Unity が /sim/rival_state の車を描く) に写る。LiDAR・超音波は JetRacer に無い。
+        self.declare_parameter('car_collision', True)
+        self.declare_parameter('car_restitution', 0.2)
+        self.declare_parameter('car_friction', 0.3)
+        self.declare_parameter('car_body_length_m', 0.43)
+        self.declare_parameter('car_body_width_m', 0.20)
+        self.declare_parameter('rival_timeout_s', 0.3)
+        self.declare_parameter('pose_log', os.environ.get('RACE_POSE_LOG', ''))   # 2 台の位置を CSV に (10 Hz)
         # 車輪スリップ率。ゴムタイヤは限界でも 10〜15% 程度しか滑らず、
         # 限界を超えたところで急に空転する。elastic が限界時のスリップ率、
         # runaway が限界超過ぶんの空転係数。
@@ -388,6 +401,19 @@ class VehicleSim(Node):
         self._wall_w = 0.0         # 壁接触で受けた回転 (ヨーレートに足す、減衰)
         self._wall_contact = False
         self._wall_hits = 0        # 接触が始まった回数
+        self.car_col = bool(p('car_collision').value)
+        self.car_e = float(p('car_restitution').value)
+        self.car_mu = float(p('car_friction').value)
+        blen, bw = float(p('car_body_length_m').value), float(p('car_body_width_m').value)
+        self.car_r = bw / 2.0
+        rear = -(blen - self.L) / 2.0                     # 後軸基準の車体後端 (前後の張り出しは等分と仮定)
+        front = self.L + (blen - self.L) / 2.0
+        self.car_offsets = list(np.linspace(rear + self.car_r, front - self.car_r, 4))
+        self.rival_timeout = float(p('rival_timeout_s').value)
+        self._rival = None                 # (x, y, yaw, v, 受信時刻)
+        self._rival_w = 0.0
+        self._car_contact = False
+        self._car_hits = 0
         # 左右μ差のヨーモーメント係数 = (トレッド/2) / (Iz/m)。
         # Iz/m ≒ (長さ² + 幅²)/12 なので、車体寸法から出す
         # (TT-02 で 4.9、M-05 は小さいぶん大きくなる)。
@@ -705,6 +731,12 @@ class VehicleSim(Node):
         else:
             self.create_timer(self.dt, self.step)
         self.create_timer(0.05, self.publish_sensors)
+        self.create_subscription(Float64MultiArray, '/sim/rival_state', self._cb_rival, 10)
+        self._pose_log = None
+        if p('pose_log').value:
+            self._pose_log = open(f"{p('pose_log').value}_{os.environ.get('ROS_DOMAIN_ID', '0')}.csv", 'w')
+            self._pose_log.write('t,x,y,yaw,v,rx,ry,ryaw,rv,dist\n')
+            self.create_timer(0.1, self._log_pose)
         self.create_timer(0.05, self.publish_perception)
         if self.use_lidar:
             self.create_timer(1.0 / self.lidar_rate, self.publish_lidar)
@@ -1044,6 +1076,9 @@ class VehicleSim(Node):
         # --- 壁の剛体衝突 ---
         if self.wall_collision:
             self._resolve_wall_contact(dt)
+        # --- 車どうしの衝突 (2 台走行のときだけ) ---
+        if self.car_col and self._rival is not None:
+            self._resolve_car_contact(dt)
 
         # --- 車輪スリップ率 (オドメトリに乗る誤差) ---
         util_x = abs(a_cmd) / max(1e-6, a_x_pure)
@@ -1072,6 +1107,130 @@ class VehicleSim(Node):
         nx, ny = ex[rows, i], ey[rows, i]
         nrm = np.where(dmin < 1e-9, 1.0, dmin)
         return dmin, nx / nrm, ny / nrm
+
+    def _cb_rival(self, m):
+        d = m.data
+        if len(d) < 14:
+            return
+        now = time.monotonic()
+        prev = self._rival
+        if prev is not None and 1e-3 < now - prev[4] < 0.2:
+            dy = math.atan2(math.sin(d[4] - prev[2]), math.cos(d[4] - prev[2]))
+            self._rival_w = 0.7 * self._rival_w + 0.3 * dy / (now - prev[4])
+        self._rival = (d[2], d[3], d[4], d[13], now)
+
+    def _rival_pose(self):
+        """受信からの経過ぶん進めた相手の姿勢 (x, y, yaw, v)。古ければ None。
+        JetRacer の render_state の stamp は sim 時計なので、相手の sim と比べず受信時刻から進める。"""
+        r = self._rival
+        if r is None:
+            return None
+        age = time.monotonic() - r[4]
+        if age > self.rival_timeout:
+            return None
+        rx, ry, ryaw, rv = r[0], r[1], r[2], r[3]
+        w = self._rival_w
+        if abs(w) > 1e-3:
+            ny = ryaw + w * age
+            rx += rv / w * (math.sin(ny) - math.sin(ryaw))
+            ry += rv / w * (-math.cos(ny) + math.cos(ryaw))
+            ryaw = ny
+        else:
+            rx += rv * math.cos(ryaw) * age
+            ry += rv * math.sin(ryaw) * age
+        return rx, ry, ryaw, rv
+
+    def _resolve_car_contact(self, dt):
+        """相手の車体と重なったら押し戻し・法線衝撃・摩擦 (壁と同じ剛体の式、同じ質量として半分ずつ)。"""
+        pose = self._rival_pose()
+        if pose is None:
+            return
+        rx, ry, ryaw, rv = pose
+        R2 = 2.0 * self.car_r
+        offs = self.car_offsets
+        rc, rs = math.cos(ryaw), math.sin(ryaw)
+        rpx = np.array([rx + rc * d for d in offs])
+        rpy = np.array([ry + rs * d for d in offs])
+
+        def contacts():
+            c, s = math.cos(self.yaw), math.sin(self.yaw)
+            out = []
+            for d in offs:
+                px, py = self.x + c * d, self.y + s * d
+                ex, ey = px - rpx, py - rpy
+                dist = np.hypot(ex, ey)
+                j = int(np.argmin(dist))
+                pen = R2 - float(dist[j])
+                if pen > 0.0:
+                    nrm = max(1e-9, float(dist[j]))
+                    out.append((d, float(ex[j]) / nrm, float(ey[j]) / nrm, pen))
+            return out
+
+        cs = contacts()
+        if not cs:
+            self._car_contact = False
+            return
+        c, s = math.cos(self.yaw), math.sin(self.yaw)
+        v0 = self.v
+        k_i = max(1e-6, (self.veh_len ** 2 + (2.0 * self.half_w) ** 2) / 12.0)
+        x_cg = self.L * self.drive_load
+        w = self.yaw_rate
+        vbx, vby = self.v * c - self.vy * s, self.v * s + self.vy * c
+        rcx, rcy = x_cg * c, x_cg * s
+        vcx, vcy = vbx - w * rcy, vby + w * rcx
+        vrx, vry = rv * rc, rv * rs
+        vn_first = 0.0
+        for _ in range(3):
+            for d, n_x, n_y, pen in cs:
+                self.x += n_x * pen * 0.5
+                self.y += n_y * pen * 0.5
+                p_x, p_y = self.x + c * d, self.y + s * d
+                rxx, ryy = p_x - (self.x + rcx), p_y - (self.y + rcy)
+                vpx, vpy = vcx - w * ryy - vrx, vcy + w * rxx - vry
+                vn = vpx * n_x + vpy * n_y
+                if vn < 0.0:
+                    if vn_first == 0.0:
+                        vn_first = vn
+                    rn = rxx * n_y - ryy * n_x
+                    jn = -0.5 * (1.0 + self.car_e) * vn / (1.0 + self.wall_couple * rn * rn / k_i)
+                    vcx += jn * n_x
+                    vcy += jn * n_y
+                    w += self.wall_couple * rn * jn / k_i
+                    t_x, t_y = -n_y, n_x
+                    vpx, vpy = vcx - w * ryy - vrx, vcy + w * rxx - vry
+                    vt = vpx * t_x + vpy * t_y
+                    rt = rxx * t_y - ryy * t_x
+                    jt = -0.5 * vt / (1.0 + self.wall_couple * rt * rt / k_i)
+                    jt = max(-self.car_mu * jn, min(self.car_mu * jn, jt))
+                    vcx += jt * t_x
+                    vcy += jt * t_y
+                    w += self.wall_couple * rt * jt / k_i
+            cs = contacts()
+            if not cs:
+                break
+        vbx, vby = vcx + w * rcy, vcy - w * rcx
+        self.v = vbx * c + vby * s
+        self.vy = -vbx * s + vby * c
+        self._wall_w += w - self.yaw_rate
+        self.yaw_rate = w
+        if not self._car_contact:
+            self._car_contact = True
+            if vn_first < -0.05:
+                self._car_hits += 1
+                self.get_logger().info(
+                    f"車両接触 #{self._car_hits}: 相対法線速度 {-vn_first:.2f} m/s, v={v0:.2f} → {self.v:.2f} m/s"
+                    f" (自車 x={self.x:.2f}, y={self.y:.2f} / 相手 x={rx:.2f}, y={ry:.2f})")
+
+    def _log_pose(self):
+        pose = self._rival_pose()
+        t = time.time()
+        if pose is None:
+            self._pose_log.write(f'{t:.3f},{self.x:.3f},{self.y:.3f},{self.yaw:.3f},{self.v:.3f},,,,,\n')
+        else:
+            rx, ry, ryaw, rv = pose
+            self._pose_log.write(f'{t:.3f},{self.x:.3f},{self.y:.3f},{self.yaw:.3f},{self.v:.3f},'
+                                 f'{rx:.3f},{ry:.3f},{ryaw:.3f},{rv:.3f},{math.hypot(rx - self.x, ry - self.y):.3f}\n')
+        self._pose_log.flush()
 
     def _resolve_wall_contact(self, dt):
         """
