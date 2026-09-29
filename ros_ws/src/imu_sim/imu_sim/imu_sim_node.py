@@ -17,6 +17,10 @@ import numpy as np
 import yaml
 
 import rclpy
+try:
+    import jetracer_common.rclpy_lean  # noqa: F401  QoS イベントを作らない (rclpy の CPU 対策)
+except ImportError:
+    pass
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDurabilityPolicy

@@ -24,7 +24,7 @@ jetracer_sim/
 ├── ros_ws/src/
 │   ├── minicar_msgs/        共通メッセージ。★ActuatorCmd (凍結する契約)・LookAhead (方策の出力)
 │   ├── minicar_sim_msgs/    sim 専用 (/sim/…): BodyState・GroundTruth・StepInfo・srv Reset/Step。推論は購読禁止
-│   ├── jetracer_common/     ROS 非依存の共有モジュール: カメラ幾何・アクチュエータ模型・IMU モデル・参照線・profile (単体テスト付き)
+│   ├── jetracer_common/     ROS 非依存の共有モジュール: カメラ幾何・アクチュエータ模型・IMU モデル・参照線・profile (単体テスト付き)。rclpy_lean (rclpy の CPU 対策) だけ ROS ノード用
 │   ├── minicar_sim/         物理 vehicle_sim (転用＋改修)・course.py・camera_info_pub・Unity 書き出し・config/
 │   │   └── config/vehicle_profile/{jetracer_tt02,m05}.yaml   ★車両の数値の定義元 (1 か所)
 │   ├── imu_sim/             ★新規。/sim/body_state → /imu (1 kHz 内部・100 Hz 出力・9 種の汚れ)
@@ -33,7 +33,7 @@ jetracer_sim/
 ├── unity/course.json        コース＋カメラ幾何の書き出し (Unity 側は数値を持たない)。Unity プロジェクトは minicarbattle2026/unity
 ├── docker/                  sim PC の ROS 側 (sim.Dockerfile / docker-compose.yml) と学習器 (learner.Dockerfile)
 ├── config/cyclonedds.xml    2 ホスト用 DDS 設定
-├── tools/                   make_route.py・corridor_check.py (参照線)・lap_eval.py (周回評価)・camera_calib.py (チェッカーボード較正)・fit_camera_from_images.py (実走画像からカメラ推定)・record_video.py・imu_allan.py・imu_spectrum.py (IMU 5 測定)・sim2real/ (画像変換)
+├── tools/                   make_route.py・corridor_check.py (参照線)・lap_eval.py (周回評価)・camera_calib.py (チェッカーボード較正)・fit_camera_from_images.py (実走画像からカメラ推定)・record_video.py・imu_allan.py・imu_spectrum.py (IMU 5 測定)・sim2real/ (画像変換)・race/ (3 台レース race3.sh・中継・ゴースト)
 ├── scripts/                 setup_host.sh (★環境を一気に作る: apt・sysctl・固定 IP・chrony)・p9_check.sh (2 ホスト直結の起動前チェック)・build.sh・test.sh・run_sim_local.sh・smoke_test.sh・setup_ws.sh・setup_unity_player.sh・export_course.sh・check_no_sim_topics.sh・sim_env.sh
 └── docs/                    architecture (境界・トピック)・setup (2 ホスト構築)・unity・docker・calibration・lockstep (強化学習 IF)
 ```
@@ -72,6 +72,7 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 | Jetson (推論) | `ros2 launch jetracer_stack vehicle_stack.launch.py model_file:=policy.onnx` |
 | Jetson (実機) | `ros2 launch jetracer_bridge bridge.launch.py` ＋ 上の推論 |
 | スタート | `ros2 topic pub --once /run std_msgs/Bool "data: true"` |
+| 3 台レース (PC 1 台・Unity) | `./tools/race/race3.sh` (3 台とも教師。`BLUE_MODEL=<onnx>` で青だけ方策。[docs/unity.md](docs/unity.md)「3 台レース」) |
 
 ## 何を流用し、何を足したか
 
@@ -94,7 +95,7 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 | ✅ ビルド・単体テスト 17 件 | Jetson (Orin Nano・JetPack 6.2.1・Humble) と sim PC (Ubuntu 22.04.5・AMD GPU) の両方 |
 | ✅ 閉ループ (1 台・Unity 無し) | realtime / lockstep とも。`scripts/run_sim_local.sh`・`scripts/smoke_test.sh` |
 | ✅ **2 ホスト接続 (P9)** | 1000BASE-T 直結で通った。画像 15 Hz・遅延 64 ms (Unity 描画) / 5 ms (OpenCV)、IMU 100 Hz・8 ms、往路 0.8 ms、教師で 24.0 s/周・衝突 0。[docs/setup.md](docs/setup.md) |
-| ✅ **参照線を TT-02 用に引き直した** | 中心線は坂道出口の右ヘアピンで R 0.42 m と δmax 27° の R_min 0.506 m を割っていた。最小曲率で引き直して最小 R 0.556 m・壁余裕 ≥ 0.18 m (`tools/make_route.py` → `config/route_jetracer_tt02.yaml`、launch の既定) |
+| ✅ **参照線を TT-02 用に引き直した** | 中心線は坂道出口の右ヘアピンで R 0.42 m と δmax 27° の R_min 0.506 m を割っていた。最小曲率で引き直して最小 R 0.590 m・壁余裕 ≥ 0.177 m・全長 29.78 m (`tools/make_route.py` → `config/route_jetracer_tt02.yaml`、launch の既定)。2026-09-29 に②坂道の位置の訂正 (切れ目 6.41〜7.95 → 5.95〜7.05 m、minicarbattle2026 と同じ) に合わせて引き直した |
 | ✅ Unity 描画 | JetRacer 用の複製プロジェクト (`unity/MinicarSim`)。224×224・15 Hz、カメラの幾何は profile の 1 か所から (fx≠fy・樽型歪み)、実カメラ寄せの後処理 (周辺減光・ブラー・自動露出・柱)、駐車枠の P1/P2/P3、エピソード乱択化 (照明・床・観戦者・床の白テープ)、参照線のミニマップ表示 |
 | ✅ 記録と録画 | `scripts/record.sh` (seed を変えて rosbag を N 本)・`record:=` (Unity 表示を mp4)・`tools/record_video.py` (車が見ている画を mp4) |
 | ✅ sim→real 画像変換 | CUT を PC の CPU で学習 (3 回目で合格、形の一致 F 値 0.83)。記録済みの bag を後から変換し、学習データの一部だけに混ぜる。自分の実画像で作り直す手順は [docs/sim2real.md](docs/sim2real.md) |

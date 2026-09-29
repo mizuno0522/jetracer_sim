@@ -89,4 +89,4 @@
 
 ## 参照線と R_min
 
-R_min = L / tan δmax。TT-02 (WB 0.257・δmax 27° 暫定) で 0.506 m。`tools/corridor_check.py` の机上判定では、コース中心線の最小曲率半径 0.42 m (坂道の右 180°・(7.3, 3.8) 付近) と、既存 sim の参照線 route.yaml の 0.39 m がこれを割る。**δmax を実測してから参照線を引き直す** (`vehicle_sim` の `route_file:=` で差し替え可)。
+R_min = L / tan δmax。TT-02 (WB 0.257・δmax 27° 暫定) で 0.506 m。`tools/corridor_check.py` の机上判定では、コース中心線の最小曲率半径 0.42 m (坂道の右 180°・(7.3, 3.8) 付近。2026-09-29 に坂道の位置を 5.95〜7.05 m へ直した後は 0.36 m @ (6.6, 3.7)) と、既存 sim の参照線 route.yaml の 0.39 m がこれを割る。**δmax を実測してから参照線を引き直す** (`vehicle_sim` の `route_file:=` で差し替え可)。

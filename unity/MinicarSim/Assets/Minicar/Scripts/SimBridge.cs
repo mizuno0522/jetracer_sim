@@ -26,7 +26,9 @@ namespace Minicar
         const string kImageTopic = "/camera/image_raw";
         const int kOwnCarLayer = 8;      // センサカメラには写さない (実機でも自車は写らない)
         const int kRivalLayer = 9;       // レース相手 (別ドメインの車)。ゴースト対戦なのでセンサにも写さない
+        const int kRival2Layer = 13;     // 3 台レース (race3.sh) の 2 台目の相手
         const string kRivalTopic = "/sim/rival_state";   // race_relay.py が転送する相手の描画状態
+        const string kRival2Topic = "/sim/rival2_state";
 
         // vehicle_sim.RENDER_STATE_FIELDS と同じ並び
         enum F { StampSec, StampNsec, X, Y, Yaw, SimTime, ArrowDir, NarrowDivider, Pitch, OppValid, OppX, OppY, OppYaw, V, Steer, ALat, Distance, Count }
@@ -43,15 +45,15 @@ namespace Minicar
         double m_LastYaw = double.NaN, m_LastStamp = double.NaN;
         float m_YawRateAbs;
         RenderTexture SensorOutput => m_PostRt != null ? m_PostRt : m_Rt;
-        CarModel m_OwnCar, m_Opponent, m_Rival;
-        double[] m_RivalState;
-        string m_OwnLabel, m_RivalLabel;
+        CarModel m_OwnCar, m_Opponent, m_Rival, m_Rival2;
+        double[] m_RivalState, m_Rival2State;
+        string m_OwnLabel, m_RivalLabel, m_Rival2Label;
         int m_Follow;                    // 0 = 自車, 1 = 相手, 2 = 俯瞰
         RvizLayout m_Rviz;               // RViz と同じ表示 (左カメラ / 右コース全景＋速度色)
         // 占有格子 (0 = 自車 /fusion/local_map、1 = 相手 /sim/rival_local_map) と、
         // 格子の stamp に合う姿勢を引くための姿勢履歴 (50 Hz × 64 ≈ 1.3 s)
         readonly OccupancyGridMsg[] m_GridMsg = new OccupancyGridMsg[2];
-        readonly PoseHistory[] m_Poses = { new PoseHistory(), new PoseHistory() };
+        readonly PoseHistory[] m_Poses = { new PoseHistory(), new PoseHistory(), new PoseHistory() };
 
         class PoseHistory
         {
@@ -119,7 +121,7 @@ namespace Minicar
                 y = m_Y + m_V * Math.Sin(mid) * dt;
             }
         }
-        readonly PoseSmoother[] m_Smooth = { new PoseSmoother(), new PoseSmoother() };
+        readonly PoseSmoother[] m_Smooth = { new PoseSmoother(), new PoseSmoother(), new PoseSmoother() };
 
         bool m_RvizMode => m_Layout == Layout.Rviz;
         Vector3 m_ChasePos;
@@ -143,7 +145,9 @@ namespace Minicar
         void Awake()
         {
             QualitySettings.vSyncCount = 0;       // 垂直同期に縛られると配信レートが 60/n Hz に丸まる
-            Application.targetFrameRate = 120;
+            // 描画の上限。カメラは 30 Hz で配るので 60 で足りる (1 コマおきに配る)。120 では描画だけで CPU を
+            // 使い、3 台レースで PC が詰まった (✎ 2026-09-28)。-fps で変えられる
+            Application.targetFrameRate = int.Parse(Arg("-fps", "60"));
             m_Course = GetComponent<CourseBuilder>();
             m_Course.Build();
 
@@ -166,7 +170,9 @@ namespace Minicar
             m_Rviz = new RvizLayout(m_Course.Data);
             // -laps N: N 周でゴール (結果画面を出す)。既定 3 = 予選 (3 周の合計タイム)。0 = 出さない
             m_Aic = new AicLayout(m_Course.Data, Arg("-route", "shortcut") == "long", int.Parse(Arg("-laps", "3")),
-                                  m_OwnLabel, m_RivalLabel, m_OwnCar.Root, m_Rival.Root, new[] { kOwnCarLayer, kRivalLayer });
+                                  new[] { m_OwnLabel, m_RivalLabel, m_Rival2Label },
+                                  new[] { m_OwnCar.Root, m_Rival.Root, m_Rival2.Root },
+                                  new[] { kOwnCarLayer, kRivalLayer, kRival2Layer });
             // 下段の「CAMERA」は表示用カメラではなく、実際に配信している画像 (後処理後・224×224) をそのまま見せる
             m_Aic.SensorTexture = SensorOutput;
             // -aicview both (既定: 上 = 追従視点・下 = カメラ映像) | chase | camera
@@ -205,6 +211,12 @@ namespace Minicar
             });
             m_Ros.Subscribe<Int32Msg>("/lap_count", msg => m_Aic.SetLapCount(0, msg.data));
             m_Ros.Subscribe<Int32Msg>("/sim/rival_lap_count", msg => m_Aic.SetLapCount(1, msg.data));
+            // 3 台レース (race3.sh) の 2 台目の相手
+            m_Ros.Subscribe<Float64MultiArrayMsg>(kRival2Topic, msg =>
+            {
+                if (msg.data != null && msg.data.Length >= (int)F.Count) { m_Rival2State = msg.data; m_Poses[2].Add(msg.data); m_Smooth[2].Add(msg.data); }
+            });
+            m_Ros.Subscribe<Int32Msg>("/sim/rival2_lap_count", msg => m_Aic.SetLapCount(2, msg.data));
             m_RateT0 = Time.unscaledTime;
         }
 
@@ -368,6 +380,10 @@ namespace Minicar
             m_Rival.Root.gameObject.SetActive(false);
             m_OwnLabel = Arg("-ownlabel", "BLUE");
             m_RivalLabel = Arg("-rivallabel", "YELLOW");
+            // 3 台レースの 2 台目の相手 (緑)。/sim/rival2_state が来たときだけ出す
+            m_Rival2 = new CarModel("Rival2", new Color(0.20f, 0.75f, 0.30f), kRival2Layer, true);
+            m_Rival2.Root.gameObject.SetActive(false);
+            m_Rival2Label = Arg("-rival2label", "GREEN");
         }
 
         // ------------------------------------------------------------------
@@ -437,6 +453,15 @@ namespace Minicar
             if (m_RivalState != null)
                 m_Aic.SetState(1, m_RivalState[(int)F.X], m_RivalState[(int)F.Y], m_RivalState[(int)F.Yaw], m_RivalState[(int)F.V],
                                m_RivalState[(int)F.SimTime], m_RivalState[(int)F.Distance]);
+            if (m_Rival2State != null)
+            {
+                double[] r2 = m_Rival2State;
+                m_Aic.SetState(2, r2[(int)F.X], r2[(int)F.Y], r2[(int)F.Yaw], r2[(int)F.V], r2[(int)F.SimTime], r2[(int)F.Distance]);
+                m_Rival2.Root.gameObject.SetActive(true);
+                m_Smooth[2].Get(out double gx2, out double gy2, out double gyaw2);
+                m_Rival2.Root.SetPositionAndRotation(RosFrame.ToUnity(gx2, gy2, 0.0), RosFrame.Yaw(gyaw2));
+                m_Rival2.Apply((float)r2[(int)F.V], (float)r2[(int)F.Steer], (float)r2[(int)F.ALat], dt);
+            }
             if (m_Opponent.Root.gameObject.activeSelf) m_Opponent.Apply(0.6f, 0f, 0f, dt);
             if (m_RivalState != null)
             {

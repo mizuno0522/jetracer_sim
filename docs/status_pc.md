@@ -1,4 +1,4 @@
-# sim PC 側の状況 (2026-09-28 朝 時点)
+# sim PC 側の状況 (2026-09-29 朝 時点)
 
 sim PC (Ubuntu 22.04.5・Humble desktop・AMD 内蔵 GPU = CUDA 無し・Unity 6000.0.83f1) で確かめたことと、PC 側の担当
 (`unity/`・`jetracer_compat`・`tools/sim2real`・Unity 系の scripts) の現状。環境構築の手順そのものは [setup.md](setup.md)・[unity.md](unity.md)。結果の画像と動画は [results/2026-09-26](results/2026-09-26/README.md)・[results/2026-09-27](results/2026-09-27/README.md) (方策)・[results/2026-09-27/real_log.md](results/2026-09-27/real_log.md) (実機ログ)。
@@ -18,7 +18,7 @@ sim PC (Ubuntu 22.04.5・Humble desktop・AMD 内蔵 GPU = CUDA 無し・Unity 6
 | sim→real 画像変換 | 3 回目 (標準 CUT + 形を保つ損失) で合格。F 値 0.832 (下の節・[sim2real.md](sim2real.md))。9/27 の実画像を足した追加学習 (cut_004・005) は sim に無い赤い壁を描いて不合格。A 側に壁に寄った場面が無いのが原因で、カメラ較正のあと撮り直す。当面は cut_003 |
 | 実機ログ 9/27 | 8 本・約 7 分 (画像 60 fps・IMU 120 Hz 独立・ジャイロ付き)。IMU の静止雑音・ゼロ点・駆動系の振動振幅が実測に。2 本で末尾欠け (1 本は電源断型)、±2 g・±250 dps で飽和あり ([results/2026-09-27/real_log.md](results/2026-09-27/real_log.md)) |
 | sim の物理 (壁・車どうし) | **壁は剛体** (押し戻し・法線衝撃・摩擦、通り抜けの修正込み)。2 台走行の相手 (`/sim/rival_state`) とは車体どうしの剛体衝突 (下の節) |
-| 2 台走行・ゴースト | 相手の走りを記録して再生する `tools/race/ghost_replay.py`。2 台の位置の CSV (`RACE_POSE_LOG`)。M-05 の 2 台レースは minicarbattle2026 の `unity/race2.sh`・`race_ghost.sh` |
+| 複数台走行・ゴースト | **3 台レース `tools/race/race3.sh`** (2026-09-29 に移植、教師 3 台で 180 s 走った)。相手の走りを記録して再生する `tools/race/ghost_replay.py`。位置の CSV (`RACE_POSE_LOG`)。M-05 の 2 台・3 台レースは minicarbattle2026 の `unity/race2.sh`・`race3.sh` |
 | policy_net の学習 | **sim の閉ループで合格**。画像 (＋IMU) だけで、学習に使っていない 7 seed を全部完走・衝突 0 (下の節・[tools/policy](../tools/policy/README.md))。実機は未確認 |
 
 ## カメラ幾何の Unity 実装と確認
@@ -102,6 +102,32 @@ M-05 (minicarbattle2026) の MPPI 対 Pure Pursuit の 2 台レースを PC ⇔ 
 - 乱択化の白テープは走路を横切る向きで 0〜6 本置く (実会場の床のテープをまねた学習用)。スタートラインと見分けがつかないので、レース表示 (M-05) では 0 本にした。
 - 確認: smoke test PASS (2 周・衝突 0)。画像を消した方策で壁に当て続けても、コース外 2 回 → 0 回 (以前は実際に壁を抜けていた)。
   教師で走る JetRacer に M-05 の記録のゴーストが後ろから追いつき、接触して押された (v 1.80 → 2.50)。
+
+## minicarbattle2026 の 9/28 以降の sim の変更の取り込み (2026-09-29)
+
+M-05 側で 9/28 に入った sim の変更を取り込んだ。確認: smoke test PASS (新しいコース・新しい参照線で 2 周・衝突 0・|cte| p95 0.094 m・壁余裕 最小 0.251 m)。
+3 台レース (教師 3 台・180 s・録画): 3 台とも約 7.2 周、壁接触 0、車両接触 青 5・黄 3・緑 1 (教師は相手を避けない)、
+矢印は青の sim が周回ごとに入れ替え、黄・緑の sim は 0.5 s 以内に同じ向きへ。Unity は 3 台の画面・ミニマップに線なし・60 FPS。
+
+| 変更 | このリポジトリ | 使い方 |
+|---|---|---|
+| **②坂道の位置の訂正** (M-05 24bbdb8) | `course.py`: L2/L3 仕切りの切れ目 = 坂道 110 cm を 6.41〜7.95 → **5.95〜7.05 m** (坂道の東端から ①トンネルの西端まで 0.45 m、p.24/p.27)。`SLOPE` の区間と中心線も同じだけ西へ | 参照線を引き直した: 最小 R 0.556 → **0.590 m**・壁余裕 (半車幅込) 最小 0.177 m・全長 28.64 → 29.78 m。坂道は x 6.44 で北へほぼ直角 (101°) に横断。`corridor_check.py` で「通れる」(旧参照線は新しいコースでは不可)。★ `unity/course.json` の書き出し (`./scripts/export_course.sh`) はまだ |
+| 3 台レース | `tools/race/race3.sh` (JetRacer 版に書き直し)・`race_relay.py`・`race_start.py` (`--min-subs`、既定 1 = cmd_shaper) | [unity.md](unity.md)「3 台レース」 |
+| Unity の 3 台表示・`-fps` | `AicLayout.cs`・`SimBridge.cs` に M-05 の差分 (38fe480 → 現在) をそのまま当てた (`/sim/rival2_state`・緑の車・3 台の画面構成・描画の上限 既定 60)。ミニマップには中心線・参照線を描かない (決勝はコースが分岐し追い抜きもあるので、1 本の線は走りと合わない) | `-fps` は `sim_host.launch.py unity_fps:=` |
+| 複数の相手 | `vehicle_sim` が `rival_topics` (既定 `/sim/rival_state`・`/sim/rival2_state`) の相手ごとに車どうしの衝突を判定する。位置の CSV には一番近い相手を書く | 相手の姿勢を中継かゴーストでそれぞれのトピックへ |
+| 毎周入れ替わる矢印 | `arrow_dir:=alternate` (周回ごとに必ず左右を入れ替える。`random` は同じ向きが続くことがある) | `sim_host.launch.py arrow_dir:=alternate` |
+| 信号を 1 つにそろえる | 各 sim が今の向きを `/sim/arrow_dir` (Int32、2 Hz) に出し、`arrow_follow:=true` の sim は `/sim/arrow_master` に従う | race3.sh が中継する |
+| カメラなしの sim | `sim_host.launch.py use_camera:=false`: 画像を出さず、Unity も `ros_tcp_endpoint` も上げない (`/sim/render_state` は `camera_backend:=unity` なら出る) | 3 台レースの黄・緑 |
+| ゴースト | `ghost_replay.py` に `GHOST_RATE` (再生の速さ)・`GHOST_TOPIC` (3 台目として足す)・CSV の 1 行目 `#hidden` (相手を出さない) | [unity.md](unity.md)「ゴースト」 |
+| 検証用の仕掛け | `MINICAR_SPIN_AT_XY` (位置指定のスピン、ジャイロにも出る)・`MINICAR_YAW_KICK_AT_XY` (向きだけの飛び、ジャイロに出ない) | [unity.md](unity.md)「検証用の仕掛け」 |
+| rclpy の CPU 対策 | `jetracer_common/rclpy_lean.py` (既定の QoS イベントを作らない。M-05 で全ノードの CPU 約 17% 減)。`vehicle_sim`・`imu_sim`・`camera_info_pub`・`tools/race/*.py` が読む (無ければ何もしない)。jetracer_stack のノードには入れていない | — |
+| 指令の失効 | 取り込み不要 (このリポジトリの `vehicle_sim` は最初から `cmd_timeout_s` 0.3 s。M-05 側が 772cd04 で同じにした) | — |
+
+- ★坂道を直したので、それより前に記録・学習したものは古いコースのもの。ゴーストは M-05 の新しいコースでの記録 `tools/race/ghosts/m05_mppi_safe_line3.csv`
+  (MPPI・safe・ライン 3 から単独 3 周) に差し替えた (旧 `m05_pp_safe_line3.csv` は仕切りを突き抜けるので消した)。
+  学習データ (`bags/`) と方策 `policy_00{1,3}` (坂道のまわりの見え方が変わる。閉ループで確かめ直す)。
+- 取り込んでいないもの (M-05 の車両スタック固有): MPPI・BT・駐車の制御、矢印の分岐 (route_guide) と `arrow_sign_from_sim`、自己位置の直し、
+  `publish_truth_topics` (JetRacer の推論スタックは `check_no_sim_topics.sh` の許可一覧で真値を読まないことを確かめている)、`brake_slip_underspeed` (車輪速センサが無い)。
 
 ## 踏んだ落とし穴 (PC)
 

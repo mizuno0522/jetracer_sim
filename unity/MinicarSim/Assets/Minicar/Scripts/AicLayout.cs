@@ -1,7 +1,7 @@
 // 自動運転 AI チャレンジのシミュレータ画面と同じ表示仕様のレイアウト。
-//   画面   = 2 台レースなら左 = P1 / 右 = P2 の 2 分割。各車とも上 = 追従視点 (車が見える)、
+//   画面   = 走っている台数で縦に分割 (2 台 = 左 P1 / 右 P2、3 台 = P1 / P2 / P3。2026-09-28 に 3 台対応)。各車とも上 = 追従視点 (車が見える)、
 //            下 = カメラ映像 (センサカメラと同じ取付・画角)。[V] で 2 段 / 追従のみ / カメラのみ
-//   左上/右上 = P1 / P2 パネル (Auto・Drive バッジ、順位、km/h、Lap n / 秒  Sec k)
+//   左上/右上/左上の下 = P1 / P2 / P3 パネル (Auto・Drive バッジ、順位、km/h、Lap n / 秒  Sec k)
 //   上中央 = 円形ミニマップ (TOP = 北が上の固定表示、白いコース線、車は色つきの丸)
 //   右上隅 = FPS
 //   スタート = "Waiting for start flag..." → 5,4,3,2,1 → GO (/sim/countdown。race_start.py が送る)
@@ -21,6 +21,11 @@ namespace Minicar
         const float kRefHeight = 768f;           // 参考動画の画面高さ。HUD の寸法はこの高さ基準
         static readonly Color kP1 = new Color32(77, 163, 255, 255);
         static readonly Color kP2 = new Color32(255, 210, 30, 255);
+        static readonly Color kP3 = new Color32(60, 200, 90, 255);
+        // 何台まで扱うか (決勝は 3 台。2026-09-28 に 2 → 3)
+        public const int kMaxCars = 3;
+        static readonly Color[] kCols = { kP1, kP2, kP3 };
+        static readonly string[] kRankNames = { "1st", "2nd", "3rd" };
         static readonly Color kPanelBg = new Color(0.16f, 0.24f, 0.36f, 0.60f);
         static readonly Color kSky = new Color32(140, 178, 218, 255);
 
@@ -150,9 +155,9 @@ namespace Minicar
             }
         }
 
-        readonly Camera[] m_Chase = new Camera[2], m_Onboard = new Camera[2];
-        readonly Tracker[] m_Track = new Tracker[2];
-        readonly bool[] m_Alive = new bool[2];
+        readonly Camera[] m_Chase = new Camera[kMaxCars], m_Onboard = new Camera[kMaxCars];
+        readonly Tracker[] m_Track = new Tracker[kMaxCars];
+        readonly bool[] m_Alive = new bool[kMaxCars];
         readonly Vector2[] m_Center;
         Vector2 m_MapMid;
         float m_MapHalf;                          // ミニマップに収める半径 (m)
@@ -168,10 +173,10 @@ namespace Minicar
         int m_FpsFrames;
         bool m_Enabled;
 
-        public AicLayout(CourseData data, bool longRoute, int laps, string p1Label, string p2Label, Transform p1, Transform p2, int[] selfLayers)
+        public AicLayout(CourseData data, bool longRoute, int laps, string[] labels, Transform[] cars, int[] selfLayers)
         {
             m_Data = data;
-            m_Labels = new[] { p1Label, p2Label };
+            m_Labels = labels;
             float[] c = longRoute ? data.centerline_long : data.centerline_shortcut;
             if (c == null || c.Length < 6) c = new float[] { 0, 0, 1, 0, 1, 1, 0, 0 };
             m_Center = new Vector2[c.Length / 2];
@@ -189,10 +194,9 @@ namespace Minicar
             }
             m_MapMid = (lo + hi) * 0.5f;
             m_MapHalf = (hi - m_MapMid).magnitude / 0.97f;   // 四隅が円の縁のすぐ内側
-            for (int i = 0; i < 2; i++) m_Track[i] = new Tracker(m_Center) { TargetLaps = laps };
+            for (int i = 0; i < kMaxCars; i++) m_Track[i] = new Tracker(m_Center) { TargetLaps = laps };
 
-            var cars = new[] { p1, p2 };
-            for (int i = 0; i < 2; i++)
+            for (int i = 0; i < kMaxCars; i++)
             {
                 m_Chase[i] = MakeChaseCamera($"AicChaseP{i + 1}", cars[i]);
                 m_Onboard[i] = MakeOnboardCamera($"AicOnboardP{i + 1}", cars[i], data.camera, selfLayers[i]);
@@ -250,7 +254,7 @@ namespace Minicar
             set { m_Enabled = value; ApplyRects(); }
         }
 
-        // index 0 = P1 (自車)、1 = P2 (2 台レースの相手)
+        // index 0 = P1 (自車)、1 = P2・2 = P3 (レースの相手)
         public void SetState(int index, double x, double y, double yaw, double v, double simTime, double distance)
         {
             m_Alive[index] = true;
@@ -272,8 +276,32 @@ namespace Minicar
         }
 
         // 走っている全車がゴールしたら結果画面
-        public bool ShowingResult =>
-            m_Alive[0] && m_Track[0].Finished && (!m_Alive[1] || m_Track[1].Finished);
+        public bool ShowingResult
+        {
+            get
+            {
+                if (!m_Alive[0]) return false;
+                for (int i = 0; i < kMaxCars; i++)
+                    if (m_Alive[i] && !m_Track[i].Finished) return false;
+                return true;
+            }
+        }
+
+        // 画面に出す車 (P1 は常に。相手は状態が届いてから)。列の順 = 番号順
+        List<int> Shown()
+        {
+            var s = new List<int> { 0 };
+            for (int i = 1; i < kMaxCars; i++) if (m_Alive[i]) s.Add(i);
+            return s;
+        }
+
+        // 順位順 (道のりの長い順)
+        List<int> Ranked()
+        {
+            var s = Shown();
+            s.Sort((a, b) => RaceScore(b).CompareTo(RaceScore(a)));
+            return s;
+        }
 
         public void Update()
         {
@@ -283,13 +311,30 @@ namespace Minicar
             ApplyRects();
         }
 
+        // 3 台のときは自動運転 AI チャレンジと同じ構成: 上段 = 左 P2 / 右 P3、下段 = P1 (横幅いっぱい)、
+        // どれも追従視点だけ。パネルは P2 左上・P3 右上・P1 左下、ミニマップは画面の中央
+        bool Three => Shown().Count == 3;
+
         void ApplyRects()
         {
-            bool split = m_Alive[1];
-            for (int i = 0; i < 2; i++)
+            var shown = Shown();
+            int n = shown.Count;
+            if (n == 3)
             {
-                bool on = m_Enabled && (i == 0 || split);
-                float x = split ? 0.5f * i : 0f, w = split ? 0.5f : 1f;
+                var rects = new[] { new Rect(0f, 0f, 1f, 0.5f), new Rect(0f, 0.5f, 0.5f, 0.5f), new Rect(0.5f, 0.5f, 0.5f, 0.5f) };
+                for (int i = 0; i < kMaxCars; i++)
+                {
+                    m_Chase[i].enabled = m_Enabled;
+                    m_Chase[i].rect = rects[i];
+                    m_Onboard[i].enabled = false;
+                }
+                return;
+            }
+            for (int i = 0; i < kMaxCars; i++)
+            {
+                int col = shown.IndexOf(i);
+                bool on = m_Enabled && col >= 0;
+                float w = 1f / n, x = Mathf.Max(0, col) * w;
                 m_Chase[i].enabled = on && ViewMode != View.Onboard;
                 m_Onboard[i].enabled = on && ViewMode != View.Chase && !(i == 0 && SensorTexture != null);
                 m_Chase[i].rect = ViewMode == View.Both ? new Rect(x, 0.5f, w, 0.5f) : new Rect(x, 0f, w, 1f);
@@ -298,10 +343,10 @@ namespace Minicar
         }
 
         // P1 のカメラ枠に実際のセンサ画像を縦横比を保って描く (224×224 は正方形なので左右は黒)
-        void DrawSensorPane(bool split)
+        void DrawSensorPane(int n)
         {
             if (SensorTexture == null || ViewMode == View.Chase) return;
-            float w = split ? Screen.width * 0.5f : Screen.width;
+            float w = Screen.width / (float)n;
             float y0 = ViewMode == View.Both ? Screen.height * 0.5f : 0f;
             float h = ViewMode == View.Both ? Screen.height * 0.5f : Screen.height;
             var r = new Rect(0f, y0, w, h);
@@ -311,14 +356,14 @@ namespace Minicar
             GUI.DrawTexture(r, SensorTexture, ScaleMode.ScaleToFit, false);
         }
 
-        // 同じ位置から数えた道のり (順位用)。P2 は P1 のスタートとの前後差を足す
+        // 同じ位置から数えた道のり (順位用)。P2・P3 は P1 のスタートとの前後差を足す
         double RaceScore(int i)
         {
             double off = 0;
-            if (i == 1)
+            if (i != 0)
             {
                 float total = m_Track[0].Total;
-                off = m_Track[1].StartS - m_Track[0].StartS;
+                off = m_Track[i].StartS - m_Track[0].StartS;
                 if (off > total * 0.5) off -= total;
                 if (off < -total * 0.5) off += total;
             }
@@ -331,13 +376,19 @@ namespace Minicar
             if (!m_Enabled) return;
             float k = Screen.height / kRefHeight;
             BuildStyles(k);
-            bool split = m_Alive[1];
-            if (ViewMode == View.Onboard) DrawSensorPane(split);
+            var shown = Shown();
+            int ncol = shown.Count;
+            if (ncol == 3)
+            {
+                OnGuiThree(k);
+                return;
+            }
+            if (ViewMode == View.Onboard) DrawSensorPane(ncol);
 
-            if (split)
+            for (int c = 1; c < ncol; c++)
             {
                 GUI.color = Color.black;
-                GUI.DrawTexture(new Rect(Screen.width * 0.5f - 1f, 0, 2f, Screen.height), m_White);
+                GUI.DrawTexture(new Rect(Screen.width * c / (float)ncol - 1f, 0, 2f, Screen.height), m_White);
                 GUI.color = Color.white;
             }
             if (ViewMode == View.Both)
@@ -345,11 +396,11 @@ namespace Minicar
                 GUI.color = Color.black;
                 GUI.DrawTexture(new Rect(0, Screen.height * 0.5f - 1f, Screen.width, 2f), m_White);
                 GUI.color = Color.white;
-                DrawSensorPane(split);
+                DrawSensorPane(ncol);
                 // 下段の見出し (カメラ映像 = センサカメラと同じ取付・画角)
-                for (int i = 0; i < (split ? 2 : 1); i++)
+                for (int i = 0; i < ncol; i++)
                 {
-                    float px = (split ? Screen.width * 0.5f * i : 0f) + 8f * k;
+                    float px = Screen.width * i / (float)ncol + 8f * k;
                     GUI.color = new Color(0.05f, 0.07f, 0.10f, 0.7f);
                     string label = i == 0 && SensorTexture != null ? "CAMERA  /camera/image_raw (実配信)" : "CAMERA";
                     float lw = (i == 0 && SensorTexture != null ? 230f : 66f) * k;
@@ -359,13 +410,35 @@ namespace Minicar
                 }
             }
 
-            bool p1Leads = !split || RaceScore(0) >= RaceScore(1);
-            DrawPanel(0, 12f * k, k, "P1", kP1, p1Leads ? 1 : 2);
-            if (split) DrawPanel(1, Screen.width - (12f + 184f) * k, k, "P2", kP2, p1Leads ? 2 : 1);
+            // パネル: P1 は左上、P2 は右上、P3 は P1 の下 (上端の中央はミニマップ)
+            var ranked = Ranked();
+            foreach (int i in shown)
+            {
+                float px = i == 1 ? Screen.width - (12f + 184f) * k : 12f * k;
+                float py = i == 2 ? (12f + 124f) * k : 12f * k;
+                DrawPanel(i, px, py, k, $"P{i + 1}", kCols[i], ranked.IndexOf(i) + 1);
+            }
             DrawMinimap(k);
 
             GUI.Label(new Rect(Screen.width - 110f * k, 0, 106f * k, 18f * k), $"{m_FpsShown:0} FPS", m_Fps);
 
+            if (ShowingResult) DrawResult(k);
+            else DrawStartSignal(k);
+        }
+
+        // 3 台 (自動運転 AI チャレンジの構成)
+        void OnGuiThree(float k)
+        {
+            GUI.color = Color.black;
+            GUI.DrawTexture(new Rect(0, Screen.height * 0.5f - 1f, Screen.width, 2f), m_White);          // 上段と下段
+            GUI.DrawTexture(new Rect(Screen.width * 0.5f - 1f, 0, 2f, Screen.height * 0.5f), m_White);   // 上段の左右
+            GUI.color = Color.white;
+            var ranked = Ranked();
+            DrawPanel(1, 12f * k, 12f * k, k, "P2", kCols[1], ranked.IndexOf(1) + 1);
+            DrawPanel(2, Screen.width - (12f + 184f) * k, 12f * k, k, "P3", kCols[2], ranked.IndexOf(2) + 1);
+            DrawPanel(0, 12f * k, Screen.height - (12f + 118f) * k, k, "P1", kCols[0], ranked.IndexOf(0) + 1);
+            DrawMinimap(k);
+            GUI.Label(new Rect(Screen.width - 110f * k, 0, 106f * k, 18f * k), $"{m_FpsShown:0} FPS", m_Fps);
             if (ShowingResult) DrawResult(k);
             else DrawStartSignal(k);
         }
@@ -406,8 +479,10 @@ namespace Minicar
             GUI.DrawTexture(new Rect(x, y, w, 3f * k), m_White);
             GUI.DrawTexture(new Rect(x, y + h - 3f * k, w, 3f * k), m_White);
 
-            bool two = m_Alive[1];
-            int win = two && m_Track[1].FinishTime < m_Track[0].FinishTime ? 1 : 0;
+            var order = Shown();
+            order.Sort((a, b) => m_Track[a].FinishTime.CompareTo(m_Track[b].FinishTime));
+            bool two = order.Count > 1;
+            int win = order[0];
             GUI.color = Color.white;
             GUI.Label(new Rect(x, y + 14f * k, w, 70f * k), two ? "WINNER" : "FINISH", m_Winner);
             GUI.Label(new Rect(x, y + 80f * k, w, 42f * k), m_Labels[win], m_WinName);
@@ -425,9 +500,9 @@ namespace Minicar
             GUI.Label(new Rect(x + 470f * k, hy, 200f * k, 22f * k), "TIME", m_Head);
             m_Head.alignment = TextAnchor.MiddleLeft;
 
-            for (int n = 0; n < (two ? 2 : 1); n++)
+            for (int n = 0; n < order.Count; n++)
             {
-                int i = n == 0 ? win : 1 - win;
+                int i = order[n];
                 float ry = y + (200f + 74f * n) * k;
                 bool first = n == 0;
                 Color accent = first ? (Color)new Color32(255, 240, 30, 255) : new Color32(225, 228, 235, 255);
@@ -441,13 +516,13 @@ namespace Minicar
                 GUI.DrawTexture(new Rect(x + 38f * k, ry + 6f * k, 52f * k, 28f * k), m_White);
                 GUI.color = accent;
                 GUI.DrawTexture(new Rect(x + 38f * k, ry + 6f * k, 3f * k, 28f * k), m_White);
-                GUI.color = i == 0 ? kP1 : kP2;
+                GUI.color = kCols[i];
                 GUI.DrawTexture(new Rect(x + 110f * k, ry + 10f * k, 10f * k, 20f * k), m_White);
                 GUI.color = Color.white;
                 var st = first ? m_RowBold : m_Row;
                 st.alignment = TextAnchor.MiddleCenter;
                 st.normal.textColor = accent;
-                GUI.Label(new Rect(x + 41f * k, ry + 6f * k, 49f * k, 28f * k), first ? "1st" : "2nd", st);
+                GUI.Label(new Rect(x + 41f * k, ry + 6f * k, 49f * k, 28f * k), kRankNames[n], st);
                 st.alignment = TextAnchor.MiddleLeft;
                 st.normal.textColor = first ? Color.white : new Color(0.85f, 0.86f, 0.9f);
                 GUI.Label(new Rect(x + 126f * k, ry, 250f * k, 40f * k), m_Labels[i], st);
@@ -477,10 +552,9 @@ namespace Minicar
             GUI.Label(new Rect(x, y + h - 34f * k, w, 28f * k), "Esc: Quit", m_Foot);
         }
 
-        void DrawPanel(int i, float x, float k, string name, Color col, int rank)
+        void DrawPanel(int i, float x, float y, float k, string name, Color col, int rank)
         {
             var tr = m_Track[i];
-            float y = 12f * k;
             GUI.color = kPanelBg;
             GUI.DrawTexture(new Rect(x, y, 184f * k, 118f * k), m_White);
 
@@ -498,7 +572,7 @@ namespace Minicar
 
             // 2 段目: 順位 (1st は金、2nd は銀)
             m_Rank.normal.textColor = rank == 1 ? new Color32(255, 214, 40, 255) : new Color32(208, 214, 224, 255);
-            GUI.Label(new Rect(x + 6f * k, y + 36f * k, 170f * k, 34f * k), rank == 1 ? "1st" : "2nd", m_Rank);
+            GUI.Label(new Rect(x + 6f * k, y + 36f * k, 170f * k, 34f * k), kRankNames[Mathf.Clamp(rank - 1, 0, kMaxCars - 1)], m_Rank);
 
             // 3 段目: 速度、4 段目: 周回 / ラップタイム / セクタ
             GUI.Label(new Rect(x + 6f * k, y + 70f * k, 176f * k, 22f * k), $"{tr.SpeedKmh:0.0} km/h", m_Speed);
@@ -525,7 +599,9 @@ namespace Minicar
         void DrawMinimap(float k)
         {
             float size = 256f * k, cx = Screen.width * 0.5f;
-            var r = new Rect(cx - size * 0.5f, 6f * k, size, size);
+            // 3 台のときは画面の中央 (上段と下段の境目)。見出し TOP は上端の中央のまま
+            float top = Three ? Screen.height * 0.5f - size * 0.5f : 6f * k;
+            var r = new Rect(cx - size * 0.5f, top, size, size);
             GUI.color = new Color(0.10f, 0.13f, 0.18f, 0.85f);
             GUI.DrawTexture(new Rect(cx - 60f * k, 0, 120f * k, 22f * k), m_White);
             GUI.color = Color.white;
@@ -533,12 +609,10 @@ namespace Minicar
             GUI.Label(new Rect(cx - 60f * k, 0, 120f * k, 22f * k), "TOP", m_Top);
 
             // 後ろの車から描く (先頭の車の丸が上に重なる)
-            bool split = m_Alive[1];
-            bool p1Leads = !split || RaceScore(0) >= RaceScore(1);
-            int first = p1Leads ? 1 : 0;
-            for (int n = 0; n < 2; n++)
+            var ranked = Ranked();
+            for (int n = ranked.Count - 1; n >= 0; n--)
             {
-                int i = (first + n) % 2;
+                int i = ranked[n];
                 if (!m_Alive[i]) continue;
                 Vector2 uv = MapUv(m_Track[i].Pos);
                 float d = 20f * k;
@@ -550,7 +624,7 @@ namespace Minicar
                 GUI.DrawTexture(new Rect(c.x - d * 0.48f, c.y - d * 1.45f, d * 0.96f, d * 1.0f), m_ArrowTex);
                 GUI.matrix = saved;
                 GUI.DrawTexture(new Rect(c.x - d * 0.5f - 2f * k, c.y - d * 0.5f - 2f * k, d + 4f * k, d + 4f * k), m_DotTex);
-                GUI.color = i == 0 ? kP1 : kP2;
+                GUI.color = kCols[i];
                 GUI.DrawTexture(new Rect(c.x - d * 0.5f, c.y - d * 0.5f, d, d), m_DotTex);
             }
             GUI.color = Color.white;
@@ -708,25 +782,8 @@ namespace Minicar
                         Line(new Vector2(w.x0, w.y0), new Vector2(w.x1, w.y1), 1.3f);
                 Flush(color == "red" ? new Color(1f, 0.42f, 0.42f, 0.95f) : new Color(0.88f, 0.92f, 1f, 0.9f));
             }
-            // 中心線 (白)。参照線 (route.yaml) があるときは車はそちらを走るので描かない (白と橙の 2 本が紛らわしい)。
-            // 周回・セクタの判定は描画と無関係に中心線で行う
-            bool hasRef = m_Data.reference_line != null && m_Data.reference_line.Length >= 6;
-            if (!hasRef)
-                for (int s = 0; s < m_Center.Length - 1; s++) Line(m_Center[s], m_Center[s + 1], 1.6f);
-
-            Flush(Color.white);
-            // 参照線 (route.yaml)。中心線と別色 (橙) で重ねる。無ければ描かない
-            var rl = m_Data.reference_line;
-            if (rl != null && rl.Length >= 6)
-            {
-                int m = rl.Length / 2;
-                for (int s = 0; s < m; s++)
-                {
-                    int t = (s + 1) % m;
-                    Line(new Vector2(rl[s * 2], rl[s * 2 + 1]), new Vector2(rl[t * 2], rl[t * 2 + 1]), 1.4f);
-                }
-                Flush(new Color(1f, 0.70f, 0.25f, 0.95f));
-            }
+            // 中心線・参照線は描かない (✎ 2026-09-29、ユーザー: 決勝はコースが分岐し追い抜きもあるので、
+            // 1 本の線は実際の走りと合わない)。周回・セクタの判定は描画と無関係に中心線で行う
             // スタートライン (中心線の始点を横切る)
             Vector2 dir = (m_Center[1] - m_Center[0]).normalized, nrm = new Vector2(-dir.y, dir.x);
             Line(m_Center[0] - nrm * 0.30f, m_Center[0] + nrm * 0.30f, 2.6f);

@@ -49,12 +49,16 @@ for _v in ('OPENBLAS_NUM_THREADS', 'OMP_NUM_THREADS', 'MKL_NUM_THREADS',
 import numpy as np
 
 import rclpy
+try:
+    import jetracer_common.rclpy_lean  # noqa: F401  QoS イベントを作らない (rclpy の CPU 対策、2026-09-28)
+except ImportError:                    # 古い install (colcon build 前) でも動かす
+    pass
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import (QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy,
                        QoSDurabilityPolicy)
 
-from std_msgs.msg import Float32, Float64, Bool, Float64MultiArray
+from std_msgs.msg import Float32, Float64, Bool, Float64MultiArray, Int32
 from sensor_msgs.msg import Range, LaserScan, Image, MagneticField
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Quaternion, Point, TransformStamped
@@ -181,6 +185,8 @@ class VehicleSim(Node):
         self.declare_parameter('car_body_length_m', 0.43)
         self.declare_parameter('car_body_width_m', 0.20)
         self.declare_parameter('rival_timeout_s', 0.3)
+        # 相手の姿勢のトピック (2026-09-28 に 3 台対応: 2 台目の相手は /sim/rival2_state。tools/race/race3.sh)
+        self.declare_parameter('rival_topics', ['/sim/rival_state', '/sim/rival2_state'])
         self.declare_parameter('pose_log', os.environ.get('RACE_POSE_LOG', ''))   # 2 台の位置を CSV に (10 Hz)
         # 車輪スリップ率。ゴムタイヤは限界でも 10〜15% 程度しか滑らず、
         # 限界を超えたところで急に空転する。elastic が限界時のスリップ率、
@@ -291,10 +297,14 @@ class VehicleSim(Node):
         self.declare_parameter('publish_mag', True)
 
         # 矢印信号の向き。'random' は決勝どおり左右がランダムに決まる。
+        # 'alternate' は周回ごとに必ず左右を入れ替える (両側を同じ回数ずつ試す。random は同じ向きが続く)。
         # 'left'/'right'/'center' を指定すると固定でき、検証で両側を試せる。
         self.declare_parameter('arrow_dir', 'random')
         # random のとき、周回ごとに引き直すか (本番は毎周指示が変わる想定)
         self.declare_parameter('arrow_random_each_lap', True)
+        # 複数台のレース (tools/race/race3.sh) で信号を 1 つにそろえる (2026-09-28)。どの sim も今の向きを
+        # /sim/arrow_dir に出し、arrow_follow の sim は中継で届いた /sim/arrow_master に従う (自分では変えない)
+        self.declare_parameter('arrow_follow', False)
 
         # ================= JetRacer sim で足したもの =================
         # 時間の進め方: realtime (壁時計・流しっぱなし) / lockstep (/sim/step で 1/30 s ずつ)
@@ -410,9 +420,10 @@ class VehicleSim(Node):
         front = self.L + (blen - self.L) / 2.0
         self.car_offsets = list(np.linspace(rear + self.car_r, front - self.car_r, 4))
         self.rival_timeout = float(p('rival_timeout_s').value)
-        self._rival = None                 # (x, y, yaw, v, 受信時刻)
-        self._rival_w = 0.0
-        self._car_contact = False
+        self.rival_topics = [str(t) for t in p('rival_topics').value]
+        self._rivals = {}                  # topic → (x, y, yaw, v, 受信時刻)
+        self._rival_ws = {}                # topic → 相手のヨーレートの見積もり [rad/s]
+        self._car_contact = {}             # topic → 接触中か
         self._car_hits = 0
         # 左右μ差のヨーモーメント係数 = (トレッド/2) / (Iz/m)。
         # Iz/m ≒ (長さ² + 幅²)/12 なので、車体寸法から出す
@@ -437,6 +448,21 @@ class VehicleSim(Node):
         _sxy = os.environ.get('MINICAR_STUCK_AT_XY', '')
         if _sxy:
             self._stuck_xy = tuple(float(v) for v in _sxy.split(','))
+        # 位置指定のスピン注入 (検証用、minicarbattle2026 と同じ): MINICAR_SPIN_AT_XY="x,y,t_min,角度rad,秒"。
+        # sim 時刻 t_min 以降に (x,y) の 0.30 m 以内へ入ったとき車体を回す (他車に回された場面を 1 台で作る)。
+        # ヨーレートに足すので /sim/body_state 経由で imu_sim のジャイロにもそのまま出る
+        self._spin_xy = None
+        self._spin_w = 0.0
+        self._spin_until = -1.0
+        _spn = os.environ.get('MINICAR_SPIN_AT_XY', '')
+        if _spn:
+            self._spin_xy = tuple(float(v) for v in _spn.split(','))
+        # 向きの飛び (検証用): MINICAR_YAW_KICK_AT_XY="x,y,t_min,角度deg"。実際の向きだけを一瞬で回し、
+        # ジャイロには出さない (IMU で向きを積分する推定が、ちょうど角度ぶんずれた状態を作る)
+        self._yaw_kick = None
+        _yk = os.environ.get('MINICAR_YAW_KICK_AT_XY', '')
+        if _yk:
+            self._yaw_kick = tuple(float(v) for v in _yk.split(','))
         self.debug_motion = bool(p('debug_motion').value)
         self._dbg_t = 0.0
         self._dbg_wall0 = None
@@ -731,7 +757,9 @@ class VehicleSim(Node):
         else:
             self.create_timer(self.dt, self.step)
         self.create_timer(0.05, self.publish_sensors)
-        self.create_subscription(Float64MultiArray, '/sim/rival_state', self._cb_rival, 10)
+        for topic in self.rival_topics:
+            self.create_subscription(Float64MultiArray, topic,
+                                     lambda m, t=topic: self._cb_rival(m, t), 10)
         self._pose_log = None
         if p('pose_log').value:
             self._pose_log = open(f"{p('pose_log').value}_{os.environ.get('ROS_DOMAIN_ID', '0')}.csv", 'w')
@@ -769,6 +797,10 @@ class VehicleSim(Node):
         # arrow_dir:=left|right|center を渡せば固定でき、検証で両側を試せる。
         self.arrow_each_lap = bool(p('arrow_random_each_lap').value)
         want = str(p('arrow_dir').value).strip().lower()
+        # alternate: 周回ごとに必ず左右を入れ替える (最初の向きは random と同じく引く)
+        self.arrow_alternate = (want == 'alternate')
+        if self.arrow_alternate:
+            want = 'random'
         if want in _ARROW_DIR_CODES:
             self.arrow_dir = _ARROW_DIR_CODES[want]
         else:
@@ -779,6 +811,13 @@ class VehicleSim(Node):
             self.arrow_dir = int(self.rng.integers(1, 3))
         self.arrow_random = self.arrow_dir not in _ARROW_DIR_CODES.values() or \
             want in ('', 'random')
+        # 信号を 1 つにそろえる: 今の向きを /sim/arrow_dir に出し、arrow_follow なら /sim/arrow_master に従う
+        self.pub_arrow_dir = self.create_publisher(Int32, '/sim/arrow_dir', 10)
+        self.arrow_follow = bool(p('arrow_follow').value)
+        if self.arrow_follow:
+            self.arrow_random = False          # 向きは /sim/arrow_master に従う
+            self.create_subscription(Int32, '/sim/arrow_master', self._cb_arrow_master, 10)
+        self.create_timer(0.5, self._publish_arrow_dir)
 
         if self.unity_camera:
             self.get_logger().info(
@@ -1067,6 +1106,10 @@ class VehicleSim(Node):
         else:
             self.vy -= math.copysign(damp, self.vy)
 
+        # --- スピン注入 (検証用、MINICAR_SPIN_AT_XY) ---
+        if self.sim_time < self._spin_until:
+            yaw_rate += self._spin_w
+
         # --- 積分 ---
         self.v = v + a_x * dt
         if not self.armed:
@@ -1086,9 +1129,10 @@ class VehicleSim(Node):
         # --- 壁の剛体衝突 ---
         if self.wall_collision:
             self._resolve_wall_contact(dt)
-        # --- 車どうしの衝突 (2 台走行のときだけ) ---
-        if self.car_col and self._rival is not None:
-            self._resolve_car_contact(dt)
+        # --- 車どうしの衝突 (複数台で走るときだけ。相手ごとに判定) ---
+        if self.car_col and self._rivals:
+            for topic in list(self._rivals):
+                self._resolve_car_contact(dt, topic)
 
         # --- 車輪スリップ率 (オドメトリに乗る誤差) ---
         util_x = abs(a_cmd) / max(1e-6, a_x_pure)
@@ -1118,28 +1162,54 @@ class VehicleSim(Node):
         nrm = np.where(dmin < 1e-9, 1.0, dmin)
         return dmin, nx / nrm, ny / nrm, i
 
-    def _cb_rival(self, m):
+    def _cb_arrow_master(self, m):
+        if m.data in (1, 2, 3) and m.data != self.arrow_dir:
+            self.arrow_dir = int(m.data)
+            self.get_logger().info(f"矢印信号を更新 (先頭の sim に合わせる): {_ARROW_DIR_NAMES[self.arrow_dir]}")
+
+    def _publish_arrow_dir(self):
+        self.pub_arrow_dir.publish(Int32(data=int(self.arrow_dir)))
+
+    def _cb_rival(self, m, topic='/sim/rival_state'):
         d = m.data
         if len(d) < 14:
             return
         now = time.monotonic()
-        prev = self._rival
+        prev = self._rivals.get(topic)
+        w = self._rival_ws.get(topic, 0.0)
         if prev is not None and 1e-3 < now - prev[4] < 0.2:
             dy = math.atan2(math.sin(d[4] - prev[2]), math.cos(d[4] - prev[2]))
-            self._rival_w = 0.7 * self._rival_w + 0.3 * dy / (now - prev[4])
-        self._rival = (d[2], d[3], d[4], d[13], now)
+            w = 0.7 * w + 0.3 * dy / (now - prev[4])
+        self._rival_ws[topic] = w
+        self._rivals[topic] = (d[2], d[3], d[4], d[13], now)
+
+    def _rival_poses(self):
+        """届いている相手すべての、受信からの経過ぶん進めた姿勢 {topic: (x, y, yaw, v)}。"""
+        out = {}
+        for topic in list(self._rivals):
+            pose = self._pose_of(topic)
+            if pose is not None:
+                out[topic] = pose
+        return out
 
     def _rival_pose(self):
+        """一番近い相手の姿勢 (位置の CSV 用)。いなければ None。"""
+        poses = list(self._rival_poses().values())
+        if not poses:
+            return None
+        return min(poses, key=lambda q: math.hypot(q[0] - self.x, q[1] - self.y))
+
+    def _pose_of(self, topic):
         """受信からの経過ぶん進めた相手の姿勢 (x, y, yaw, v)。古ければ None。
         JetRacer の render_state の stamp は sim 時計なので、相手の sim と比べず受信時刻から進める。"""
-        r = self._rival
+        r = self._rivals.get(topic)
         if r is None:
             return None
         age = time.monotonic() - r[4]
         if age > self.rival_timeout:
             return None
         rx, ry, ryaw, rv = r[0], r[1], r[2], r[3]
-        w = self._rival_w
+        w = self._rival_ws.get(topic, 0.0)
         if abs(w) > 1e-3:
             ny = ryaw + w * age
             rx += rv / w * (math.sin(ny) - math.sin(ryaw))
@@ -1150,10 +1220,11 @@ class VehicleSim(Node):
             ry += rv * math.sin(ryaw) * age
         return rx, ry, ryaw, rv
 
-    def _resolve_car_contact(self, dt):
-        """相手の車体と重なったら押し戻し・法線衝撃・摩擦 (壁と同じ剛体の式、同じ質量として半分ずつ)。"""
-        pose = self._rival_pose()
+    def _resolve_car_contact(self, dt, topic='/sim/rival_state'):
+        """相手 (topic) の車体と重なったら押し戻し・法線衝撃・摩擦 (壁と同じ剛体の式、同じ質量として半分ずつ)。"""
+        pose = self._pose_of(topic)
         if pose is None:
+            self._car_contact[topic] = False
             return
         rx, ry, ryaw, rv = pose
         R2 = 2.0 * self.car_r
@@ -1178,7 +1249,7 @@ class VehicleSim(Node):
 
         cs = contacts()
         if not cs:
-            self._car_contact = False
+            self._car_contact[topic] = False
             return
         c, s = math.cos(self.yaw), math.sin(self.yaw)
         v0 = self.v
@@ -1223,13 +1294,13 @@ class VehicleSim(Node):
         self.vy = -vbx * s + vby * c
         self._wall_w += w - self.yaw_rate
         self.yaw_rate = w
-        if not self._car_contact:
-            self._car_contact = True
+        if not self._car_contact.get(topic, False):
+            self._car_contact[topic] = True
             if vn_first < -0.05:
                 self._car_hits += 1
                 self.get_logger().info(
                     f"車両接触 #{self._car_hits}: 相対法線速度 {-vn_first:.2f} m/s, v={v0:.2f} → {self.v:.2f} m/s"
-                    f" (自車 x={self.x:.2f}, y={self.y:.2f} / 相手 x={rx:.2f}, y={ry:.2f})")
+                    f" (自車 x={self.x:.2f}, y={self.y:.2f} / 相手 {topic} x={rx:.2f}, y={ry:.2f})")
 
     def _log_pose(self):
         pose = self._rival_pose()
@@ -1364,6 +1435,20 @@ class VehicleSim(Node):
             self.stuck_at = self.sim_time
             self.get_logger().warn(f'スタック注入 @({self.x:.2f},{self.y:.2f}) t={self.sim_time:.1f}')
             self._stuck_xy = None
+        if self._spin_xy is not None and self.sim_time >= self._spin_xy[2] \
+                and math.hypot(self.x - self._spin_xy[0], self.y - self._spin_xy[1]) < 0.30:
+            ang, dur = self._spin_xy[3], max(0.05, self._spin_xy[4])
+            self._spin_w = ang / dur
+            self._spin_until = self.sim_time + dur
+            self.v *= 0.3
+            self.get_logger().warn(f'スピン注入 @({self.x:.2f},{self.y:.2f}) {math.degrees(ang):.0f} 度 / {dur:.1f} s')
+            self._spin_xy = None
+        if self._yaw_kick is not None and self.sim_time >= self._yaw_kick[2] \
+                and math.hypot(self.x - self._yaw_kick[0], self.y - self._yaw_kick[1]) < 0.30:
+            self.yaw = math.atan2(math.sin(self.yaw + math.radians(self._yaw_kick[3])),
+                                  math.cos(self.yaw + math.radians(self._yaw_kick[3])))
+            self.get_logger().warn(f'向きの飛び注入 @({self.x:.2f},{self.y:.2f}) {self._yaw_kick[3]:+.0f} 度 (ジャイロには出さない)')
+            self._yaw_kick = None
         stuck = (self.stuck_at > 0.0
                  and self.stuck_at <= self.sim_time < self.stuck_at + self.stuck_dur)
 
@@ -1420,7 +1505,7 @@ class VehicleSim(Node):
             prog = self.course.progress(self.x, self.y)
             prev = getattr(self, '_prev_prog', prog)
             if prev > 0.8 and prog < 0.2:       # 1周した
-                new_dir = int(self.rng.integers(1, 3))
+                new_dir = (3 - self.arrow_dir) if self.arrow_alternate else int(self.rng.integers(1, 3))
                 if new_dir != self.arrow_dir:
                     self.arrow_dir = new_dir
                 self.get_logger().info(

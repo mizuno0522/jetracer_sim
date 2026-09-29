@@ -44,7 +44,8 @@ def generate_launch_description():
     seed = LaunchConfiguration('seed')
     route_file = LaunchConfiguration('route_file')
     tcp_port = LaunchConfiguration('tcp_port')
-    use_unity = PythonExpression(["'", camera_backend, "' == 'unity'"])
+    use_unity = PythonExpression(["'", camera_backend, "' == 'unity' and '",
+                                  LaunchConfiguration('use_camera'), "' == 'true'"])
     lockstep = PythonExpression(["'", sim_mode, "' == 'lockstep'"])
 
     return LaunchDescription([
@@ -73,7 +74,14 @@ def generate_launch_description():
         DeclareLaunchArgument('viz', default_value='false'),
         DeclareLaunchArgument('use_shortcut', default_value='true'),
         DeclareLaunchArgument('narrow_divider', default_value='true'),
-        DeclareLaunchArgument('arrow_dir', default_value='center'),
+        DeclareLaunchArgument('arrow_dir', default_value='center',
+                              description='⑥矢印信号: center (既定) / random / alternate (周回ごとに左右を入れ替える) / left / right'),
+        DeclareLaunchArgument('arrow_follow', default_value='false',
+                              description='複数台のレースで、中継で届く /sim/arrow_master の矢印に従う (tools/race/race3.sh の 2・3 台目)'),
+        DeclareLaunchArgument('use_camera', default_value='true',
+                              description='false で画像を出さない (カメラを使わない教師の相手役。Unity も endpoint も起動しない)'),
+        DeclareLaunchArgument('unity_fps', default_value='60',
+                              description='Unity の描画の上限 [FPS] (-fps)。3 台レースで PC が詰まるときに下げる'),
         DeclareLaunchArgument('seed', default_value='0', description='エピソードの seed (imu_sim の乱択化)'),
         DeclareLaunchArgument('route_file', default_value='route_jetracer_tt02.yaml',
                               description='参照線 (tools/make_route.py の yaml。名前だけなら config/ から)。'
@@ -88,7 +96,8 @@ def generate_launch_description():
              parameters=[sim_params, {
                  'vehicle_profile_file': profile,
                  'sim_mode': sim_mode,
-                 'use_camera': True,
+                 'use_camera': ParameterValue(LaunchConfiguration('use_camera'), value_type=bool),
+                 'arrow_follow': ParameterValue(LaunchConfiguration('arrow_follow'), value_type=bool),
                  'camera_backend': camera_backend,
                  'use_shortcut': use_shortcut,
                  'narrow_divider': narrow_divider,
@@ -122,6 +131,7 @@ def generate_launch_description():
             # -record: 空なら録画しない。Unity が描いた画面をそのまま ffmpeg (libx264 ultrafast) へ流すので
             #          デスクトップ録画 (x11grab) と違い Wayland でも黒画面にならず、描画も止まらない
             cmd=[unity_player, '-rosip', '127.0.0.1', '-rosport', tcp_port, '-layout', 'aic', '-laps', '0', '-seed', seed,
+                 '-fps', LaunchConfiguration('unity_fps'),
                  '-record', LaunchConfiguration('record'),
                  '-recordfps', LaunchConfiguration('record_fps'),
                  '-recordwidth', LaunchConfiguration('record_width'),

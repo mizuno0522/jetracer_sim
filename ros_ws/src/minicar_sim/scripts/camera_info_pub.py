@@ -8,6 +8,10 @@ Unity は CameraInfo を出さないので、vehicle_profile.camera (定義元) 
 歪み係数 D は distortion: none のとき全ゼロ (plumb_bob)。
 """
 import rclpy
+try:
+    import jetracer_common.rclpy_lean  # noqa: F401  QoS イベントを作らない (rclpy の CPU 対策)
+except ImportError:
+    pass
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy

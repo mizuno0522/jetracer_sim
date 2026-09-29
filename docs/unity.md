@@ -15,7 +15,7 @@ vehicle_sim ──/sim/render_state (sim 時刻 stamp, step_id, car_id)──▶
 
 | もの | 場所 | 備考 |
 |---|---|---|
-| Unity プロジェクト | **`unity/MinicarSim`** (このリポジトリ。`minicarbattle2026/unity/MinicarSim` の複製 + JetRacer 向けの変更。Unity 6000.0.83f1・ROS-TCP-Connector 0.7.0) | Assets / Packages / ProjectSettings だけを管理。Library は初回ビルドで生成 (数分)。複製元との差分: `Scripts/LabelTexture.cs` (P1/P2/P3 のドット文字)、`Shaders/SensorPost.shader` (実カメラ風の後処理)、`CourseBuilder.cs` (駐車枠ラベル・常設のスタートライン 1/2/3 `BuildStartLines`・実画像カーペット・観戦者・realism の色・環境光 `ambient_gain`・エピソード乱択化 `ApplyEpisode` と床テープ `BuildTapes`)、`CourseData.cs` (`RealismData`・カメラ幾何 `fx, fy, cx, cy, k1, k2, render_tan_*`)、`SimBridge.cs` (カメラ幾何 `ApplyIntrinsics`・後処理・自動露出・frame_id `camera_link`・起動引数 `-seed`)、`AicLayout.cs` (下段 CAMERA に実配信の 224×224 を表示・参照線があるときミニマップに白い中心線を描かない)、`Editor/MinicarBuild.cs` (Mat_SensorPost)。ビルドは `scripts/build_unity.sh` |
+| Unity プロジェクト | **`unity/MinicarSim`** (このリポジトリ。`minicarbattle2026/unity/MinicarSim` の複製 + JetRacer 向けの変更。Unity 6000.0.83f1・ROS-TCP-Connector 0.7.0) | Assets / Packages / ProjectSettings だけを管理。Library は初回ビルドで生成 (数分)。複製元との差分: `Scripts/LabelTexture.cs` (P1/P2/P3 のドット文字)、`Shaders/SensorPost.shader` (実カメラ風の後処理)、`CourseBuilder.cs` (駐車枠ラベル・常設のスタートライン 1/2/3 `BuildStartLines`・実画像カーペット・観戦者・realism の色・環境光 `ambient_gain`・エピソード乱択化 `ApplyEpisode` と床テープ `BuildTapes`)、`CourseData.cs` (`RealismData`・カメラ幾何 `fx, fy, cx, cy, k1, k2, render_tan_*`)、`SimBridge.cs` (カメラ幾何 `ApplyIntrinsics`・後処理・自動露出・frame_id `camera_link`・起動引数 `-seed`。3 台目の `/sim/rival2_state` と描画の上限 `-fps` は複製元と同じ)、`AicLayout.cs` (下段 CAMERA に実配信の 224×224 を表示。ミニマップに中心線・参照線を描かない・3 台表示は複製元と同じ)、`Editor/MinicarBuild.cs` (Mat_SensorPost)。ビルドは `scripts/build_unity.sh` |
 | コースとカメラ幾何の定義元 | `ros_ws/src/minicar_sim/scripts/course.py`・`config/sim.yaml`・`config/vehicle_profile/jetracer_tt02.yaml` | Unity 側に数値を書かない (P11) |
 | 書き出し | `./scripts/export_course.sh` → `unity/course.json` | `UNITY_PROJ=<path>` を付けたときだけ `Assets/StreamingAssets/course.json` へコピー |
 | プレイヤーのビルド | `minicarbattle2026/unity/build_player.sh` → `Build/MinicarSim.x86_64` | ★既存スクリプトは `jetson/ros_ws/.../export_unity_course.py` (M-05 用) を呼ぶ。JetRacer 用は先に `export_course.sh` でコピーしてから Unity 部分だけ実行する (下) |
@@ -154,4 +154,54 @@ python3 tools/record_video.py --seconds 60 --scale 3 --hud -o ~/Videos/camera.mp
 | 車体の写り込み | 画面下に黒い柱 (実画像では 2 本: 列 54–57・121–124、行 209〜223) | Unity では `realism.posts` で描いた (上の表)。`camera_preproc` でマスクするなら**両系とも同じ領域** (片方だけだと sim-to-real の穴) |
 | 壁の浮き | 規約では床から 30 mm 浮いて上端 120 mm | `course.json` の `wall_base_m` は書き出し済み (0.03)。Unity 側の反映は未確認 |
 
-既存 sim の RViz 風・AI チャレンジ風レイアウト、2 台レース (`race2.sh`) はそのまま使える。JetRacer 機は LiDAR が無いので占有格子は表示されない。
+既存 sim の RViz 風・AI チャレンジ風レイアウトはそのまま使える。JetRacer 機は LiDAR が無いので占有格子は表示されない。
+
+## 3 台レース (`tools/race/race3.sh`、2026-09-29)
+
+minicarbattle2026 の `unity/race3.sh` の JetRacer 版。PC 1 台で 3 台 (青・黄・緑) を別の `ROS_DOMAIN_ID` (既定 42 / 43 / 44) で動かし、Unity 1 つで 3 台とも描く。
+
+```bash
+./tools/race/race3.sh                                        # 3 台とも教師 (gt_teacher)・3 分
+BLUE_MODEL=~/jetracer/runs/policy_003/policy.onnx ./tools/race/race3.sh   # 青だけ方策 (画像＋IMU)
+RECORD=~/Videos/race3.mp4 ./tools/race/race3.sh              # 録画 (カウントダウンから)
+ARROW=random MAX_S=300 ./tools/race/race3.sh                 # 矢印の出し方・走らせる秒数
+```
+
+- 青 (42): カメラあり (Unity が描く)。黄 (43)・緑 (44): 教師・カメラなし (`sim_host.launch.py use_camera:=false`。画像が無いので `failsafe:=false`)。
+  `ros_tcp_endpoint` と Unity は青だけ (TCP は既定 `10001`、M-05 の sim の 10000 と分ける)
+- スタートは規約のスタートライン 1 / 2 / 3 (x = 2.56 / 4.36 / 6.16 m) に車体の前端を合わせる (`start_offset_m` 0.216 / 2.016 / 3.816)
+- 車どうしの衝突: `tools/race/race_relay.py` が各車の `/sim/render_state` を他の 2 台へ `/sim/rival_state`・`/sim/rival2_state` として中継し、
+  各車の `vehicle_sim` が相手ごとに判定する (`rival_topics`)。相手はカメラにも写る (Unity が描く)
+- 信号は 1 つ: 青の sim が周回ごとに左右を入れ替え (`arrow_dir:=alternate`)、黄・緑の sim は中継の `/sim/arrow_master` に従う (`arrow_follow:=true`)。
+  各 sim は今の向きを `/sim/arrow_dir` に出す
+- スタート: `tools/race/race_start.py` が 3 つのドメインで `/run` の購読者 (cmd_shaper) がそろうのを待ち、カウントダウン (`/sim/countdown`) の後に同時に送る
+- 起動待ちは各車のログ (`VehicleSim started`・cmd_shaper の起動行 `cmd_shaper: L=`・青の `RegisterPublisher(/camera/image_raw`) で判定する (M-05 で ros2 topic の問い合わせ 183 s → 11 s)
+- Unity の画面は自動運転 AI チャレンジの 3 台の構成: 上段 左 P2 / 右 P3、下段 P1 (横幅いっぱい)、どれも追従視点 (3 台のときは下段の 224×224 のカメラ枠は出ない)。
+  パネルは P2 左上・P3 右上・P1 左下、ミニマップは画面の中央。2 台なら左右 2 分割のまま
+- 描画の上限は `-fps` (既定 60、`UNITY_FPS`・`sim_host.launch.py unity_fps:=`)。以前は 120 固定で、描画だけで CPU を使って 3 台レースで PC が詰まった (M-05)
+- ★教師は同じ参照線をなぞるだけで相手を避けない。追いつけば接触する (押し合いの試験にはなる)
+- ログは `log/race3_*.log`、位置の CSV は `log/race3_pose_<ドメイン>.csv` (一番近い相手の位置も入る)
+
+### ゴースト (`tools/race/ghost_replay.py`)
+
+記録した相手の走り (位置の CSV の自車列) を `/sim/rival_state` として再生する。相手の走行スタックは要らない。
+
+```bash
+source scripts/sim_env.sh
+python3 tools/race/ghost_replay.py tools/race/ghosts/<記録>.csv                    # 2 台目として
+GHOST_TOPIC=/sim/rival2_state python3 tools/race/ghost_replay.py <記録>.csv        # 3 台目として足す
+GHOST_RATE=1.2 python3 tools/race/ghost_replay.py <記録>.csv                       # 記録より速く (後ろから追いついて押す場面)
+```
+
+- 再生は自車の `/sim/render_state` の速度で始まる (`camera_backend:=unity` のとき出る)。
+- CSV の 1 行目が `#hidden` なら相手を出さない (1 台で走らせるとき。コースの外に置くと Unity のミニマップが相手の点を画面の決まった位置に描く)。
+- 止まった車は、位置を 2 行だけ書いた CSV で置ける。
+- ★2026-09-29 に②坂道の位置を直した。それより前の記録 (旧 `ghosts/m05_pp_safe_line3.csv`) は古い坂道を通って仕切りを突き抜けるので消し、M-05 の新しいコースでの記録 `ghosts/m05_mppi_safe_line3.csv` に差し替えた。
+
+### 検証用の仕掛け (`vehicle_sim`、環境変数)
+
+| 変数 | 内容 |
+|---|---|
+| `MINICAR_SPIN_AT_XY="x,y,t_min,角度rad,秒"` | sim 時刻 t_min 以降に (x,y) の 0.3 m 以内へ入ったとき車体を回す。ヨーレートに足すので IMU のジャイロにも出る。他車に回された場面を 1 台で作る。例: `4.5,1.2,0,1.5708,0.3` = 下の直線で左へ 90°、`4.5,1.2,15,3.1416,0.6` = 180° (逆向き) |
+| `MINICAR_YAW_KICK_AT_XY="x,y,t_min,角度deg"` | 向きだけを一瞬で回し、ジャイロには出さない (IMU で向きを積分する推定が大きくずれた状態を作る) |
+| `MINICAR_STUCK_AT_XY="x,y,t_min"` | (以前から) その位置に入ったら `stuck_duration_s` の間スタックさせる |
