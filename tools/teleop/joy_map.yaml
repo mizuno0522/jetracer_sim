@@ -1,0 +1,21 @@
+# ゲームパッドの割り当て (joy_teleop.py が読む。割り当てはここ 1 か所)。
+# 既定は Nintendo Switch Pro Controller を `ros2 run joy game_controller_node` (SDL の標準配置) で読んだ場合。
+# ドライバや接続 (USB / Bluetooth) で番号・向きが変わることがあるので、最初に
+#   python3 tools/teleop/joy_teleop.py --probe
+# で動かしたものの番号と値を確かめ、違っていたらここを直す。
+#
+# type: axis    -1〜1。scale を -1 にすると向きが逆になる (ハンドルは左が正になるように)
+#       trigger 離した値 rest・押し切った値 pressed を 0〜1 に写す (ZL / ZR はデジタルなので 0 か 1)
+#       button  押していれば 1
+# 1 つの役割に複数書くと大きい方を使う (ZR と A のどちらでもアクセル、など)
+joy_map:
+  steer:                       # 左スティック左右
+    {type: axis, index: 0, scale: 1.0, deadzone: 0.06}
+  throttle:                    # ZR
+    - {type: trigger, index: 5, rest: 1.0, pressed: -1.0}
+  brake:                       # ZL
+    - {type: trigger, index: 4, rest: 1.0, pressed: -1.0}
+  record:                      # ＋ (START)。ML-Agents の記録ではエピソードを区切る
+    {type: button, index: 6}
+  estop:                       # − (BACK)。押すたびに非常停止の ON / OFF
+    {type: button, index: 4}

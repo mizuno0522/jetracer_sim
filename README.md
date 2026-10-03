@@ -72,6 +72,9 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 | Jetson (推論) | `ros2 launch jetracer_stack vehicle_stack.launch.py model_file:=policy.onnx` |
 | Jetson (実機) | `ros2 launch jetracer_bridge bridge.launch.py` ＋ 上の推論 |
 | スタート | `ros2 topic pub --once /run std_msgs/Bool "data: true"` |
+| ボディ・エンジン音 | `sim_host.launch.py ... car:=b787 rival_car:=nd rival2_car:=rx7` (`b787`・`nd`・`rx7`。見た目と音だけ。[docs/unity.md](docs/unity.md)「ボディとエンジン音」) |
+| プロコンで運転 (realtime) | `ros2 run joy game_controller_node` ＋ `python3 tools/teleop/joy_teleop.py --ros-args -p publish_actuator:=true` (`vehicle_stack` は上げない) |
+| ML-Agents (模倣 → PPO) | 学習器 `mlagents-learn tools/mlagents/config/minicar_bc_ppo.yaml ...` → `sim_host.launch.py sim_mode:=lockstep mlagents:=true` ＋ `tools/mlagents/mlagents_gateway.py`。人の運転の記録は `demo:=<名前>` ([docs/mlagents.md](docs/mlagents.md)) |
 | 3 台レース (PC 1 台・Unity) | `./tools/race/race3.sh` (3 台とも教師。`BLUE_MODEL=<onnx>` で青だけ方策。[docs/unity.md](docs/unity.md)「3 台レース」) |
 
 ## 何を流用し、何を足したか
@@ -130,4 +133,5 @@ ros2 topic echo /sim/ground_truth --once   # lap・cte_m・u/v_px (先行注視�
 | [docs/sim2real.md](docs/sim2real.md) | **sim→real 画像変換を自分の実画像で作る手順** (実画像の集め方・sim 画像の撮り方・学習・検証・bag の変換・混ぜ方・うまくいかないとき) |
 | [tools/sim2real/README.md](tools/sim2real/README.md) | sim→real 画像変換の道具と、この PC での学習の記録 |
 | [docs/lockstep.md](docs/lockstep.md) | 強化学習 IF (sim_mode:=lockstep・Reset/Step・StepInfo) |
+| [docs/mlagents.md](docs/mlagents.md) | ML-Agents: プロコンで人の運転を記録 (.demo) → 模倣 (BC/GAIL) → PPO。中継 `mlagents_gateway.py`・報酬 `reward.yaml`・割り当て `joy_map.yaml` |
 | [docs/status_pc.md](docs/status_pc.md) | sim PC 側の現状 (Unity・互換クラス・画像変換の学習状況・PC で踏んだ落とし穴) |

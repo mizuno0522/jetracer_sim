@@ -45,6 +45,13 @@ namespace Minicar
         double m_LastYaw = double.NaN, m_LastStamp = double.NaN;
         float m_YawRateAbs;
         RenderTexture SensorOutput => m_PostRt != null ? m_PostRt : m_Rt;
+        /// 配信しているセンサ画像 (後処理後・クロップ前)。ML-Agents の画像観測が同じものを使う
+        public RenderTexture SensorTexture => SensorOutput;
+        /// 最新の /sim/render_state (null = 未着)。並びは F
+        public double[] LatestState => m_State;
+        public ROSConnection Ros => m_Ros;
+        EngineAudio m_Engine;            // 自車のエンジン音 (-sound on|off)
+        MinicarAgent m_Agent;            // ML-Agents (-mlagents のときだけ)
         CarModel m_OwnCar, m_Opponent, m_Rival, m_Rival2;
         double[] m_RivalState, m_Rival2State;
         string m_OwnLabel, m_RivalLabel, m_Rival2Label;
@@ -166,6 +173,16 @@ namespace Minicar
             BuildCars();
             BuildSensorCamera(cam);
             BuildViewCamera();
+            // エンジン音: -sound on|off (既定: ボディを選んだときだけ on)。-volume 0〜1
+            string sound = Arg("-sound", "auto");
+            if (sound == "auto" || sound == "") sound = m_OwnCar.Style == CarStyle.Default ? "off" : "on";
+            if (sound == "on")
+                m_Engine = EngineAudio.Create(gameObject, m_OwnCar.Style,
+                    float.Parse(Arg("-volume", "0.6"), System.Globalization.CultureInfo.InvariantCulture),
+                    float.Parse(Arg("-soundvmax", "3.0"), System.Globalization.CultureInfo.InvariantCulture));
+            // ML-Agents: -mlagents で有効 (sim_mode:=lockstep と mlagents_gateway.py が前提。docs/mlagents.md)
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-mlagents") >= 0)
+                m_Agent = MinicarAgent.Create(this, Arg);
             // -layout aic (既定) | rviz | chase、-route shortcut (既定) | long (周回・ミニマップに使う中心線)
             m_Rviz = new RvizLayout(m_Course.Data);
             // -laps N: N 周でゴール (結果画面を出す)。既定 3 = 予選 (3 周の合計タイム)。0 = 出さない
@@ -238,11 +255,17 @@ namespace Minicar
             m_ViewCam.enabled = layout == Layout.Chase;
         }
 
-        static string Arg(string name, string def)
+        internal static string Arg(string name, string def)
         {
             var a = Environment.GetCommandLineArgs();
             for (int i = 0; i < a.Length - 1; i++)
-                if (a[i] == name) return a[i + 1];
+                if (a[i] == name)
+                {
+                    // launch が空の値を落とすと次の "-xxx" を値と読んでしまうので、それは「無し」とする
+                    string v = a[i + 1];
+                    if (v.Length > 1 && v[0] == '-' && !char.IsDigit(v[1]) && v[1] != '.') return def;
+                    return v;
+                }
             return def;
         }
 
@@ -372,16 +395,20 @@ namespace Minicar
         void BuildCars()
         {
             // 自車: 動画の濃紺メタリック。センサカメラには写さない
-            m_OwnCar = new CarModel("OwnCar", new Color(0.06f, 0.10f, 0.42f), kOwnCarLayer, true);
+            // -owncar / -rivalcar / -rival2car: b787 | nd | rx7 (省略で従来の見た目)。見た目だけで物理は変わらない
+            m_OwnCar = new CarModel("OwnCar", new Color(0.06f, 0.10f, 0.42f), kOwnCarLayer, true,
+                                    CarModel.ParseStyle(Arg("-owncar", "")));
             m_Opponent = new CarModel("Opponent", new Color(0.85f, 0.85f, 0.83f), 0, false);
             m_Opponent.Root.gameObject.SetActive(false);
             // レース相手 (黄)。/sim/rival_state が来たときだけ出す
-            m_Rival = new CarModel("Rival", new Color(0.95f, 0.72f, 0.05f), kRivalLayer, true);
+            m_Rival = new CarModel("Rival", new Color(0.95f, 0.72f, 0.05f), kRivalLayer, true,
+                                   CarModel.ParseStyle(Arg("-rivalcar", "")));
             m_Rival.Root.gameObject.SetActive(false);
             m_OwnLabel = Arg("-ownlabel", "BLUE");
             m_RivalLabel = Arg("-rivallabel", "YELLOW");
             // 3 台レースの 2 台目の相手 (緑)。/sim/rival2_state が来たときだけ出す
-            m_Rival2 = new CarModel("Rival2", new Color(0.20f, 0.75f, 0.30f), kRival2Layer, true);
+            m_Rival2 = new CarModel("Rival2", new Color(0.20f, 0.75f, 0.30f), kRival2Layer, true,
+                                    CarModel.ParseStyle(Arg("-rival2car", "")));
             m_Rival2.Root.gameObject.SetActive(false);
             m_Rival2Label = Arg("-rival2label", "GREEN");
         }
@@ -436,6 +463,7 @@ namespace Minicar
             m_Smooth[0].Get(out double sx, out double sy, out double syaw);
             m_OwnCar.Root.SetPositionAndRotation(RosFrame.ToUnity(sx, sy, 0.0), RosFrame.Yaw(syaw));
             m_OwnCar.Apply((float)S(F.V), (float)S(F.Steer), (float)S(F.ALat), dt);
+            if (m_Engine != null) m_Engine.SetState((float)S(F.V), (float)S(F.ALat), dt);
             m_Rviz.AddSample(0, S(F.X), S(F.Y), S(F.V), S(F.Distance));
             if (m_RivalState != null)
                 m_Rviz.AddSample(1, m_RivalState[(int)F.X], m_RivalState[(int)F.Y], m_RivalState[(int)F.V], m_RivalState[(int)F.Distance]);
@@ -513,6 +541,7 @@ namespace Minicar
                 }
                 if (Input.GetKeyDown(KeyCode.Escape) && m_Layout == Layout.Aic && m_Aic.ShowingResult) Application.Quit();
                 if (Input.GetKeyDown(KeyCode.L)) SetLayout((Layout)(((int)m_Layout + 1) % 3));
+                if (Input.GetKeyDown(KeyCode.M) && m_Engine != null) m_Engine.Muted = !m_Engine.Muted;
             }
             catch (InvalidOperationException)
             {
