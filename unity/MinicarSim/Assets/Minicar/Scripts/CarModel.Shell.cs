@@ -237,7 +237,7 @@ namespace Minicar
                 return Finish(verts, uvs, tris);
             }
 
-            /// 曲面に貼る絵 2 枚 (色、金属感 R + 滑らかさ A)
+            /// 曲面に貼る絵 2 枚 (色、金属感 R + 滑らかさ A。HDRP ではそのままマスクの絵として使う)
             public void BuildTextures(ShellPaint paint, int w, int h, out Texture2D albedo, out Texture2D gloss)
             {
                 var ca = new Color32[w * h]; var cg = new Color32[w * h];
@@ -261,7 +261,7 @@ namespace Minicar
                         if (v < lip - 0.6f) { col = new Color32(9, 9, 9, 255); metal = 0f; smooth = 0.1f; }     // ホイールハウスの中
                         else paint(pos, q.x, q.y, v / K, out col, out metal, out smooth);
                         ca[iy * w + ix] = col;
-                        cg[iy * w + ix] = new Color32((byte)(metal * 255f), 0, 0, (byte)(smooth * 255f));
+                        cg[iy * w + ix] = new Color32((byte)(metal * 255f), 255, 0, (byte)(smooth * 255f));    // G = 255: HDRP のマスクでは AO (遮りなし)
                     }
                 }
                 albedo = new Texture2D(w, h, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, anisoLevel = 8 };

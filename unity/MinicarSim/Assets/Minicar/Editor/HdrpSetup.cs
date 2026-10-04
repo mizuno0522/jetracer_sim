@@ -86,7 +86,7 @@ namespace Minicar.EditorTools
             var white = TexAsset(dir + "/White.asset", new Color32(255, 255, 255, 255), false);
             var flatN = TexAsset(dir + "/FlatNormal.asset", new Color32(255, 128, 128, 128), true);
             var det = TexAsset(dir + "/Detail.asset", new Color32(128, 128, 128, 128), true);
-            void V(string name, bool normal, bool detail, bool cutout, bool transparent, bool coat = false)
+            void V(string name, bool normal, bool detail, bool cutout, bool transparent, bool coat = false, bool mask = false)
             {
                 var m = new Material(lit) { name = name };
                 m.SetTexture("_BaseColorMap", white);
@@ -103,6 +103,7 @@ namespace Minicar.EditorTools
                 m.SetFloat("_SurfaceType", transparent ? 1f : 0f);
                 if (transparent) m.SetFloat("_BlendMode", 0f);
                 m.SetFloat("_CoatMask", coat ? 1f : 0f);
+                if (mask) m.SetTexture("_MaskMap", white);
                 HDMaterial.ValidateMaterial(m);
                 string path = $"{dir}/{name}.mat";
                 if (AssetDatabase.LoadAssetAtPath<Material>(path) != null) AssetDatabase.DeleteAsset(path);
@@ -117,6 +118,7 @@ namespace Minicar.EditorTools
             V("Transparent", false, false, false, true);
             V("TransparentNormal", true, false, false, true);
             V("Coat", false, false, false, false, true);           // 車体の塗装 (クリアコート)
+            V("CoatMask", false, false, false, false, true, true);  // シェルの車体 (金属感・滑らかさの絵つき)
             Debug.Log($"[HdrpSetup] shader variant materials → {dir}");
         }
 
@@ -135,7 +137,9 @@ namespace Minicar.EditorTools
 
         static bool EnsureGlobalSettings()
         {
-            var t = typeof(HDRenderPipelineGlobalSettings);
+            // HDRP 17 では型が非公開なので、名前で探す
+            var t = typeof(HDRenderPipelineAsset).Assembly.GetType("UnityEngine.Rendering.HighDefinition.HDRenderPipelineGlobalSettings");
+            if (t == null) { Debug.LogWarning("[HdrpSetup] HDRenderPipelineGlobalSettings が見つからない"); return true; }
             foreach (var m in t.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
             {
                 if (m.Name != "Ensure" || m.ContainsGenericParameters) continue;

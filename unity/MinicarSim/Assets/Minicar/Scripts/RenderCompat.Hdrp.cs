@@ -243,6 +243,16 @@ namespace Minicar
             if (nrm != null) m.SetFloat("_NormalScale", s.GetFloat("_BumpScale"));
             m.SetFloat("_Smoothness", s.HasProperty("_Glossiness") ? s.GetFloat("_Glossiness") : 0.5f);
             m.SetFloat("_Metallic", s.HasProperty("_Metallic") ? s.GetFloat("_Metallic") : 0f);
+            // 金属感・滑らかさの絵 (車体のシェル): HDRP のマスク (R = 金属感・G = AO・A = 滑らかさ) としてそのまま使う
+            var mg = s.IsKeywordEnabled("_METALLICGLOSSMAP") && s.HasProperty("_MetallicGlossMap") ? s.GetTexture("_MetallicGlossMap") : null;
+            if (mg != null)
+            {
+                m.SetTexture("_MaskMap", mg);
+                m.SetFloat("_Metallic", 1f);
+                m.SetFloat("_MetallicRemapMin", 0f); m.SetFloat("_MetallicRemapMax", 1f);
+                m.SetFloat("_SmoothnessRemapMin", 0f); m.SetFloat("_SmoothnessRemapMax", 1f);
+                m.SetFloat("_AORemapMin", 0f); m.SetFloat("_AORemapMax", 1f);
+            }
 
             float mode = s.HasProperty("_Mode") ? s.GetFloat("_Mode") : 0f;
             bool cutout = Mathf.Approximately(mode, 1f), transparent = mode >= 1.5f;
