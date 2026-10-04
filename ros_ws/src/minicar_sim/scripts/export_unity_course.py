@@ -39,9 +39,21 @@ def _sim_yaml(node='vehicle_sim'):
         return yaml.safe_load(f)[node]['ros__parameters']
 
 
-def _profile_camera(name):
+def _profile(name):
     from jetracer_common.profile import find_profile, load_profile
-    return load_profile(find_profile(name))['camera']
+    return load_profile(find_profile(name))
+
+
+def _profile_camera(name):
+    return _profile(name)['camera']
+
+
+def _vehicle_block(prof):
+    """Unity が車体の大きさ (見た目の縮尺)・エンジン音の回転数・スキールの閾値に使う車両諸元。物理には使わない。"""
+    mu = float(prof.get('tire_mu', 0.45))          # TT-02 は実測のフルロック横加速度 0.45 g
+    return dict(name=str(prof.get('name', '')), length_m=float(prof.get('length_m', 0.43)),
+                width_m=float(prof.get('width_m', 0.19)), wheelbase_m=float(prof['wheelbase_m']),
+                v_max_mps=float(prof['v_max_mps']), a_lat_max_mps2=round(mu * 9.81, 2))
 
 
 def _camera_block(cam):
@@ -81,6 +93,8 @@ def build(profile=DEFAULT_PROFILE, route=None):
     slots = [dict(name=n, color=c, x0=x0, y0=y0, x1=x1, y1=y1)
              for n, c, x0, y0, x1, y1 in PARKING_SLOTS]
     return dict(
+        kind='minicar',
+        vehicle=_vehicle_block(_profile(profile)),
         walls=walls,
         wall_height_m=float(p.get('wall_height_m', 0.089)),
         wall_base_m=float(p.get('wall_base_m', 0.030)),     # 規約 p.34: 床から 30 mm 浮く
@@ -122,6 +136,33 @@ def build(profile=DEFAULT_PROFILE, route=None):
     )
 
 
+def build_circuit(course_name, profile):
+    """実車スケールのサーキット (course.py の circuit_course)。壁・ギミック・駐車枠は無く、Unity は circuit から
+    舗装・白線・縁石・バリア・コントロールラインを組み立てる。"""
+    from course import circuit_course
+    c = circuit_course(course_name)
+    prof = _profile(profile)
+    pts = c.center[:-1]
+    flat = [round(float(v), 2) for xy in c.center for v in xy]
+    vmax = float(prof['v_max_mps'])
+    return dict(
+        kind='circuit',
+        vehicle=_vehicle_block(prof),
+        circuit=dict(name=c.name, title=c.title, width_m=c.width, runoff_m=c.runoff,
+                     barrier_height_m=1.0, kerb_width_m=1.2, kerb_min_curvature=1.0 / 220.0,
+                     corners=[dict(name=k['name'], x=float(k['x']), y=float(k['y'])) for k in c.corners],
+                     bounds=[float(pts[:, 0].min()), float(pts[:, 1].min()), float(pts[:, 0].max()), float(pts[:, 1].max())]),
+        walls=[], areas=[], parking_slots=[], start_lines=[],
+        wall_height_m=1.0, wall_base_m=0.0, wall_thickness_m=0.3,
+        camera=_camera_block(prof['camera']),
+        realism={'enable': False},
+        viz=dict(speed_color_max_mps=vmax, trail_max_points=3000, trail_min_dist_m=1.5,
+                 legend_x=0.0, legend_y0=0.0, legend_y1=0.0),
+        centerline_shortcut=flat, centerline_long=flat,
+        reference_line=[], reference_line_name='',
+    )
+
+
 def _reference_line(route, name='shortcut'):
     if not route:
         return []
@@ -144,10 +185,13 @@ def main():
                     help='vehicle_profile の名前かパス (カメラ幾何の定義元)')
     ap.add_argument('-r', '--route', default=None,
                     help='参照線 route.yaml (make_route.py の出力)。ミニマップ用に course.json の reference_line へ書き出す')
+    ap.add_argument('-c', '--course', default='minicar',
+                    help='minicar (既定) | fuji など config/courses/ のサーキット')
     a = ap.parse_args()
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
+    data = build(a.profile, route=a.route) if a.course == 'minicar' else build_circuit(a.course, a.profile)
     with open(a.out, 'w') as f:
-        json.dump(build(a.profile, route=a.route), f, indent=1, ensure_ascii=False)
+        json.dump(data, f, indent=1, ensure_ascii=False)
     print(f'wrote {a.out}')
 
 

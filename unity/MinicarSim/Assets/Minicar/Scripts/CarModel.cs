@@ -1,4 +1,6 @@
 // 車両の見た目 (タミヤ M-05 + FD 系クーペボディ + センサマスト)。
+// -owncar 等で別のボディを選べる (CarStyle)。787B・ロードスター ND・RX-7 は TT-02 (WB 0.257) の
+// 寸法に合わせた 1/10 相当の見た目で、ロゴ・文字は入れない。物理には一切使わない。
 // 参考: 試走会場の走行動画 (濃紺メタリックのボディ・シルバーホイール・リアウイング・
 // 屋根のセンサマスト、コーナーで外側へロール)。
 //
@@ -8,12 +10,16 @@ using UnityEngine;
 
 namespace Minicar
 {
-    public class CarModel
+    /// ボディの種類。Default は従来の濃紺 FD 系 (M-05 寸法)
+    public enum CarStyle { Default, B787, Roadster, Rx7 }
+
+    public partial class CarModel
     {
-        const float Wheelbase = 0.210f;       // M-05 (sim.yaml wheelbase_m)
-        const float HalfTrack = 0.082f;       // タイヤ外面がボディ側面と面一になる位置
-        const float TireRadius = 0.030f;      // hw_params.yaml tire_diameter_m 0.060
-        const float TireWidth = 0.026f;
+        // 寸法はボディごと (Default は M-05、それ以外は TT-02)
+        readonly float Wheelbase;
+        readonly float HalfTrack;
+        readonly float TireRadius;
+        readonly float TireWidth;
         const float TireSink = 0.0015f;       // 接地面のつぶれ (わずかに床へ沈めて接地感を出す)
         // 見た目のロール量 (実測ではない)。1/10 ツーリングは重心が低くサスが硬く、横 1 g でも 1〜2° 程度。
         // 旧値 0.55°/(m/s²)・上限 6° はコーナーで 4° 以上傾き、大きすぎた (2026-09-27)
@@ -29,8 +35,68 @@ namespace Minicar
         float m_SpinDeg, m_Roll, m_Pitch, m_PrevV;
         bool m_HasPrev;
 
-        public CarModel(string name, Color bodyColor, int layer, bool withMast)
+        public CarStyle Style { get; }
+
+        /// 見た目の全長 [m] (縮尺 1 のとき)。実車スケールのコースでは vehicle_profile の全長に合わせて SetScale する
+        public float ModelLength
         {
+            get
+            {
+                switch (Style)
+                {
+                    case CarStyle.B787: return 4.784f * kB787Scale;
+                    case CarStyle.Roadster: return 3.915f * kNdScale;
+                    case CarStyle.Rx7: return 4.289f * kRx7Scale;      // 実車の全長 (丸めた端まで) × 縮尺
+                    default: return 0.401f;
+                }
+            }
+        }
+        public float Scale { get; private set; } = 1f;
+
+        /// 実車の 3 台: 模型の単位 → 実車の m の倍率 (これを SetScale すると実車の寸法になる)。従来のボディは 0
+        public float RealScale
+        {
+            get
+            {
+                if (Style == CarStyle.Default) return 0f;
+                RealDims(Style, out float k, out _, out _, out _);
+                return 1f / k;
+            }
+        }
+
+        /// 車体全体の縮尺 (サーキットでは約 10 倍)。タイヤの回転と姿勢の量もこれに合わせる
+        public void SetScale(float s)
+        {
+            Scale = Mathf.Max(0.01f, s);
+            Root.localScale = Vector3.one * Scale;
+        }
+
+        /// "b787" | "nd" (roadster) | "rx7" | それ以外 = Default
+        public static CarStyle ParseStyle(string s)
+        {
+            switch ((s ?? "").Trim().ToLowerInvariant())
+            {
+                case "b787": case "787b": case "787": return CarStyle.B787;
+                case "nd": case "roadster": case "mx5": return CarStyle.Roadster;
+                case "rx7": case "rx-7": case "fd": return CarStyle.Rx7;
+                default: return CarStyle.Default;
+            }
+        }
+
+        public CarModel(string name, Color bodyColor, int layer, bool withMast, CarStyle style = CarStyle.Default)
+        {
+            Style = style;
+            bool tt02 = style != CarStyle.Default;
+            Wheelbase = tt02 ? 0.257f : 0.210f;     // TT-02 公称 / M-05 (sim.yaml wheelbase_m)
+            HalfTrack = tt02 ? 0.084f : 0.082f;     // タイヤ外面がボディ側面と面一になる位置
+            TireRadius = tt02 ? 0.032f : 0.030f;    // TT-02 約 64 mm / hw_params.yaml tire_diameter_m 0.060
+            TireWidth = tt02 ? 0.028f : 0.026f;
+            if (tt02)
+            {
+                // 実車の寸法から (CarModel.Shell.cs)。タイヤの外面はフェンダーの 1 cm 内側
+                RealDims(style, out float rk, out float tireR, out float tireW, out float side);
+                TireRadius = tireR * rk; TireWidth = tireW * rk; HalfTrack = (side - 0.01f - tireW * 0.5f) * rk;
+            }
             Root = new GameObject(name).transform;
             var lit = Resources.Load<Material>("Mat_Lit");
             Material Mat(Color c, float smooth, float metal = 0f)
@@ -40,6 +106,8 @@ namespace Minicar
                 m.SetFloat("_Metallic", metal);
                 return m;
             }
+            // 車体の塗装: 787B・ND・RX-7 は下地 (色と金属感) の上にクリア層を重ねる (Paint で印を付け、AddClearCoat が 2 枚目の材質を足す)。
+            // 従来のボディ (ミニカーの会場・センサ画像に写る相手) は今まで通り 1 層
             var paint = Mat(bodyColor, 0.82f, 0.45f);
             var glass = Mat(new Color(0.04f, 0.05f, 0.07f), 0.93f);
             var black = Mat(new Color(0.03f, 0.03f, 0.03f), 0.25f);
@@ -58,6 +126,86 @@ namespace Minicar
             hull.SetParent(m_Body, false);
             hull.localPosition = new Vector3(0f, -0.03f, -Wheelbase * 0.5f);
 
+            switch (style)
+            {
+                case CarStyle.B787: BuildB787(hull, withMast, Mat, black, glass, lamp, tail, alu, lit); break;
+                case CarStyle.Roadster: BuildRoadster(hull, withMast, Mat, black, glass, lamp, tail, alu, lit); break;
+                case CarStyle.Rx7: BuildRx7(hull, withMast, Mat, black, glass, lamp, tail, alu, lit); break;
+                default: BuildDefault(hull, withMast, paint, black, glass, lamp, tail, alu); break;
+            }
+
+            AddClearCoat(lit);
+
+            // ---- タイヤ (車体に固定しない: ロールしてもタイヤは接地したまま) ----
+            int k = 0;
+            foreach (float z in new[] { 0f, Wheelbase })
+            {
+                foreach (float sx in new[] { -1f, 1f })
+                {
+                    var pivot = new GameObject(z > 0 ? "FrontWheelPivot" : "RearWheelPivot").transform;
+                    pivot.SetParent(Root, false);
+                    pivot.localPosition = new Vector3(sx * HalfTrack, TireRadius - TireSink, z);
+                    if (z > 0) m_SteerPivots[sx < 0 ? 0 : 1] = pivot;
+                    var spin = new GameObject("Spin").transform;
+                    spin.SetParent(pivot, false);
+                    m_Spinners[k++] = spin;
+
+                    if (tt02)
+                    {
+                        // 787B は白、RX-7 は金色の 6 本スポーク、ND は銀の 5 本
+                        var wrim = style == CarStyle.B787 ? Mat(new Color(0.93f, 0.93f, 0.91f), 0.6f, 0.1f)
+                                 : style == CarStyle.Rx7 ? Mat(new Color(0.78f, 0.60f, 0.24f), 0.72f, 0.9f) : rim;
+                        BuildWheel(spin, sx, tire, wrim, black, alu, style == CarStyle.Rx7 ? 6 : 5);
+                        continue;
+                    }
+                    var t = Prim(PrimitiveType.Cylinder, "Tire", spin, tire);
+                    t.localRotation = Quaternion.Euler(0f, 0f, 90f);
+                    t.localScale = new Vector3(TireRadius * 2f, TireWidth * 0.5f, TireRadius * 2f);
+                    var r = Prim(PrimitiveType.Cylinder, "Rim", spin, rim);
+                    r.localRotation = Quaternion.Euler(0f, 0f, 90f);
+                    r.localPosition = new Vector3(sx * 0.002f, 0f, 0f);
+                    r.localScale = new Vector3(TireRadius * 1.35f, TireWidth * 0.5f + 0.0008f, TireRadius * 1.35f);
+                    // スポーク 5 本 (回転が見えるように)
+                    for (int s = 0; s < 5; s++)
+                    {
+                        var sp = Cube("Spoke", spin, new Vector3(sx * (TireWidth * 0.5f + 0.0012f), 0f, 0f),
+                                      new Vector3(0.0015f, TireRadius * 1.25f, 0.004f), alu);
+                        sp.localRotation = Quaternion.Euler(s * 36f, 0f, 0f);
+                    }
+                }
+            }
+
+            SetLayer(Root, layer);
+        }
+
+        // ------------------------------------------------------------------
+        // 塗装のクリア層。Built-in の Standard は 1 層しか持てないので、同じメッシュをもう 1 回、色が透けて映り込みと
+        // ハイライトだけが残る材質 (Transparent・α 0・滑らかさ 0.95) で重ねて描く。HDRP では RenderCompat が
+        // この 2 枚目を外し、下地の材質に HDRP/Lit のクリアコート (_CoatMask) を付ける
+        readonly System.Collections.Generic.List<Material> m_Paints = new System.Collections.Generic.List<Material>();
+
+        Material Paint(Material m)
+        {
+            m.name = "CarPaint";
+            m_Paints.Add(m);
+            return m;
+        }
+
+        void AddClearCoat(Material lit)
+        {
+            if (m_Paints.Count == 0) return;
+            var coat = new Material(lit) { name = "ClearCoat", color = new Color(1f, 1f, 1f, 0f) };
+            coat.SetFloat("_Glossiness", 0.95f);
+            coat.SetFloat("_Metallic", 0f);
+            ProcTex.MakeTransparent(coat);
+            foreach (var r in Root.GetComponentsInChildren<MeshRenderer>(true))
+                if (m_Paints.Contains(r.sharedMaterial)) r.sharedMaterials = new[] { r.sharedMaterial, coat };
+        }
+
+        // 従来のボディ (M-05 + FD 系クーペ・濃紺など)
+        void BuildDefault(Transform hull, bool withMast, Material paint, Material black, Material glass,
+                          Material lamp, Material tail, Material alu)
+        {
             // 断面 (z: 後軸からの前後位置, 半幅, 下端, 上端)。ホイールアーチは下端を上げて表す
             var hullSections = new[]
             {
@@ -115,39 +263,18 @@ namespace Minicar
                 rod.localScale = new Vector3(0.008f, 0.062f, 0.008f);
                 Cube("MastSensor", hull, new Vector3(0f, 0.252f, 0.074f), new Vector3(0.026f, 0.022f, 0.030f), black);
             }
+        }
 
-            // ---- タイヤ (車体に固定しない: ロールしてもタイヤは接地したまま) ----
-            int k = 0;
-            foreach (float z in new[] { 0f, Wheelbase })
-            {
-                foreach (float sx in new[] { -1f, 1f })
-                {
-                    var pivot = new GameObject(z > 0 ? "FrontWheelPivot" : "RearWheelPivot").transform;
-                    pivot.SetParent(Root, false);
-                    pivot.localPosition = new Vector3(sx * HalfTrack, TireRadius - TireSink, z);
-                    if (z > 0) m_SteerPivots[sx < 0 ? 0 : 1] = pivot;
-                    var spin = new GameObject("Spin").transform;
-                    spin.SetParent(pivot, false);
-                    m_Spinners[k++] = spin;
+        delegate Material MatFn(Color c, float smooth, float metal = 0f);
 
-                    var t = Prim(PrimitiveType.Cylinder, "Tire", spin, tire);
-                    t.localRotation = Quaternion.Euler(0f, 0f, 90f);
-                    t.localScale = new Vector3(TireRadius * 2f, TireWidth * 0.5f, TireRadius * 2f);
-                    var r = Prim(PrimitiveType.Cylinder, "Rim", spin, rim);
-                    r.localRotation = Quaternion.Euler(0f, 0f, 90f);
-                    r.localPosition = new Vector3(sx * 0.002f, 0f, 0f);
-                    r.localScale = new Vector3(TireRadius * 1.35f, TireWidth * 0.5f + 0.0008f, TireRadius * 1.35f);
-                    // スポーク 5 本 (回転が見えるように)
-                    for (int s = 0; s < 5; s++)
-                    {
-                        var sp = Cube("Spoke", spin, new Vector3(sx * (TireWidth * 0.5f + 0.0012f), 0f, 0f),
-                                      new Vector3(0.0015f, TireRadius * 1.25f, 0.004f), alu);
-                        sp.localRotation = Quaternion.Euler(s * 36f, 0f, 0f);
-                    }
-                }
-            }
-
-            SetLayer(Root, layer);
+        // センサマスト (見た目だけ。取付高さは vehicle_profile.camera が正)
+        void Mast(Transform hull, Material black, Material alu, float z, float baseY)
+        {
+            Cube("MastPlate", hull, new Vector3(0f, baseY + 0.002f, z), new Vector3(0.040f, 0.004f, 0.040f), black);
+            var rod = Prim(PrimitiveType.Cylinder, "MastRod", hull, alu);
+            rod.localPosition = new Vector3(0f, baseY + 0.034f, z);
+            rod.localScale = new Vector3(0.008f, 0.032f, 0.008f);
+            Cube("MastSensor", hull, new Vector3(0f, baseY + 0.074f, z + 0.004f), new Vector3(0.026f, 0.020f, 0.028f), black);
         }
 
         // v [m/s], steer [rad, 左正], aLat [m/s², 左正]
@@ -157,7 +284,7 @@ namespace Minicar
             foreach (var p in m_SteerPivots)
                 p.localRotation = Quaternion.Euler(0f, -steer * Mathf.Rad2Deg, 0f);
 
-            m_SpinDeg = Mathf.Repeat(m_SpinDeg + v / TireRadius * Mathf.Rad2Deg * dt, 360f);
+            m_SpinDeg = Mathf.Repeat(m_SpinDeg + v / (TireRadius * Scale) * Mathf.Rad2Deg * dt, 360f);
             foreach (var s in m_Spinners)
                 s.localRotation = Quaternion.Euler(m_SpinDeg, 0f, 0f);
 

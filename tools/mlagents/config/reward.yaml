@@ -1,0 +1,13 @@
+# mlagents_gateway の報酬の重み (gateway_core.RewardWeights)。sim には報酬を持たせない (docs/lockstep.md)。
+# 1 判断 (1/15 s) の報酬は、その間の /sim/step (2 回) の StepInfo から足し合わせる。
+reward:
+  progress: 1.0          # 参照線上で 1 m 進むごと (主項。1 周 ≈ 29 m)
+  backward: 2.0          # 後ろに進んだ距離 [m] に追加で掛ける (逆走の抑止)
+  cte_free_m: 0.10       # この横偏差までは罰しない
+  cte: 5.0               # (|横偏差| − cte_free_m)² に掛ける
+  wall_margin_m: 0.05    # 壁までの余裕がこれを割ったら罰
+  wall: 2.0              # 割った量 [m] に掛ける
+  steer_rate: 0.002      # 舵の変化率² × dt (舵の振動を抑える。実機のサーボを守る)
+  time: 0.002            # 毎 step の小さな罰
+  lap_bonus: 5.0         # 周回 1 回
+  terminal: 5.0          # 衝突・コース外 (エピソードはそこで終わる)

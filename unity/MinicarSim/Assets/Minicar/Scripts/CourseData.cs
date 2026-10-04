@@ -112,9 +112,39 @@ namespace Minicar
         public float legend_x, legend_y0, legend_y1;
     }
 
+    /// <summary>車両の諸元 (vehicle_profile から)。見た目の縮尺・エンジン音にだけ使い、物理には使わない</summary>
+    [Serializable]
+    public class VehicleData
+    {
+        public string name;
+        public float length_m, width_m, wheelbase_m, v_max_mps, a_lat_max_mps2;
+    }
+
+    [Serializable]
+    public class CornerData
+    {
+        public string name;
+        public float x, y;
+    }
+
+    /// <summary>実車スケールのサーキット (course.py の circuit_course)。中心線は centerline_shortcut</summary>
+    [Serializable]
+    public class CircuitData
+    {
+        public string name, title;
+        public float width_m, runoff_m, barrier_height_m, kerb_width_m, kerb_min_curvature;
+        public CornerData[] corners;
+        public float[] bounds;      // [xmin, ymin, xmax, ymax] (中心線)
+    }
+
     [Serializable]
     public class CourseData
     {
+        /// <summary>"minicar" (規約 p.24 のコース) | "circuit" (実車スケール)。古い course.json は空 = minicar</summary>
+        public string kind;
+        public bool IsCircuit => kind == "circuit";
+        public VehicleData vehicle;
+        public CircuitData circuit;
         public WallData[] walls;
         public float wall_height_m, wall_thickness_m;
         /// <summary>板の下端の床からの高さ。規約 p.34: 板は床から 30 mm 浮かせ、上端 120 mm。

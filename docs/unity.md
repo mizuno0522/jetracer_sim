@@ -156,6 +156,23 @@ python3 tools/record_video.py --seconds 60 --scale 3 --hud -o ~/Videos/camera.mp
 
 既存 sim の RViz 風・AI チャレンジ風レイアウトはそのまま使える。JetRacer 機は LiDAR が無いので占有格子は表示されない。
 
+## ボディとエンジン音 (2026-10-04)
+
+見た目と音だけで、物理・センサ・カメラ画像の幾何は変わらない (車体は自車カメラに写らない)。
+
+| 起動引数 (Unity) | launch 引数 | 値 |
+|---|---|---|
+| `-owncar` / `-rivalcar` / `-rival2car` | `car:=` / `rival_car:=` / `rival2_car:=` | `b787` (オレンジ×グリーンのプロトタイプ・閉じたキャノピー・大きなリアウイング) / `nd` (ソウルレッドのロードスター・幌を開けた 2 シーター・右ハンドル) / `rx7` (イエローの FD 系クーペ)。省略で従来の見た目。3 台とも TT-02 の寸法 (WB 0.257 m・タイヤ径 64 mm) でロゴ・文字は無し |
+| `-sound on\|off\|auto` | `sound:=` | 自車のエンジン音・走行音。`auto` (既定) はボディを選んだときだけ鳴らす。`-volume 0〜1`、`-soundvmax` (既定 3.0 m/s を実車の最高速に当てて回転数を決める)。**[M]** で消音 |
+
+```bash
+ros2 launch minicar_sim sim_host.launch.py unity_player:=<Build/MinicarSim.x86_64> car:=b787 rival_car:=nd rival2_car:=rx7
+```
+
+エンジン音は音源ファイルを使わず合成する (`EngineAudio.cs`)。787B は 4 ローター (1 回転で 4 回燃焼) の高く鋭い音、RX-7 は 2 ローター＋ターボの過給音、
+ND は直列 4 気筒の丸い音にオープンの大きな風切り音。ほかにロードノイズ・風切り音・タイヤのスキール (横加速度が 0.45 g の 85 % を超えたとき、強いブレーキ)。
+回転数は車速から自動変速で決め、アクセル開度は車速の変化から推定する (render_state に指令は無いため)。
+
 ## 3 台レース (`tools/race/race3.sh`、2026-09-29)
 
 minicarbattle2026 の `unity/race3.sh` の JetRacer 版。PC 1 台で 3 台 (青・黄・緑) を別の `ROS_DOMAIN_ID` (既定 42 / 43 / 44) で動かし、Unity 1 つで 3 台とも描く。

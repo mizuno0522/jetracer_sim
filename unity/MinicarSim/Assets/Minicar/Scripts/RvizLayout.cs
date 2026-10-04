@@ -156,7 +156,13 @@ namespace Minicar
         void FitCamera()
         {
             m_Cam.rect = new Rect(LeftFrac, 0f, 1f - LeftFrac, 1f);
-            const float x0 = -1.45f, x1 = 10.55f, y0 = -0.35f, y1 = 6.75f;
+            float x0 = -1.45f, x1 = 10.55f, y0 = -0.35f, y1 = 6.75f;
+            if (m_Data != null && m_Data.IsCircuit && m_Data.circuit != null && m_Data.circuit.bounds != null && m_Data.circuit.bounds.Length == 4)
+            {
+                var b = m_Data.circuit.bounds;
+                float pad = 40f;
+                x0 = b[0] - pad; y0 = b[1] - pad; x1 = b[2] + pad; y1 = b[3] + pad;
+            }
             float w = x1 - x0, h = y1 - y0;
             float aspect = (Screen.width * (1f - LeftFrac)) / Mathf.Max(1f, Screen.height);
             m_Cam.orthographicSize = Mathf.Max(h * 0.5f, w * 0.5f / aspect) * 1.02f;

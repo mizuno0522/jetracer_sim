@@ -22,3 +22,9 @@ unity/MinicarSim/*.sln
 # 実画像から生成する大きなテクスチャ (tools/make_real_textures.py)。carpet.png (~90 KB) だけ管理する
 unity/MinicarSim/Assets/StreamingAssets/textures/backdrop.png
 unity/MinicarSim/Assets/StreamingAssets/textures/stats.json
+# ML-Agents の人の運転 (.demo) と学習結果 (docs/mlagents.md)
+demos/
+results/
+shots/
+# HDRP 版 (scripts/migrate_hdrp.sh が unity/MinicarSim から作る。管理しない)
+unity/MinicarSimHDRP/

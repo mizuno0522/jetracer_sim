@@ -79,7 +79,7 @@ from jetracer_common.actuator_model import ServoModel, EscModel, MotorModel
 from jetracer_common.cam_geom import CamGeom
 from jetracer_common.reference_line import ReferenceLine
 
-from course import (default_course, raycast, raycast_multi,
+from course import (course_by_name, raycast, raycast_multi,
                     GIMMICK_AREAS, PARKING_SLOTS, surface_at, ARROW_SIGN)
 
 
@@ -99,6 +99,11 @@ LATCHED = QoSProfile(depth=1,
                      durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
                      reliability=QoSReliabilityPolicy.RELIABLE,
                      history=QoSHistoryPolicy.KEEP_LAST)
+
+def _no_surface(x, y):
+    """サーキット: ギミックの区間は無い (どこも既定の路面)。"""
+    return None
+
 
 class VehicleSim(Node):
 
@@ -210,6 +215,9 @@ class VehicleSim(Node):
         # (opponent_detector を使わず BT/制御だけ検証したいとき true)
         self.declare_parameter('publish_opponent_info', True)
         # 走行ルート: true=②坂道ショートカット経由(③ライトかく乱を通らない)
+        # コース: minicar (既定・規約 p.24) | fuji (実車スケールのサーキット。config/courses/fuji.yaml)
+        self.declare_parameter('course', 'minicar')
+        self.declare_parameter('mu_asphalt', 1.0)          # サーキットの舗装 (vehicle_profile の tire_mu で上書き)
         self.declare_parameter('use_shortcut', True)
         # ⑤狭い道の中央仕切り。試走会/予選/決勝すべてで設置 (△3 p.30-31)。false は比較検証用
         self.declare_parameter('narrow_divider', True)
@@ -556,11 +564,30 @@ class VehicleSim(Node):
         self.floor_speckle = bool(p('cam_floor_speckle').value)
         self.speckle_pitch = float(p('floor_speckle_pitch_m').value)
 
-        self.course = default_course(
+        self.course = course_by_name(
+            str(self.get_parameter('course').value),
             use_shortcut=bool(self.get_parameter('use_shortcut').value),
             narrow_divider=bool(self.get_parameter('narrow_divider').value))
+        self.circuit = getattr(self.course, 'kind', 'minicar') == 'circuit'
+        if self.circuit:
+            # サーキットにはギミック・駐車枠・矢印信号が無い。路面はどこも舗装 (mu_asphalt)。
+            # ミニカーコースの区間 (原点付近の矩形) を引かないよう、このモジュールの参照を空にする
+            # (1 プロセス = 1 コースなので、モジュールの名前を差し替えて済ませる)
+            global surface_at, GIMMICK_AREAS, PARKING_SLOTS
+            surface_at = _no_surface
+            GIMMICK_AREAS = ()
+            PARKING_SLOTS = []
+            self.mu_table[None] = float(p('mu_asphalt').value)
+            if self.L < 1.0:
+                self.get_logger().warn(f"サーキットにミニカーの車両 (WB {self.L:.3f} m)。vehicle_profile:=real_nd / real_rx7 / "
+                                       f"real_b787 を指定すること")
+            self.get_logger().info(
+                f"コース: {self.course.title} 全長 {self.course.total_length:.0f} m 幅 {self.course.width:.0f} m "
+                f"μ={self.mu_table[None]:.2f} (実車スケール)")
         self.segs = self.course.wall_segments()
-        if self.use_camera:
+        if self.use_camera and not (self.circuit and self.unity_camera):
+            if self.circuit:
+                self.get_logger().warn('サーキットを OpenCV で描くとミニカーの板の見た目になる。camera_backend:=unity を推奨')
             self._build_wall_tiles()
 
         # 矢印ゲートの世界座標 (⑥ 標識)。コースの ARROW_GATE 特徴位置を使う。
@@ -643,8 +670,15 @@ class VehicleSim(Node):
         self._t_gt_pub = 0.0
         self.off_track_margin = float(p('off_track_margin_m').value)
         self.collision_clear = float(p('collision_clear_m').value)
+        if self.circuit:
+            # サーキットの判定はコース定義の値 (ミニカー用の 5 cm・10 cm では実車がすぐ終端になる)
+            self.off_track_margin = self.course.off_track_margin
+            self.collision_clear = self.course.collision_clear
         self.episode_seed = int(p('episode_seed').value)
         route_file = str(p('route_file').value).strip()
+        if self.circuit and route_file:
+            self.get_logger().info(f"サーキットでは route_file ({route_file}) を使わず、コース中心線を参照線にする")
+            route_file = ''
         if route_file:
             if '/' not in route_file:          # 名前だけなら minicar_sim の config/ (install 側) から
                 from ament_index_python.packages import get_package_share_directory
@@ -652,6 +686,9 @@ class VehicleSim(Node):
             self.ref = ReferenceLine.from_yaml_route(os.path.expanduser(route_file),
                                                      str(p('route_name').value))
             self.get_logger().info(f"参照線: {route_file} ({p('route_name').value}) 全長 {self.ref.total:.2f} m")
+        elif self.circuit:
+            # 既定の 2 cm 刻みは実車スケールでは点が 20 万を超え、2 m 刻みの頂点で曲率が尖る。中心線と同じ刻みで引く
+            self.ref = ReferenceLine(self.course.center, resample_m=self.course.step)
         else:
             self.ref = ReferenceLine(self.course.center)
         g0 = self._cam_model
@@ -1804,7 +1841,8 @@ class VehicleSim(Node):
         spawn = (req.spawn or 'start').strip().lower()
         if spawn == 'random':
             s0 = float(self.rng.uniform(0.0, self.ref.total))
-            lat = float(self.rng.uniform(-0.10, 0.10))
+            span = 0.3 * self.course.half if self.circuit else 0.10     # ミニカー ±10 cm / 幅 15 m なら ±2.25 m
+            lat = float(self.rng.uniform(-span, span))
         elif spawn.startswith('zone:'):
             # 区間 ID の始点 (参照線上で最初にその区間になる弧長)
             want = int(spawn.split(':')[1])

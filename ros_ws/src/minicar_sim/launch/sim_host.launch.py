@@ -29,7 +29,10 @@ from launch_ros.parameter_descriptions import ParameterValue
 def generate_launch_description():
     sim_pkg = get_package_share_directory('minicar_sim')
     sim_params = os.path.join(sim_pkg, 'config', 'sim.yaml')
-    imu_params = os.path.join(sim_pkg, 'config', 'imu_sim.yaml')
+    course = LaunchConfiguration('course')
+    # 実車スケールのコースは IMU の取付・レンジ・路面振動が違う (imu_sim_real.yaml)
+    imu_params = PythonExpression(["'", os.path.join(sim_pkg, 'config', 'imu_sim.yaml'), "' if '", course,
+                                   "' == 'minicar' else '", os.path.join(sim_pkg, 'config', 'imu_sim_real.yaml'), "'"])
     rviz_dir = os.path.join(sim_pkg, 'rviz')
 
     profile = LaunchConfiguration('vehicle_profile')
@@ -49,6 +52,11 @@ def generate_launch_description():
     lockstep = PythonExpression(["'", sim_mode, "' == 'lockstep'"])
 
     return LaunchDescription([
+        DeclareLaunchArgument('course', default_value='minicar',
+                              description='minicar (規約 p.24) | fuji (富士スピードウェイ・実車スケール。'
+                                          'vehicle_profile:=real_nd|real_rx7|real_b787 と組み合わせる。docs/fuji.md)'),
+        DeclareLaunchArgument('ml_maxsteps', default_value='1800',
+                              description='ML-Agents の 1 エピソードの判断回数の上限 (15 Hz。富士は 3600 = 4 分)'),
         DeclareLaunchArgument('vehicle_profile', default_value='jetracer_tt02',
                               description='config/vehicle_profile/<name>.yaml (m05 で旧車両)'),
         DeclareLaunchArgument('sim_mode', default_value='realtime',
@@ -83,6 +91,23 @@ def generate_launch_description():
         DeclareLaunchArgument('unity_fps', default_value='60',
                               description='Unity の描画の上限 [FPS] (-fps)。3 台レースで PC が詰まるときに下げる'),
         DeclareLaunchArgument('seed', default_value='0', description='エピソードの seed (imu_sim の乱択化)'),
+        # 見た目・音・ML-Agents (Unity だけに効く。物理は変わらない)
+        DeclareLaunchArgument('car', default_value='',
+                              description='自車のボディ: b787 | nd | rx7 (空なら従来の見た目)'),
+        DeclareLaunchArgument('rival_car', default_value='', description='相手 (黄) のボディ'),
+        DeclareLaunchArgument('rival2_car', default_value='', description='3 台目 (緑) のボディ'),
+        DeclareLaunchArgument('sound', default_value='auto',
+                              description='エンジン音: on | off | auto (ボディを選んだときだけ on)'),
+        DeclareLaunchArgument('quality', default_value='auto',
+                              description='画質: low | medium | high | auto (GPU を見て選ぶ。mlagents:=true なら low。docs/hdrp.md)'),
+        DeclareLaunchArgument('mlagents', default_value='false',
+                              description='true で Unity に ML-Agents のエージェントを作る (sim_mode:=lockstep と '
+                                          'tools/mlagents/mlagents_gateway.py が要る。docs/mlagents.md)'),
+        DeclareLaunchArgument('ml_port', default_value='5004', description='学習器 (mlagents-learn) のポート'),
+        DeclareLaunchArgument('demo', default_value='',
+                              description='ML-Agents: 人の運転を <名前>.demo に記録する (mlagents:=true のとき)'),
+        DeclareLaunchArgument('demo_dir', default_value=os.path.join(os.getcwd(), 'demos'),
+                              description='.demo を書く場所 (既定: 起動したフォルダの demos/)'),
         DeclareLaunchArgument('route_file', default_value='route_jetracer_tt02.yaml',
                               description='参照線 (tools/make_route.py の yaml。名前だけなら config/ から)。'
                                           '空ならコース中心線 (TT-02 では R_min を割る区間がある)'),
@@ -95,6 +120,7 @@ def generate_launch_description():
         Node(package='minicar_sim', executable='vehicle_sim.py', name='vehicle_sim', output='screen',
              parameters=[sim_params, {
                  'vehicle_profile_file': profile,
+                 'course': course,
                  'sim_mode': sim_mode,
                  'use_camera': ParameterValue(LaunchConfiguration('use_camera'), value_type=bool),
                  'arrow_follow': ParameterValue(LaunchConfiguration('arrow_follow'), value_type=bool),
@@ -112,7 +138,7 @@ def generate_launch_description():
              }]),
 
         Node(package='imu_sim', executable='imu_sim_node', name='imu_sim', output='screen',
-             parameters=[{'config_file': imu_params,
+             parameters=[{'config_file': ParameterValue(imu_params, value_type=str),
                           'seed': ParameterValue(seed, value_type=int),
                           'use_sim_time': ParameterValue(lockstep, value_type=bool)}]),
 
@@ -132,6 +158,20 @@ def generate_launch_description():
             #          デスクトップ録画 (x11grab) と違い Wayland でも黒画面にならず、描画も止まらない
             cmd=[unity_player, '-rosip', '127.0.0.1', '-rosport', tcp_port, '-layout', 'aic', '-laps', '0', '-seed', seed,
                  '-fps', LaunchConfiguration('unity_fps'),
+                 '-owncar', LaunchConfiguration('car'),
+                 '-rivalcar', LaunchConfiguration('rival_car'),
+                 '-rival2car', LaunchConfiguration('rival2_car'),
+                 '-sound', LaunchConfiguration('sound'),
+                 '-quality', LaunchConfiguration('quality'),
+                 PythonExpression(["'-mlagents' if '", LaunchConfiguration('mlagents'), "' == 'true' else '-nomlagents'"]),
+                 '-demo', LaunchConfiguration('demo'),
+                 # ビルドしたプレイヤーは、この引数が無いと学習器 (mlagents-learn) に繋ぎに行かない (エディタだけ既定で 5004 に繋ぐ)
+                 '--mlagents-port', LaunchConfiguration('ml_port'),
+                 '-maxsteps', LaunchConfiguration('ml_maxsteps'),
+                 # コースの描画は course.json (ミニカー) か course_<コース>_<profile>.json (StreamingAssets の中。
+                 # COURSE=fuji ./scripts/export_course.sh <profile> が作る。カメラの取付が車ごとに違うので profile ごと)
+                 '-course', PythonExpression(["'course.json' if '", course, "' == 'minicar' else 'course_", course, "_", profile, ".json'"]),
+                 '-demodir', LaunchConfiguration('demo_dir'),
                  '-record', LaunchConfiguration('record'),
                  '-recordfps', LaunchConfiguration('record_fps'),
                  '-recordwidth', LaunchConfiguration('record_width'),
@@ -139,6 +179,8 @@ def generate_launch_description():
                  '-screen-height', LaunchConfiguration('window_height'),
                  '-logFile', os.path.expanduser('~/.ros/log/jetracer_unity_player.log')],
             name='unity_player', output='screen',
+            # ノート PC (内蔵 + 単体 GPU) では何も指定しないと内蔵 GPU で動く。Mesa に単体 GPU を選ばせる (1 枚だけの PC では無視される)
+            additional_env={'DRI_PRIME': os.environ.get('DRI_PRIME', '1')},
             condition=IfCondition(PythonExpression(
                 ["(", use_unity, ") and '", unity_player, "' not in ('', 'none')"]))),
 

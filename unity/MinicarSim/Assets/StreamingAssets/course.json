@@ -1,4 +1,13 @@
 {
+ "kind": "minicar",
+ "vehicle": {
+  "name": "jetracer_tt02",
+  "length_m": 0.43,
+  "width_m": 0.19,
+  "wheelbase_m": 0.257,
+  "v_max_mps": 3.0,
+  "a_lat_max_mps2": 4.41
+ },
  "walls": [
   {
    "x0": 0.0,

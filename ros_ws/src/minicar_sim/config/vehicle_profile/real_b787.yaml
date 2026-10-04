@@ -1,0 +1,56 @@
+# マツダ 787B (4 ローター・グループ C) の実車スケール (course:=fuji 用)。
+# ★公表されている寸法・車重・最高速から置いた概算で、実測ではない。物理は vehicle_sim (摩擦円つき自転車モデル) のまま。
+#   最高速 約 330 km/h (92 m/s)。車重は 830 kg＋ドライバー・燃料。空気抵抗は惰行の減速 0.8 m/s² で近似
+# 制動は全輪で受けるよう drive: all・drive_split 0.9 にしている (vehicle_sim の制動上限は「駆動輪の荷重 × μ」のため。
+# 加速は駆動力 motor.force_n が律速するので、2WD を all にした影響はほぼ出ない)。
+vehicle_profile:
+  name: real_b787
+  wheelbase_m: 2.662
+  track_m: 1.534
+  mass_kg: 900
+  cg_height_m: 0.3
+  length_m: 4.782
+  width_m: 1.994
+  delta_max_rad: 0.35          # 前輪の最大切れ角 (最小回転半径から)
+  v_max_mps: 92.0              # 最高速。cmd_shaper / gateway の速度 1.0 に当たる
+  drive: all
+  drive_split: [0.9, 0.1]
+  tire_dia_m: 0.66
+  tire_mu: 1.9                  # スリックタイヤ＋ダウンフォースを速度によらない一定の μ で近似 (低速では高すぎ・高速では低すぎ)
+  motor:                         # 駆動力 F(v) = force_n × (1 − v / v_free_mps)。エンジン＋変速機の包絡を直線で近似
+    force_n: 9000
+    v_free_mps: 100.0
+    accel_time_constant_s: 0.35
+  servo:                         # ステアリング (ラック) の追従
+    tau_s: 0.05
+    rate_limit_rad_s: 1.2
+  esc:
+    type: car
+    deadband_mps: 0.3
+    reverse_via_neutral_ms: 0
+    brake_decel_mps2: 17.5        # 全制動 (≈ μg)
+    coast_decel_mps2: 0.8         # 惰行 (転がり＋空気抵抗の平均)
+  suspension:
+    roll_per_ms2: 0.0015
+    pitch_per_ms2: 0.0015
+  collision:                     # 壁・車どうしの剛体当たり (車体を円 3 つで近似。後軸からの前後位置)
+    disc_radius_m: 0.997
+    disc_offsets_m: [-0.063, 1.331, 2.725]
+  cmd_limits:                    # 人の運転・ML-Agents の指令に掛ける制限 (TT-02 は cmd_shaper の既定)
+    accel_mps2: 9.0
+    decel_mps2: 16.6
+    steer_rate_rad_s: 1.2
+  camera:                        # ボンネット上の前向きカメラ。画像は TT-02 と同じ 224×224・15 Hz (推論側の契約)
+    width: 224
+    height: 224
+    rate_hz: 15.0
+    hfov_deg: 100.0
+    vfov_deg: 0.0                # 0 = 正方画素
+    k1: 0.0
+    k2: 0.0
+    mount_height_m: 0.85
+    mount_x_m: 0.0
+    pitch_deg: 3.0
+    crop_top_frac: 0.0
+    realism:
+      enable: false

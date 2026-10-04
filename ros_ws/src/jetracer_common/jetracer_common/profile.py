@@ -84,6 +84,18 @@ def vehicle_sim_overrides(prof):
         m['esc_brake_decel_mps2'] = float(esc['brake_decel_mps2'])
     if 'coast_decel_mps2' in esc:
         m['coast_decel_mps2'] = float(esc['coast_decel_mps2'])
+    # 実車プロファイル (config/vehicle_profile/real_*.yaml) 用。TT-02 には無い項目なので、無ければ vehicle_sim の既定のまま
+    if 'tire_mu' in prof:
+        m['mu_asphalt'] = float(prof['tire_mu'])          # サーキット (course:=fuji) の舗装とタイヤの μ
+    col = prof.get('collision', {})
+    if 'disc_radius_m' in col:
+        m['wall_disc_radius_m'] = float(col['disc_radius_m'])
+    if 'disc_offsets_m' in col:
+        m['wall_disc_offsets_m'] = [float(v) for v in col['disc_offsets_m']]
+    if 'length_m' in prof and col:
+        m['car_body_length_m'] = float(prof['length_m'])
+    if 'width_m' in prof and col:
+        m['car_body_width_m'] = float(prof['width_m'])
     lk = prof.get('drivetrain_lock', {})
     if 'windup_gain' in lk:
         m['windup_gain'] = float(lk['windup_gain'])
