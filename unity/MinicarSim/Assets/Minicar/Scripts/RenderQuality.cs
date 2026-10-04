@@ -61,6 +61,16 @@ namespace Minicar
         {
             // Intel の内蔵 (UHD / Iris / HD Graphics)。Arc は単体 GPU
             if (n.Contains("intel") && !n.Contains("arc")) return true;
+            // Linux の Mesa は単体 GPU も "AMD Radeon Graphics (navi14, LLVM …)" と型番なしで名乗る。括弧の中の開発名で見分ける
+            int p = n.IndexOf("radeon graphics (");
+            if (p >= 0)
+            {
+                string code = n.Substring(p + 17);
+                foreach (var apu in new[] { "stoney", "carrizo", "raven", "picasso", "renoir", "lucienne", "cezanne", "barcelo",
+                                            "mendocino", "rembrandt", "yellow_carp", "phoenix", "hawk", "strix", "krackan", "gfx" })
+                    if (code.StartsWith(apu)) return true;
+                return false;
+            }
             // AMD の APU: "AMD Radeon(TM) Graphics"・"Radeon Vega 8 Graphics"・"Radeon 780M" 等 (RX / Pro の型番が無い)
             if (n.Contains("radeon") && !n.Contains(" rx") && !n.Contains("pro ") && !n.Contains("firepro")
                 && (n.Contains("(tm) graphics") || n.Contains("vega") || n.Contains("radeon graphics") || n.EndsWith("m graphics") || n.Contains("780m") || n.Contains("760m") || n.Contains("680m") || n.Contains("660m")))

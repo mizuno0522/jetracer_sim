@@ -20,6 +20,7 @@ else
 fi
 OUT="${OUT:-$HERE/../shots/${COURSE}_${CAR}_$(date +%Y%m%d_%H%M%S)}"
 mkdir -p "$OUT"
+export DRI_PRIME="${DRI_PRIME:-1}"   # 内蔵 + 単体 GPU の PC で単体 GPU を使う (1 枚だけの PC では無視される)
 echo "撮影: $JSON  自車 $CAR  → $OUT"
 "$PLAYER" -course "$JSON" -owncar "$CAR" -rivalcar "$R1" -rival2car "$R2" -sound off \
   -layout "${LAYOUT:-aic}" -quality "${QUALITY:-low}" \

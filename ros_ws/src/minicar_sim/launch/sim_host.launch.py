@@ -176,6 +176,8 @@ def generate_launch_description():
                  '-screen-height', LaunchConfiguration('window_height'),
                  '-logFile', os.path.expanduser('~/.ros/log/jetracer_unity_player.log')],
             name='unity_player', output='screen',
+            # ノート PC (内蔵 + 単体 GPU) では何も指定しないと内蔵 GPU で動く。Mesa に単体 GPU を選ばせる (1 枚だけの PC では無視される)
+            additional_env={'DRI_PRIME': os.environ.get('DRI_PRIME', '1')},
             condition=IfCondition(PythonExpression(
                 ["(", use_unity, ") and '", unity_player, "' not in ('', 'none')"]))),
 
