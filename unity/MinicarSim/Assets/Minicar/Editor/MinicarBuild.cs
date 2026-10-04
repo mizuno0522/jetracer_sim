@@ -75,6 +75,10 @@ namespace Minicar.EditorTools
                     if ((k & 2) != 0) m.EnableKeyword("_DETAIL_MULX2");
                     Save(m, $"StdVariants/Std_{i}{k}");
                 }
+            // 車体のシェル: 金属感・滑らかさの絵 (不透明)
+            var mg = new Material(Shader.Find("Standard"));
+            mg.EnableKeyword("_METALLICGLOSSMAP");
+            Save(mg, "StdVariants/Std_MetalMap");
         }
 
         static void Save(Material m, string name)

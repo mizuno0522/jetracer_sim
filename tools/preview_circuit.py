@@ -498,7 +498,7 @@ def render(data, s_car, view, W, H, ss=2):
     car_xy = p + nrm * tr.line[i] * 0.85
     veh = data.get('vehicle', {})
     L = veh.get('length_m', 4.3)
-    k = L / {'real_rx7': 0.448, 'real_nd': 0.428, 'real_b787': 0.486}.get(veh.get('name', ''), 0.45)
+    k = L / {'real_rx7': 4.289 * 0.257 / 2.425, 'real_nd': 0.428, 'real_b787': 0.486}.get(veh.get('name', ''), 0.45)
     if view == 'chase':
         eye = np.array([*(car_xy - t * 0.95 * k + nrm * -0.25 * k), 0.42 * k])
         look = np.array([*(car_xy + t * 0.35 * k), 0.06 * k])
@@ -807,15 +807,183 @@ def render(data, s_car, view, W, H, ss=2):
 
 
 CARMODEL = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', 'unity', 'MinicarSim', 'Assets', 'Minicar', 'Scripts', 'CarModel.cs')
-PAINT = {'BuildRx7': (0.98, 0.78, 0.05), 'BuildRoadster': (0.66, 0.015, 0.04), 'BuildB787': (0.96, 0.42, 0.06)}
+PAINT = {'BuildRx7': (0.97, 0.745, 0.055), 'BuildRoadster': (0.66, 0.015, 0.04), 'BuildB787': (0.96, 0.42, 0.06)}
 METAL = {'BuildRx7': 0.25, 'BuildRoadster': 0.80, 'BuildB787': 0.15}     # CarModel の下地の金属感 (ソウルレッドは 0.8)
 MATS = {'yellow': None, 'red': None, 'orange': None, 'paint': None, 'green': (0.05, 0.55, 0.30), 'black': (0.03, 0.03, 0.03),
         'glass': (0.04, 0.05, 0.07), 'lamp': (0.95, 0.95, 0.90), 'tail': (0.75, 0.05, 0.05), 'alu': (0.55, 0.56, 0.58), 'seat': (0.12, 0.11, 0.11)}
 
 
+SHELLMODEL = CARMODEL.replace('CarModel.cs', 'CarModel.Shell.cs')
+SHELL_K = 6                      # CarModel.Shell: 1 区間の分割 (K)・ベジェ 7 本・半断面 43 点
+SHELL_NU = 7 * SHELL_K + 1
+
+
+def _f(t):
+    return float(t.strip().rstrip('f'))
+
+
+def shell_spec(method):
+    """CarModel.Shell.cs から、シェルの車体 (断面の表 St(…)・縮尺・車軸・アーチ) を読む。無ければ None"""
+    src = open(SHELLMODEL, encoding='utf-8').read()
+    m = re.search(r'void %s\(.*?new Shell\((\w+), k, new\[\] \{([^}]*)\}, ([\d.]+)f, TireRadius / k, ([\d.]+)f\)' % method, src, re.S)
+    if not m:
+        return None
+    tab = re.search(r'%s =\s*\{(.*?)\n        \};' % m.group(1), src, re.S).group(1)
+    secs = [[_f(x) for x in v.split(',')] for v in re.findall(r'St\(([^)]*)\)', tab)]
+    name = method.replace('Build', '')
+    sc = re.search(r'const float k%sScale = ([\d.]+)f / ([\d.]+)f' % name, src)
+    scale = float(sc.group(1)) / float(sc.group(2))
+    tr = re.search(r'TireRadius = ([\d.]+)f \* k%sScale' % name, open(CARMODEL, encoding='utf-8').read())
+    return dict(secs=secs, scale=scale, axles=[_f(x) for x in m.group(2).split(',')], arch_r=float(m.group(3)),
+                arch_y=float(tr.group(1)), well_x=float(m.group(4)))
+
+
+class Shell:
+    """CarModel.Shell と同じ式 (実車の m)。断面 = 制御点 9 個の 2 次 B スプライン、前後は単調な 3 次補間、端は丸く閉じる"""
+
+    def __init__(self, sp):
+        self.__dict__.update(sp)
+        S = np.array(self.secs)
+        self.S = S
+        n = len(S)
+        d = (S[1:, 1:] - S[:-1, 1:]) / (S[1:, :1] - S[:-1, :1])
+        T = np.zeros((n, S.shape[1] - 1))
+        T[0], T[-1] = d[0], d[-1]
+        for k in range(1, n - 1):
+            ok = d[k - 1] * d[k] > 0
+            T[k] = np.where(ok, 2 * d[k - 1] * d[k] / np.where(ok, d[k - 1] + d[k], 1), 0)
+        self.T = T
+
+    def controls(self, z, f):
+        S, T = self.S, self.T
+        z = min(max(z, S[0, 0]), S[-1, 0])
+        k = 0
+        while k < len(S) - 2 and z > S[k + 1, 0]:
+            k += 1
+        h = S[k + 1, 0] - S[k, 0]
+        t = (z - S[k, 0]) / h
+        v = ((2 * t ** 3 - 3 * t ** 2 + 1) * S[k, 1:] + (t ** 3 - 2 * t ** 2 + t) * h * T[k]
+             + (-2 * t ** 3 + 3 * t ** 2) * S[k + 1, 1:] + (t ** 3 - t ** 2) * h * T[k + 1])
+        yb, wb, w2, y2, w3, y3, w4, y4, w5, y5, w6, y6, y7 = v
+        c = np.array([[0, yb], [wb * 0.6, yb], [wb, yb], [w2, y2], [w3, y3], [w4, y4], [w5, y5], [w6, y6], [0, y7]])
+        if f < 1:
+            mid = np.array([0, (c[0, 1] + c[8, 1]) / 2])
+            c = mid + (c - mid) * f
+        return c
+
+    @staticmethod
+    def profile(c):
+        K = SHELL_K
+        p = np.zeros((SHELL_NU, 2))
+        tt = np.arange(K) / K
+        for s in range(7):
+            a = c[0] if s == 0 else (c[s] + c[s + 1]) / 2
+            e = c[8] if s == 6 else (c[s + 1] + c[s + 2]) / 2
+            p[s * K:(s + 1) * K] = ((1 - tt) ** 2)[:, None] * a + (2 * (1 - tt) * tt)[:, None] * c[s + 1] + (tt ** 2)[:, None] * e
+        p[-1] = c[8]
+        return p
+
+    @staticmethod
+    def _resample(src, n):
+        seg = np.linalg.norm(np.diff(src, axis=0), axis=1)
+        cum = np.concatenate([[0], np.cumsum(seg)])
+        d = np.linspace(0, cum[-1], n)
+        return np.stack([np.interp(d, cum, src[:, 0]), np.interp(d, cum, src[:, 1])], 1)
+
+    def section(self, z, f):
+        K = SHELL_K
+        c = self.controls(z, f)
+        p = self.profile(c)
+        ya = -1.0
+        if f >= 1:
+            for za in self.axles:
+                if abs(z - za) < self.arch_r:
+                    ya = self.arch_y + math.sqrt(self.arch_r ** 2 - (z - za) ** 2)
+                    break
+        if ya < 0:
+            return p, 0
+        ya = min(ya, c[5, 1] - 0.06)
+        i1 = 2 * K
+        while i1 < 5 * K and p[i1, 1] < ya:
+            i1 += 1
+        if i1 <= 2 * K:
+            return p, 0
+        a, b = p[i1 - 1], p[i1]
+        L = a + (b - a) * min(1, max(0, (ya - a[1]) / max(1e-5, b[1] - a[1])))
+        lip = 3 * K
+        up = np.vstack([L[None], p[i1:5 * K + 1]])
+        well = np.array([p[0], [self.well_x - 0.03, p[0, 1]], [self.well_x, ya + 0.03], [L[0] - 0.03, ya + 0.03], L])
+        p[lip:5 * K + 1] = self._resample(up, 5 * K - lip + 1)
+        p[0:lip + 1] = self._resample(well, lip + 1)
+        return p, lip
+
+    def rings(self):
+        z0, z1 = self.S[0, 0], self.S[-1, 0]
+        zs = list(np.arange(z0, z1, 0.03)) + [z1] + list(self.S[:, 0])
+        for za in self.axles:
+            zs += [za + self.arch_r * 0.999 * math.cos(math.pi * i / 20) for i in range(21)]
+            zs += [za - self.arch_r * 1.001, za + self.arch_r * 1.001]
+        zs.sort()
+        cf, cd = (0.93, 0.78, 0.52, 0.0), (0.008, 0.016, 0.021, 0.022)
+        out = [(z0, z0 - cd[i], cf[i]) for i in (3, 2, 1, 0)]
+        prev = -1e9
+        for z in zs:
+            if z < z0 or z > z1 or z - prev < 0.0005:
+                continue
+            out.append((z, z, 1.0))
+            prev = z
+        out += [(z1, z1 + cd[i], cf[i]) for i in range(4)]
+        return out
+
+
+def rx7_mat(z, x, y, u):
+    """CarModel.Shell.PaintRx7 の大きな塗り分けだけ (窓・黒い樹脂・尾端の帯)。細い合わせ目は省く"""
+    fr = (u - 5.5) / 0.9
+    if (5.55 <= u <= 6.35 and -0.06 + fr * 0.42 <= z <= 1.63 - fr * 0.55) or (u > 6.62 and (1.07 <= z <= 1.74 or -0.40 <= z <= 0.33)):
+        return 'glass'
+    if (z > 2.75 and y < 0.185) or (z < -0.55 and y < 0.27 and x < 0.62):
+        return 'black'
+    if z > 3.20 and x < 0.27 and 0.225 <= y <= 0.33:
+        return 'black'
+    if z < -0.86 and 0.625 <= y <= 0.765 and x < 0.72:
+        return 'tail' if any(math.hypot(x - (0.27 + 0.17 * k), y - 0.695) < 0.062 for k in (1, 2)) else 'black'
+    return 'paint'
+
+
+SHELL_MAT = {'BuildRx7': rx7_mat}
+
+
+def shell_quads(method):
+    """シェルの車体の面 (模型の大きさ)。(面, 材質, 外向きの基準点)"""
+    sp = shell_spec(method)
+    if sp is None:
+        return None
+    sh = Shell(sp)
+    k = sh.scale
+    matf = SHELL_MAT.get(method, lambda *a: 'paint')
+    R = []
+    for ze, zp, f in sh.rings():
+        p, lip = sh.section(ze, f)
+        R.append((zp, p, lip))
+    out = []
+    for j in range(len(R) - 1):
+        (za, pa, la), (zb, pb, lb) = R[j], R[j + 1]
+        ref = (0.0, (pa[0, 1] + pa[-1, 1]) / 2 * k, (za + zb) / 2 * k)
+        for i in range(SHELL_NU - 1):
+            mid = (pa[i] + pa[i + 1] + pb[i] + pb[i + 1]) / 4
+            mat = 'black' if i < max(la, lb) - 1 else matf((za + zb) / 2, mid[0], mid[1], (i + 0.5) / SHELL_K)
+            for sx in (1, -1):
+                q = [(sx * pa[i, 0] * k, pa[i, 1] * k, za * k), (sx * pa[i + 1, 0] * k, pa[i + 1, 1] * k, za * k),
+                     (sx * pb[i + 1, 0] * k, pb[i + 1, 1] * k, zb * k), (sx * pb[i, 0] * k, pb[i, 1] * k, zb * k)]
+                out.append((q, mat, ref))
+    return out
+
+
 def car_parts(method):
     """CarModel.cs の Build<車>() から、断面 (Loft) と箱 (Cube) を読む。Unity と同じ形を描くため"""
     src = open(CARMODEL, encoding='utf-8').read()
+    if f'void {method}(' not in src:         # シェルの車体 (CarModel.Shell.cs)。羽根などの小物は省く
+        return [], []
     a = src.index(f'void {method}(')
     b = src.index('\n        }\n', a)
     blk = src[a:b]
@@ -935,12 +1103,15 @@ def box_quads(pos, size, pitch):
 def draw_car(im, proj, eye, xy, t, nrm, k, style):
     """CarModel の断面を拡大して、太陽の向きで陰影をつけて描く (奥から順に)。下に柔らかい影"""
     lofts, cubes = car_parts(style)
+    shell = shell_quads(style)
     paint = np.array(PAINT.get(style, (0.6, 0.6, 0.6)))
     def W(p):                # 車体座標 (x 右・y 上・z 前、後軸の真下が原点) → 世界
         x, y, z = p
         w = xy + t * z * k - nrm * x * k
         return np.array([w[0], w[1], y * k])
     items = []                # (面, 材質, 外向きの基準点 [車体座標]): 面の重心から基準点を引いた向きが外
+    if shell:
+        items += shell
     for lf in lofts:
         if lf[0] == 'body':
             _, secs, nexp, arch_r, pinch, mat = lf

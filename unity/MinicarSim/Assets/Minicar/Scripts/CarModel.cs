@@ -13,7 +13,7 @@ namespace Minicar
     /// ボディの種類。Default は従来の濃紺 FD 系 (M-05 寸法)
     public enum CarStyle { Default, B787, Roadster, Rx7 }
 
-    public class CarModel
+    public partial class CarModel
     {
         // 寸法はボディごと (Default は M-05、それ以外は TT-02)
         readonly float Wheelbase;
@@ -36,6 +36,7 @@ namespace Minicar
         bool m_HasPrev;
 
         public CarStyle Style { get; }
+        readonly bool m_FlipLoft;
 
         /// 見た目の全長 [m] (縮尺 1 のとき)。実車スケールのコースでは vehicle_profile の全長に合わせて SetScale する
         public float ModelLength
@@ -46,7 +47,7 @@ namespace Minicar
                 {
                     case CarStyle.B787: return 0.486f;
                     case CarStyle.Roadster: return 0.428f;
-                    case CarStyle.Rx7: return 0.448f;
+                    case CarStyle.Rx7: return 4.289f * kRx7Scale;      // 実車の全長 (丸めた端まで) × 縮尺
                     default: return 0.401f;
                 }
             }
@@ -75,11 +76,17 @@ namespace Minicar
         public CarModel(string name, Color bodyColor, int layer, bool withMast, CarStyle style = CarStyle.Default)
         {
             Style = style;
+            m_FlipLoft = style != CarStyle.Default;
             bool tt02 = style != CarStyle.Default;
             Wheelbase = tt02 ? 0.257f : 0.210f;     // TT-02 公称 / M-05 (sim.yaml wheelbase_m)
             HalfTrack = tt02 ? 0.084f : 0.082f;     // タイヤ外面がボディ側面と面一になる位置
             TireRadius = tt02 ? 0.032f : 0.030f;    // TT-02 約 64 mm / hw_params.yaml tire_diameter_m 0.060
             TireWidth = tt02 ? 0.028f : 0.026f;
+            if (style == CarStyle.Rx7)
+            {
+                // 実車の寸法から: タイヤ外径 0.63 m・幅 0.245 m、外面はフェンダーの 1 cm 内側
+                TireRadius = 0.315f * kRx7Scale; TireWidth = 0.245f * kRx7Scale; HalfTrack = (0.865f - 0.1225f) * kRx7Scale;
+            }
             Root = new GameObject(name).transform;
             var lit = Resources.Load<Material>("Mat_Lit");
             Material Mat(Color c, float smooth, float metal = 0f)
@@ -113,7 +120,7 @@ namespace Minicar
             {
                 case CarStyle.B787: BuildB787(hull, withMast, Mat, black, glass, lamp, tail, alu); break;
                 case CarStyle.Roadster: BuildRoadster(hull, withMast, Mat, black, glass, lamp, tail, alu); break;
-                case CarStyle.Rx7: BuildRx7(hull, withMast, Mat, black, glass, lamp, tail, alu); break;
+                case CarStyle.Rx7: BuildRx7(hull, withMast, Mat, black, glass, lamp, tail, alu, lit); break;
                 default: BuildDefault(hull, withMast, paint, black, glass, lamp, tail, alu); break;
             }
 
@@ -133,6 +140,7 @@ namespace Minicar
                     spin.SetParent(pivot, false);
                     m_Spinners[k++] = spin;
 
+                    if (style == CarStyle.Rx7) { BuildWheel(spin, sx, tire, rim, black, alu); continue; }
                     var t = Prim(PrimitiveType.Cylinder, "Tire", spin, tire);
                     t.localRotation = Quaternion.Euler(0f, 0f, 90f);
                     t.localScale = new Vector3(TireRadius * 2f, TireWidth * 0.5f, TireRadius * 2f);
@@ -361,162 +369,6 @@ namespace Minicar
             if (withMast) Mast(hull, black, alu, 0.080f, 0.060f);
         }
 
-        // RX-7 (FD3S): 曲面だけでできた低いクーペ。全長 4,285 × 全幅 1,760 × 全高 1,230 mm・WB 2,425 mm (模型の縮尺 0.1046)。
-        // 低いボンネットの両脇に張り出した前フェンダーの峰 (運転席から見える)、ぐっと絞った客室とダブルバブルの屋根、
-        // 盛り上がった後フェンダー、なだらかに落ちるハッチ、尾端の羽根、丸 3 灯のテール、閉じたリトラクタブルライトと五角形の開口
-        void BuildRx7(Transform hull, bool withMast, MatFn Mat, Material black, Material glass,
-                          Material lamp, Material tail, Material alu)
-        {
-            var yellow = Paint(Mat(new Color(0.97f, 0.77f, 0.06f), 0.80f, 0.25f));
-            // 胴: S(z, 半幅, 下端, 上端の中央, 峰の高さ)。車輪のアーチは BodyLoft が車軸の位置から丸く抜く
-            var body = new[]
-            {
-                S(-0.095f, 0.058f, 0.036f, 0.072f, 0.000f),   // 尾端 (上から見て丸く絞る)
-                S(-0.090f, 0.079f, 0.026f, 0.082f, 0.001f),
-                S(-0.080f, 0.088f, 0.020f, 0.088f, 0.003f),
-                S(-0.066f, 0.091f, 0.017f, 0.091f, 0.006f),   // 後フェンダーの盛り上がり
-                S(-0.010f, 0.092f, 0.016f, 0.091f, 0.008f),
-                S( 0.050f, 0.090f, 0.016f, 0.088f, 0.006f),
-                S( 0.110f, 0.087f, 0.016f, 0.085f, 0.004f),   // ドア (くびれ)
-                S( 0.160f, 0.088f, 0.016f, 0.080f, 0.006f),   // カウル
-                S( 0.220f, 0.090f, 0.016f, 0.074f, 0.009f),   // 前フェンダーの峰 (ボンネットより 9 mm = 実車 9 cm 高い)
-                S( 0.275f, 0.089f, 0.017f, 0.066f, 0.008f),
-                S( 0.315f, 0.081f, 0.019f, 0.056f, 0.005f),
-                S( 0.340f, 0.072f, 0.021f, 0.048f, 0.003f),   // ノーズ (低く、上から見ると丸い)
-                S( 0.357f, 0.054f, 0.021f, 0.043f, 0.000f),
-            };
-            Part("Paint", hull, BodyLoft(body, 3.0f, 0.040f), yellow);
-            // 客室: 胴より細く絞り (上ほど狭い)、屋根は左右 2 つの膨らみ (ダブルバブル)
-            var cabin = new[]
-            {
-                S(-0.074f, 0.056f, 0.080f, 0.086f, 0.000f),   // ハッチの尾 (羽根の付け根)
-                S(-0.040f, 0.062f, 0.080f, 0.100f, 0.000f),
-                S( 0.000f, 0.065f, 0.080f, 0.112f, 0.002f),
-                S( 0.050f, 0.066f, 0.080f, 0.1225f, 0.004f),  // 屋根の頂点 (全高 1,230 mm)
-                S( 0.090f, 0.064f, 0.080f, 0.1215f, 0.004f),
-                S( 0.120f, 0.060f, 0.080f, 0.110f, 0.002f),
-                S( 0.152f, 0.054f, 0.078f, 0.088f, 0.000f),   // 前窓の付け根
-            };
-            Part("Glass", hull, BodyLoft(cabin, 2.4f, 0f, 0.55f), glass);
-            // 屋根の板 (ガラスの上に黄色の屋根。ダブルバブルの膨らみごと 1 mm 外へ)
-            Part("Roof", hull, BodyLoft(new[]
-            {
-                S(0.010f, 0.058f, 0.104f, 0.1145f, 0.0025f),
-                S(0.050f, 0.061f, 0.108f, 0.1235f, 0.0042f),
-                S(0.092f, 0.059f, 0.106f, 0.1225f, 0.0042f),
-                S(0.112f, 0.055f, 0.100f, 0.1160f, 0.0025f),
-            }, 2.4f, 0f, 0.55f), yellow);
-            // ノーズ: 閉じたリトラクタブルライト (面一なので形には出さない)・五角形の開口・両脇のダクト・つり目の小さなランプ
-            foreach (float sx in new[] { -1f, 1f })
-            {
-                Cube("SideDuct", hull, new Vector3(sx * 0.052f, 0.032f, 0.348f), new Vector3(0.020f, 0.008f, 0.006f), black, 30f);
-                Cube("FoxEyeLamp", hull, new Vector3(sx * 0.064f, 0.043f, 0.336f), new Vector3(0.020f, 0.005f, 0.010f), lamp, 34f);
-                Cube("SideVent", hull, new Vector3(sx * 0.0895f, 0.050f, 0.188f), new Vector3(0.002f, 0.010f, 0.020f), black);
-                Cube("Mirror", hull, new Vector3(sx * 0.073f, 0.085f, 0.150f), new Vector3(0.012f, 0.008f, 0.010f), yellow);
-                // 丸 3 灯のテール (外側 2 つが赤、内側がバック灯)
-                for (int k = 0; k < 3; k++)
-                {
-                    var t = Prim(PrimitiveType.Cylinder, "TailLamp", hull, k == 0 ? lamp : tail);
-                    t.localPosition = new Vector3(sx * (0.022f + 0.014f * k), 0.062f, -0.0950f + 0.0018f * k);
-                    t.localRotation = Quaternion.Euler(90f, 0f, 0f);
-                    t.localScale = new Vector3(0.012f, 0.002f, 0.012f);
-                }
-                Cube("WingStay", hull, new Vector3(sx * 0.074f, 0.086f, -0.076f), new Vector3(0.006f, 0.014f, 0.016f), yellow, -10f);
-            }
-            Cube("NoseOpening", hull, new Vector3(0f, 0.031f, 0.353f), new Vector3(0.040f, 0.011f, 0.008f), black, 25f);
-            // 尾端の黒い帯 (テールランプの台)
-            Cube("TailPanel", hull, new Vector3(0f, 0.062f, -0.0952f), new Vector3(0.100f, 0.015f, 0.002f), black);
-            Cube("WingPlate", hull, new Vector3(0f, 0.094f, -0.080f), new Vector3(0.156f, 0.003f, 0.020f), yellow, -6f);
-            if (withMast) Mast(hull, black, alu, 0.060f, 0.124f);
-        }
-
-        // BodyLoft の断面: z, 半幅, 下端, 上端 (中央), 峰 (左右の肩が中央よりどれだけ高いか)
-        static float[] S(float z, float hw, float lo, float hi, float hump) => new[] { z, hw, lo, hi, hump };
-
-        /// 曲面の胴。断面を前後方向に Catmull-Rom で細かく (4 mm ごと) つなぎ、断面は超楕円 (n) に
-        /// 「肩の峰」(hump: 上側の 72 % 幅あたりを持ち上げる) と「上すぼまり」(pinch: 上ほど幅を絞る) を足す。
-        /// archR > 0 なら前後の車軸 (z = 0, Wheelbase) の上を半径 archR の円で抜く (下端を持ち上げる)。
-        /// tools/preview_circuit.py が同じ式で描く
-        Mesh BodyLoft(float[][] sec, float n, float archR, float pinch = 0f)
-        {
-            const int Ring = 40;
-            float e = 2f / n;
-            float z0 = sec[0][0], z1 = sec[sec.Length - 1][0];
-            int rings = Mathf.Max(2, Mathf.CeilToInt((z1 - z0) / 0.004f) + 1);
-            var verts = new System.Collections.Generic.List<Vector3>();
-            var tris = new System.Collections.Generic.List<int>();
-            for (int j = 0; j < rings; j++)
-            {
-                float z = Mathf.Lerp(z0, z1, j / (float)(rings - 1));
-                SecAt(sec, z, out float hw, out float lo, out float hi, out float hump);
-                if (archR > 0f)
-                    foreach (float axle in new[] { 0f, Wheelbase })
-                    {
-                        float dz = z - axle;
-                        if (Mathf.Abs(dz) < archR) lo = Mathf.Max(lo, TireRadius + Mathf.Sqrt(archR * archR - dz * dz) * 0.92f);
-                    }
-                lo = Mathf.Min(lo, hi - 0.006f);
-                float cy = (lo + hi) * 0.5f, hh = (hi - lo) * 0.5f;
-                for (int i = 0; i < Ring; i++)
-                {
-                    float th = i * Mathf.PI * 2f / Ring;
-                    float c = Mathf.Cos(th), sn = Mathf.Sin(th);
-                    float x = hw * Mathf.Sign(c) * Mathf.Pow(Mathf.Abs(c), e);
-                    float y = cy + hh * Mathf.Sign(sn) * Mathf.Pow(Mathf.Abs(sn), e);
-                    if (sn > 0f)
-                    {
-                        float t = Mathf.Abs(x) / Mathf.Max(1e-5f, hw), up = Mathf.Pow(sn, 0.6f);
-                        y += hump * Mathf.Exp(-Mathf.Pow((t - 0.72f) / 0.20f, 2f)) * up;
-                        x *= 1f - pinch * sn * sn;
-                    }
-                    verts.Add(new Vector3(x, y, z));
-                }
-            }
-            for (int j = 0; j < rings - 1; j++)
-                for (int i = 0; i < Ring; i++)
-                {
-                    int a = j * Ring + i, b = j * Ring + (i + 1) % Ring;
-                    int c = a + Ring, d = b + Ring;
-                    tris.AddRange(new[] { a, c, b, b, c, d });
-                }
-            // 前後の蓋
-            foreach (int j in new[] { 0, rings - 1 })
-            {
-                int center = verts.Count;
-                Vector3 m = Vector3.zero;
-                for (int i = 0; i < Ring; i++) m += verts[j * Ring + i];
-                verts.Add(m / Ring);
-                for (int i = 0; i < Ring; i++)
-                {
-                    int a = j * Ring + i, b = j * Ring + (i + 1) % Ring;
-                    if (j == 0) tris.AddRange(new[] { center, a, b });
-                    else tris.AddRange(new[] { center, b, a });
-                }
-            }
-            var mesh = new Mesh();
-            mesh.SetVertices(verts);
-            mesh.SetTriangles(tris, 0);
-            mesh.RecalculateNormals();
-            mesh.RecalculateBounds();
-            return mesh;
-        }
-
-        /// 断面の値を z で補間 (半幅・上端・峰は Catmull-Rom で滑らかに、下端は直線)
-        static void SecAt(float[][] sec, float z, out float hw, out float lo, out float hi, out float hump)
-        {
-            int k = 0;
-            while (k < sec.Length - 2 && z > sec[k + 1][0]) k++;
-            float za = sec[k][0], zb = sec[k + 1][0];
-            float t = Mathf.Clamp01((z - za) / Mathf.Max(1e-6f, zb - za));
-            float[] p0 = sec[Mathf.Max(0, k - 1)], p1 = sec[k], p2 = sec[k + 1], p3 = sec[Mathf.Min(sec.Length - 1, k + 2)];
-            float CR(int i) => 0.5f * (2f * p1[i] + (-p0[i] + p2[i]) * t + (2f * p0[i] - 5f * p1[i] + 4f * p2[i] - p3[i]) * t * t
-                                      + (-p0[i] + 3f * p1[i] - 3f * p2[i] + p3[i]) * t * t * t);
-            hw = Mathf.Max(0.002f, CR(1));
-            lo = Mathf.Lerp(p1[2], p2[2], t);
-            hi = CR(3);
-            hump = Mathf.Max(0f, CR(4));
-        }
-
         // センサマスト (見た目だけ。取付高さは vehicle_profile.camera が正)
         void Mast(Transform hull, Material black, Material alu, float z, float baseY)
         {
@@ -585,7 +437,7 @@ namespace Minicar
         }
 
         // 断面 (z, 半幅, 下端, 上端) を超楕円で結んだ閉じた胴体。n が大きいほど角張る
-        static Mesh Loft(Vector4[] sec, float n, bool caps)
+        Mesh Loft(Vector4[] sec, float n, bool caps)
         {
             const int Ring = 28;
             var verts = new System.Collections.Generic.List<Vector3>();
@@ -626,6 +478,9 @@ namespace Minicar
                     }
                 }
             }
+            // 上の並びは面が内向き (裏返し) になる。787B・ND は表向きに直す。従来のボディはセンサ画像に写る見た目を変えないためそのまま
+            if (m_FlipLoft)
+                for (int i = 0; i + 2 < tris.Count; i += 3) { int t = tris[i + 1]; tris[i + 1] = tris[i + 2]; tris[i + 2] = t; }
             var mesh = new Mesh();
             mesh.SetVertices(verts);
             mesh.SetTriangles(tris, 0);
