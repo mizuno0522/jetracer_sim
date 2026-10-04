@@ -498,7 +498,7 @@ def render(data, s_car, view, W, H, ss=2):
     car_xy = p + nrm * tr.line[i] * 0.85
     veh = data.get('vehicle', {})
     L = veh.get('length_m', 4.3)
-    k = L / {'real_rx7': 4.289 * 0.257 / 2.425, 'real_nd': 0.428, 'real_b787': 0.486}.get(veh.get('name', ''), 0.45)
+    k = L / {'real_rx7': 4.289 * 0.257 / 2.425, 'real_nd': 3.939 * 0.257 / 2.310, 'real_b787': 4.826 * 0.257 / 2.662}.get(veh.get('name', ''), 0.45)
     if view == 'chase':
         eye = np.array([*(car_xy - t * 0.95 * k + nrm * -0.25 * k), 0.42 * k])
         look = np.array([*(car_xy + t * 0.35 * k), 0.06 * k])
@@ -830,10 +830,10 @@ def shell_spec(method):
         return None
     tab = re.search(r'%s =\s*\{(.*?)\n        \};' % m.group(1), src, re.S).group(1)
     secs = [[_f(x) for x in v.split(',')] for v in re.findall(r'St\(([^)]*)\)', tab)]
-    name = method.replace('Build', '')
-    sc = re.search(r'const float k%sScale = ([\d.]+)f / ([\d.]+)f' % name, src)
+    kc = {'BuildRx7': 'kRx7Scale', 'BuildRoadster': 'kNdScale', 'BuildB787': 'kB787Scale'}[method]
+    sc = re.search(r'const float %s = ([\d.]+)f / ([\d.]+)f' % kc, src)
     scale = float(sc.group(1)) / float(sc.group(2))
-    tr = re.search(r'TireRadius = ([\d.]+)f \* k%sScale' % name, open(CARMODEL, encoding='utf-8').read())
+    tr = re.search(r'k = %s; tireR = ([\d.]+)f' % kc, src)          # RealDims
     return dict(secs=secs, scale=scale, axles=[_f(x) for x in m.group(2).split(',')], arch_r=float(m.group(3)),
                 arch_y=float(tr.group(1)), well_x=float(m.group(4)))
 
@@ -950,7 +950,31 @@ def rx7_mat(z, x, y, u):
     return 'paint'
 
 
-SHELL_MAT = {'BuildRx7': rx7_mat}
+def nd_mat(z, x, y, u):
+    """CarModel.Shell.PaintNd の大きな塗り分けだけ (窓・黒い幌)"""
+    fr = (u - 5.5) / 0.9
+    sr = 0.42 + fr * 0.06
+    if (5.55 <= u <= 6.35 and sr <= z <= 1.50 - fr * 0.50) or (u > 6.62 and 1.02 <= z <= 1.59):
+        return 'glass'
+    if u > 5.5 and -0.25 <= z <= 1.02 and not (u < 6.45 and z > sr):
+        return 'black'
+    if (z > 2.60 and y < 0.185) or (z < -0.45 and y < 0.27 and x < 0.60) or (z > 3.0 and x < 0.32 and 0.235 <= y <= 0.36):
+        return 'black'
+    if z < -0.70 and math.hypot(x - 0.52, y - 0.70) < 0.075:
+        return 'tail'
+    return 'paint'
+
+
+def b787_mat(z, x, y, u):
+    """CarModel.Shell.PaintB787 の大きな塗り分けだけ (キャノピー・オレンジと緑の斜めの帯)"""
+    if (5.75 <= u <= 6.35 and 1.28 + (u - 5.75) * 0.2 <= z <= 2.10 - (u - 5.75) * 0.5) or (u > 6.50 and 1.72 <= z <= 2.26):
+        return 'glass'
+    if y < 0.115:
+        return 'black'
+    return 'paint' if (z * 0.55 + x * 0.9 + y * 0.6) % 1.9 < 0.95 else 'green'
+
+
+SHELL_MAT = {'BuildRx7': rx7_mat, 'BuildRoadster': nd_mat, 'BuildB787': b787_mat}
 
 
 def shell_quads(method):

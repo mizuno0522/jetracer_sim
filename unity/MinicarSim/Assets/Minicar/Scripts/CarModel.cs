@@ -36,7 +36,6 @@ namespace Minicar
         bool m_HasPrev;
 
         public CarStyle Style { get; }
-        readonly bool m_FlipLoft;
 
         /// 見た目の全長 [m] (縮尺 1 のとき)。実車スケールのコースでは vehicle_profile の全長に合わせて SetScale する
         public float ModelLength
@@ -45,8 +44,8 @@ namespace Minicar
             {
                 switch (Style)
                 {
-                    case CarStyle.B787: return 0.486f;
-                    case CarStyle.Roadster: return 0.428f;
+                    case CarStyle.B787: return 4.826f * kB787Scale;
+                    case CarStyle.Roadster: return 3.939f * kNdScale;
                     case CarStyle.Rx7: return 4.289f * kRx7Scale;      // 実車の全長 (丸めた端まで) × 縮尺
                     default: return 0.401f;
                 }
@@ -76,16 +75,16 @@ namespace Minicar
         public CarModel(string name, Color bodyColor, int layer, bool withMast, CarStyle style = CarStyle.Default)
         {
             Style = style;
-            m_FlipLoft = style != CarStyle.Default;
             bool tt02 = style != CarStyle.Default;
             Wheelbase = tt02 ? 0.257f : 0.210f;     // TT-02 公称 / M-05 (sim.yaml wheelbase_m)
             HalfTrack = tt02 ? 0.084f : 0.082f;     // タイヤ外面がボディ側面と面一になる位置
             TireRadius = tt02 ? 0.032f : 0.030f;    // TT-02 約 64 mm / hw_params.yaml tire_diameter_m 0.060
             TireWidth = tt02 ? 0.028f : 0.026f;
-            if (style == CarStyle.Rx7)
+            if (tt02)
             {
-                // 実車の寸法から: タイヤ外径 0.63 m・幅 0.245 m、外面はフェンダーの 1 cm 内側
-                TireRadius = 0.315f * kRx7Scale; TireWidth = 0.245f * kRx7Scale; HalfTrack = (0.865f - 0.1225f) * kRx7Scale;
+                // 実車の寸法から (CarModel.Shell.cs)。タイヤの外面はフェンダーの 1 cm 内側
+                RealDims(style, out float rk, out float tireR, out float tireW, out float side);
+                TireRadius = tireR * rk; TireWidth = tireW * rk; HalfTrack = (side - 0.01f - tireW * 0.5f) * rk;
             }
             Root = new GameObject(name).transform;
             var lit = Resources.Load<Material>("Mat_Lit");
@@ -118,8 +117,8 @@ namespace Minicar
 
             switch (style)
             {
-                case CarStyle.B787: BuildB787(hull, withMast, Mat, black, glass, lamp, tail, alu); break;
-                case CarStyle.Roadster: BuildRoadster(hull, withMast, Mat, black, glass, lamp, tail, alu); break;
+                case CarStyle.B787: BuildB787(hull, withMast, Mat, black, glass, lamp, tail, alu, lit); break;
+                case CarStyle.Roadster: BuildRoadster(hull, withMast, Mat, black, glass, lamp, tail, alu, lit); break;
                 case CarStyle.Rx7: BuildRx7(hull, withMast, Mat, black, glass, lamp, tail, alu, lit); break;
                 default: BuildDefault(hull, withMast, paint, black, glass, lamp, tail, alu); break;
             }
@@ -140,7 +139,7 @@ namespace Minicar
                     spin.SetParent(pivot, false);
                     m_Spinners[k++] = spin;
 
-                    if (style == CarStyle.Rx7) { BuildWheel(spin, sx, tire, rim, black, alu); continue; }
+                    if (tt02) { BuildWheel(spin, sx, tire, style == CarStyle.B787 ? Mat(new Color(0.85f, 0.70f, 0.25f), 0.7f, 0.9f) : rim, black, alu); continue; }
                     var t = Prim(PrimitiveType.Cylinder, "Tire", spin, tire);
                     t.localRotation = Quaternion.Euler(0f, 0f, 90f);
                     t.localScale = new Vector3(TireRadius * 2f, TireWidth * 0.5f, TireRadius * 2f);
@@ -184,10 +183,6 @@ namespace Minicar
             foreach (var r in Root.GetComponentsInChildren<MeshRenderer>(true))
                 if (m_Paints.Contains(r.sharedMaterial)) r.sharedMaterials = new[] { r.sharedMaterial, coat };
         }
-
-        /// ソウルレッド (ロードスター): 鮮やかな赤の金属的な下地 (ハイライトが赤く光って広がる) ＋ クリア層。
-        /// 下地の拡散は少なく (金属 0.8)、陰は深い赤。下地の滑らかさを 0.62 に下げてハイライトの赤い「にじみ」を広げる
-        Material SoulRed(MatFn Mat) => Paint(Mat(new Color(0.66f, 0.015f, 0.04f), 0.62f, 0.80f));
 
         // 従来のボディ (M-05 + FD 系クーペ・濃紺など)
         void BuildDefault(Transform hull, bool withMast, Material paint, Material black, Material glass,
@@ -253,121 +248,6 @@ namespace Minicar
         }
 
         delegate Material MatFn(Color c, float smooth, float metal = 0f);
-
-        // ------------------------------------------------------------------
-        // 787B: 低く長いプロトタイプ。オレンジ地にグリーンの帯、閉じたキャノピー、大きなリアウイング
-        void BuildB787(Transform hull, bool withMast, MatFn Mat, Material black, Material glass,
-                       Material lamp, Material tail, Material alu)
-        {
-            var orange = Paint(Mat(new Color(0.96f, 0.42f, 0.06f), 0.80f, 0.15f));
-            var green = Paint(Mat(new Color(0.05f, 0.55f, 0.30f), 0.80f, 0.15f));
-            var body = new[]
-            {
-                new Vector4(-0.112f, 0.088f, 0.024f, 0.058f),   // テール
-                new Vector4(-0.098f, 0.097f, 0.016f, 0.072f),
-                new Vector4(-0.044f, 0.100f, 0.014f, 0.082f),   // 後フェンダーの峰
-                new Vector4(-0.034f, 0.100f, 0.068f, 0.083f),   // 後輪アーチ
-                new Vector4( 0.034f, 0.100f, 0.068f, 0.080f),
-                new Vector4( 0.046f, 0.098f, 0.014f, 0.071f),
-                new Vector4( 0.205f, 0.092f, 0.014f, 0.061f),   // くびれ
-                new Vector4( 0.221f, 0.099f, 0.068f, 0.066f),   // 前輪アーチ
-                new Vector4( 0.293f, 0.099f, 0.068f, 0.058f),
-                new Vector4( 0.306f, 0.094f, 0.017f, 0.052f),
-                new Vector4( 0.346f, 0.080f, 0.019f, 0.036f),   // ノーズ
-                new Vector4( 0.374f, 0.050f, 0.021f, 0.026f),
-            };
-            Part("Paint", hull, Loft(body, 4.0f, true), orange);
-            // グリーンの帯: 胴の下半分を一周する薄い帯 (ボディより 1.5 mm 外側)
-            var belt = new[]
-            {
-                new Vector4(-0.106f, 0.0905f, 0.020f, 0.040f),
-                new Vector4(-0.044f, 0.1015f, 0.016f, 0.040f),
-                new Vector4( 0.046f, 0.0995f, 0.016f, 0.040f),
-                new Vector4( 0.205f, 0.0935f, 0.016f, 0.040f),
-                new Vector4( 0.306f, 0.0955f, 0.018f, 0.038f),
-                new Vector4( 0.360f, 0.0700f, 0.020f, 0.030f),
-            };
-            Part("GreenBelt", hull, Loft(belt, 4.0f, true), green);
-            // ノーズ中央の緑
-            Cube("NoseStripe", hull, new Vector3(0f, 0.050f, 0.318f), new Vector3(0.030f, 0.003f, 0.080f), green, 10f);
-            // キャノピー (閉じた操縦席) と、その後ろのエンジンカウルの背
-            Part("Canopy", hull, Loft(new[]
-            {
-                new Vector4(0.040f, 0.030f, 0.076f, 0.080f),
-                new Vector4(0.080f, 0.048f, 0.076f, 0.106f),
-                new Vector4(0.140f, 0.046f, 0.072f, 0.100f),
-                new Vector4(0.190f, 0.034f, 0.064f, 0.068f),
-            }, 2.6f, true), glass);
-            Part("EngineCover", hull, Loft(new[]
-            {
-                new Vector4(-0.100f, 0.026f, 0.060f, 0.074f),
-                new Vector4(-0.020f, 0.036f, 0.070f, 0.094f),
-                new Vector4( 0.050f, 0.040f, 0.074f, 0.100f),
-            }, 3.0f, true), orange);
-            // ヘッドライトのカバー
-            foreach (float sx in new[] { -1f, 1f })
-            {
-                Cube("HeadLamp", hull, new Vector3(sx * 0.060f, 0.050f, 0.328f), new Vector3(0.030f, 0.010f, 0.018f), lamp, 18f);
-                Cube("TailLamp", hull, new Vector3(sx * 0.066f, 0.050f, -0.113f), new Vector3(0.022f, 0.008f, 0.004f), tail);
-            }
-            // リアウイング (黒い翼・緑の翼端板)
-            Cube("WingPlate", hull, new Vector3(0f, 0.110f, -0.100f), new Vector3(0.200f, 0.004f, 0.040f), black, -8f);
-            foreach (float sx in new[] { -1f, 1f })
-            {
-                Cube("WingEnd", hull, new Vector3(sx * 0.101f, 0.100f, -0.100f), new Vector3(0.003f, 0.036f, 0.050f), green);
-                Cube("WingStay", hull, new Vector3(sx * 0.030f, 0.090f, -0.096f), new Vector3(0.004f, 0.030f, 0.016f), black);
-            }
-            if (withMast) Mast(hull, black, alu, 0.110f, 0.120f);
-        }
-
-        // ロードスター ND: 幌を開けたオープン 2 シーター (右ハンドル)。ソウルレッドのメタリック
-        void BuildRoadster(Transform hull, bool withMast, MatFn Mat, Material black, Material glass,
-                           Material lamp, Material tail, Material alu)
-        {
-            var red = SoulRed(Mat);
-            var seat = Mat(new Color(0.12f, 0.11f, 0.11f), 0.35f);
-            var body = new[]
-            {
-                new Vector4(-0.080f, 0.078f, 0.034f, 0.066f),   // リア
-                new Vector4(-0.070f, 0.092f, 0.022f, 0.078f),
-                new Vector4(-0.040f, 0.096f, 0.016f, 0.083f),
-                new Vector4(-0.034f, 0.097f, 0.068f, 0.083f),   // 後輪アーチ
-                new Vector4( 0.034f, 0.097f, 0.068f, 0.080f),
-                new Vector4( 0.044f, 0.095f, 0.016f, 0.077f),
-                new Vector4( 0.205f, 0.093f, 0.016f, 0.073f),
-                new Vector4( 0.219f, 0.097f, 0.068f, 0.074f),   // 前輪アーチ
-                new Vector4( 0.292f, 0.097f, 0.068f, 0.064f),
-                new Vector4( 0.304f, 0.092f, 0.020f, 0.058f),
-                new Vector4( 0.334f, 0.078f, 0.024f, 0.048f),   // ノーズ
-                new Vector4( 0.348f, 0.056f, 0.028f, 0.040f),
-            };
-            Part("Paint", hull, Loft(body, 3.2f, true), red);
-            // オープンの室内: ボディ上面より少し高い黒い「くぼみ」で開口部を表す
-            Part("Cockpit", hull, Loft(new[]
-            {
-                new Vector4(-0.008f, 0.060f, 0.072f, 0.0815f),
-                new Vector4( 0.020f, 0.076f, 0.072f, 0.0820f),
-                new Vector4( 0.120f, 0.076f, 0.071f, 0.0800f),
-                new Vector4( 0.142f, 0.066f, 0.071f, 0.0790f),
-            }, 4.0f, true), black);
-            foreach (float sx in new[] { -1f, 1f })
-            {
-                Cube("SeatBase", hull, new Vector3(sx * 0.036f, 0.084f, 0.050f), new Vector3(0.050f, 0.008f, 0.050f), seat);
-                Cube("SeatBack", hull, new Vector3(sx * 0.036f, 0.100f, 0.022f), new Vector3(0.048f, 0.040f, 0.010f), seat, -14f);
-                Cube("RollHoop", hull, new Vector3(sx * 0.036f, 0.104f, 0.008f), new Vector3(0.040f, 0.026f, 0.006f), black, -10f);
-                Cube("HeadLamp", hull, new Vector3(sx * 0.060f, 0.054f, 0.330f), new Vector3(0.034f, 0.006f, 0.010f), lamp, 14f);
-                Cube("TailLamp", hull, new Vector3(sx * 0.064f, 0.066f, -0.080f), new Vector3(0.026f, 0.008f, 0.005f), tail);
-            }
-            // ステアリング (右ハンドル = +x)
-            var wheel = Prim(PrimitiveType.Cylinder, "SteeringWheel", hull, black);
-            wheel.localPosition = new Vector3(0.036f, 0.098f, 0.098f);
-            wheel.localRotation = Quaternion.Euler(-62f, 0f, 0f);
-            wheel.localScale = new Vector3(0.030f, 0.002f, 0.030f);
-            // フロントガラス (後ろへ傾けた板と黒い枠)
-            Cube("Windshield", hull, new Vector3(0f, 0.098f, 0.150f), new Vector3(0.150f, 0.040f, 0.003f), glass, -58f);
-            Cube("ShieldFrame", hull, new Vector3(0f, 0.115f, 0.140f), new Vector3(0.152f, 0.004f, 0.006f), black, -58f);
-            if (withMast) Mast(hull, black, alu, 0.080f, 0.060f);
-        }
 
         // センサマスト (見た目だけ。取付高さは vehicle_profile.camera が正)
         void Mast(Transform hull, Material black, Material alu, float z, float baseY)
@@ -437,7 +317,7 @@ namespace Minicar
         }
 
         // 断面 (z, 半幅, 下端, 上端) を超楕円で結んだ閉じた胴体。n が大きいほど角張る
-        Mesh Loft(Vector4[] sec, float n, bool caps)
+        static Mesh Loft(Vector4[] sec, float n, bool caps)
         {
             const int Ring = 28;
             var verts = new System.Collections.Generic.List<Vector3>();
@@ -478,9 +358,6 @@ namespace Minicar
                     }
                 }
             }
-            // 上の並びは面が内向き (裏返し) になる。787B・ND は表向きに直す。従来のボディはセンサ画像に写る見た目を変えないためそのまま
-            if (m_FlipLoft)
-                for (int i = 0; i + 2 < tris.Count; i += 3) { int t = tris[i + 1]; tris[i + 1] = tris[i + 2]; tris[i + 2] = t; }
             var mesh = new Mesh();
             mesh.SetVertices(verts);
             mesh.SetTriangles(tris, 0);

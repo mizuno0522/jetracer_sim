@@ -369,6 +369,19 @@ namespace Minicar
         // 全長 4,285 × 全幅 1,760 × 全高 1,230 mm・WB 2,425 mm。曲面だけの低いクーペ。低いボンネットの両脇に前フェンダーの峰、
         // ぐっと絞った客室、盛り上がった後フェンダー、なだらかに落ちるハッチ、丸 3 灯のテール、尾端の羽根。色はイエロー
         const float kRx7Scale = 0.257f / 2.425f;        // TT-02 のホイールベースに合わせた縮尺
+        const float kNdScale = 0.257f / 2.310f;
+        const float kB787Scale = 0.257f / 2.662f;
+
+        /// 実車の寸法: 縮尺、タイヤの半径・幅 [m]、車軸の位置での車体の半幅 [m]
+        static void RealDims(CarStyle style, out float k, out float tireR, out float tireW, out float side)
+        {
+            switch (style)
+            {
+                case CarStyle.Roadster: k = kNdScale; tireR = 0.300f; tireW = 0.205f; side = 0.865f; break;     // 195/50R16
+                case CarStyle.B787: k = kB787Scale; tireR = 0.335f; tireW = 0.320f; side = 0.990f; break;       // 前後の平均
+                default: k = kRx7Scale; tireR = 0.315f; tireW = 0.245f; side = 0.875f; break;                    // 225/50R16
+            }
+        }
 
         static readonly float[][] kRx7Sections =
         {
@@ -483,6 +496,160 @@ namespace Minicar
             pipe.localRotation = Quaternion.Euler(90f, 0f, 0f);
             pipe.localScale = new Vector3(0.10f * k, 0.05f * k, 0.10f * k);
             if (withMast) Mast(hull, black, alu, 0.060f, 0.131f);
+        }
+
+        // ------------------------------------------------------------------ ロードスター (ND)
+        // 全長 3,915 × 全幅 1,735 × 全高 1,235 mm・WB 2,310 mm。短く低いノーズ、張りのある前フェンダー、短いデッキ。
+        // 幌は閉じた状態 (黒い布)。色はソウルレッド (金属的な下地 + クリア層)
+        static readonly float[][] kNdSections =
+        {
+            //   z      yb     wb     w2     y2     w3     y3     w4     y4     w5     y5     w6     y6     y7
+            St(-0.785f, 0.34f, 0.44f, 0.54f, 0.40f, 0.60f, 0.58f, 0.57f, 0.760f, 0.48f, 0.820f, 0.26f, 0.845f, 0.850f),   // 尾端
+            St(-0.720f, 0.28f, 0.62f, 0.76f, 0.36f, 0.80f, 0.58f, 0.76f, 0.800f, 0.64f, 0.870f, 0.34f, 0.890f, 0.895f),
+            St(-0.500f, 0.20f, 0.70f, 0.83f, 0.30f, 0.855f, 0.56f, 0.82f, 0.850f, 0.68f, 0.905f, 0.40f, 0.915f, 0.915f),
+            St(-0.250f, 0.16f, 0.72f, 0.85f, 0.26f, 0.865f, 0.54f, 0.83f, 0.870f, 0.68f, 0.920f, 0.44f, 0.930f, 0.930f),  // デッキ (幌の後端)
+            St( 0.000f, 0.15f, 0.72f, 0.855f, 0.25f, 0.867f, 0.54f, 0.83f, 0.875f, 0.66f, 0.930f, 0.50f, 1.050f, 1.070f), // 後軸
+            St( 0.350f, 0.14f, 0.72f, 0.845f, 0.24f, 0.855f, 0.52f, 0.81f, 0.870f, 0.67f, 0.910f, 0.52f, 1.190f, 1.215f),
+            St( 0.750f, 0.14f, 0.72f, 0.835f, 0.24f, 0.84f, 0.50f, 0.79f, 0.860f, 0.67f, 0.895f, 0.52f, 1.210f, 1.235f),  // 幌の頂点
+            St( 1.000f, 0.14f, 0.72f, 0.83f, 0.24f, 0.835f, 0.50f, 0.785f, 0.850f, 0.675f, 0.885f, 0.52f, 1.190f, 1.210f), // 前窓の上端
+            St( 1.300f, 0.14f, 0.72f, 0.83f, 0.24f, 0.835f, 0.50f, 0.79f, 0.845f, 0.68f, 0.875f, 0.58f, 1.030f, 1.050f),
+            St( 1.600f, 0.14f, 0.72f, 0.835f, 0.24f, 0.84f, 0.50f, 0.80f, 0.840f, 0.69f, 0.860f, 0.44f, 0.850f, 0.850f),  // カウル
+            St( 1.950f, 0.14f, 0.72f, 0.845f, 0.24f, 0.855f, 0.50f, 0.82f, 0.820f, 0.70f, 0.815f, 0.40f, 0.775f, 0.775f),
+            St( 2.310f, 0.14f, 0.72f, 0.85f, 0.24f, 0.865f, 0.50f, 0.825f, 0.770f, 0.68f, 0.760f, 0.38f, 0.700f, 0.700f), // 前軸
+            St( 2.700f, 0.15f, 0.68f, 0.82f, 0.25f, 0.835f, 0.46f, 0.78f, 0.670f, 0.64f, 0.665f, 0.36f, 0.620f, 0.620f),
+            St( 2.950f, 0.17f, 0.58f, 0.70f, 0.26f, 0.72f, 0.40f, 0.66f, 0.540f, 0.54f, 0.550f, 0.30f, 0.530f, 0.530f),
+            St( 3.070f, 0.20f, 0.42f, 0.50f, 0.28f, 0.52f, 0.37f, 0.48f, 0.460f, 0.40f, 0.470f, 0.22f, 0.470f, 0.470f),
+            St( 3.110f, 0.23f, 0.30f, 0.36f, 0.30f, 0.37f, 0.35f, 0.34f, 0.420f, 0.29f, 0.430f, 0.16f, 0.435f, 0.435f),   // ノーズ
+        };
+
+        static void PaintNd(float z, float x, float y, float u, out Color32 col, out float metal, out float smooth)
+        {
+            var black = new Color32(12, 12, 13, 255);
+            var glass = new Color32(10, 13, 18, 255);
+            col = new Color32(168, 4, 10, 255); metal = 0.80f; smooth = 0.62f;        // ソウルレッドの下地
+            bool side = In(u, 2.6f, 5.4f);
+            float fr = (u - 5.5f) / 0.9f, sideF = 1.50f - fr * 0.50f, sideR = 0.42f + fr * 0.06f;
+            bool gSide = In(u, 5.55f, 6.35f) && In(z, sideR, sideF);
+            bool gFront = u > 6.62f && In(z, 1.02f, 1.59f);
+            bool gRear = u > 6.72f && In(z, -0.08f, 0.20f);
+            if (gSide || gFront || gRear)
+            {
+                bool edge = gSide ? (u < 5.60f || u > 6.30f || z < sideR + 0.02f || z > sideF - 0.02f) : gFront ? (u < 6.66f || z < 1.045f || z > 1.565f) : false;
+                col = edge ? black : glass; metal = 0f; smooth = edge ? 0.45f : 0.96f;
+                return;
+            }
+            // 幌 (黒い布): 窓の後ろと屋根
+            if (u > 5.5f && In(z, -0.25f, 1.02f) && !(u < 6.45f && z > sideR))
+            { col = new Color32(20, 20, 21, 255); metal = 0f; smooth = 0.12f; return; }
+            if ((z > 2.60f && y < 0.185f) || (z < -0.45f && y < 0.27f && x < 0.60f)) { col = black; metal = 0f; smooth = 0.35f; return; }
+            if (z > 3.00f && x < 0.32f && In(y, 0.235f, 0.36f)) { col = black; metal = 0f; smooth = 0.25f; return; }           // グリルの口
+            if (z > 2.80f && In(x, 0.40f, 0.68f) && In(y, 0.50f, 0.54f) && u > 4.0f) { col = new Color32(235, 235, 225, 255); metal = 0.1f; smooth = 0.95f; return; }   // 細いヘッドライト
+            if (z < -0.70f)
+            {
+                float dx = x - 0.52f, dy = y - 0.70f, r = Mathf.Sqrt(dx * dx + dy * dy);
+                if (r < 0.075f) { col = r < 0.035f ? new Color32(120, 6, 8, 255) : new Color32(215, 14, 16, 255); metal = 0f; smooth = 0.92f; return; }
+            }
+            const float lw = 0.004f;
+            bool s = false;
+            if (side && In(y, 0.17f, 0.88f) && (Mathf.Abs(z - 1.50f) < lw || Mathf.Abs(z - 0.42f) < lw)) s = true;
+            if (side && In(z, 0.42f, 1.50f) && Mathf.Abs(y - 0.185f) < lw) s = true;
+            if (u > 5.0f && z > 1.64f && ((In(z, 1.64f, 2.86f) && Mathf.Abs(x - 0.62f) < lw) || (x < 0.62f && (Mathf.Abs(z - 2.86f) < lw || Mathf.Abs(z - 1.64f) < lw)))) s = true;
+            if (side && In(z, 0.52f, 0.66f) && In(y, 0.80f, 0.83f)) { col = black; metal = 0f; smooth = 0.5f; return; }
+            if (s) { col = new Color32(60, 4, 6, 255); metal = 0f; smooth = 0.4f; }
+        }
+
+        void BuildRoadster(Transform hull, bool withMast, MatFn Mat, Material black, Material glass,
+                           Material lamp, Material tail, Material alu, Material lit)
+        {
+            float k = kNdScale;
+            var shell = new Shell(kNdSections, k, new[] { 0f, 2.310f }, 0.350f, TireRadius / k, 0.60f);
+            AddShell(hull, shell, PaintNd, lit);
+            var red = Paint(Mat(new Color(0.66f, 0.015f, 0.04f), 0.62f, 0.80f));
+            foreach (float sx in new[] { -1f, 1f })
+            {
+                var mir = Prim(PrimitiveType.Sphere, "Mirror", hull, red);
+                mir.localPosition = new Vector3(sx * 0.885f * k, 0.955f * k, 1.44f * k);
+                mir.localScale = new Vector3(0.17f * k, 0.115f * k, 0.10f * k);
+                Cube("MirrorStay", hull, new Vector3(sx * 0.82f * k, 0.915f * k, 1.45f * k), new Vector3(0.10f * k, 0.03f * k, 0.05f * k), black);
+            }
+            foreach (float sx in new[] { -1f, 1f })
+            {
+                var pipe = Prim(PrimitiveType.Cylinder, "Exhaust", hull, alu);
+                pipe.localPosition = new Vector3(sx * 0.12f * k + 0.40f * k, 0.255f * k, -0.76f * k);
+                pipe.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                pipe.localScale = new Vector3(0.07f * k, 0.05f * k, 0.07f * k);
+            }
+            if (withMast) Mast(hull, black, alu, 0.060f, 0.139f);
+        }
+
+        // ------------------------------------------------------------------ 787B
+        // 全長 4,782 × 全幅 1,994 × 全高 1,003 mm・WB 2,662 mm。低く平たいグループ C のプロトタイプ。
+        // 中央の細い操縦席 (キャノピー)、その両脇に盛り上がる前後のフェンダー、低いノーズ、高い位置の大きなリアウイング。
+        // 塗り分けは明るいオレンジと緑、境目に白い線
+        static readonly float[][] kB787Sections =
+        {
+            //   z      yb     wb     w2     y2     w3     y3     w4     y4     w5     y5     w6     y6     y7
+            St(-1.150f, 0.20f, 0.80f, 0.93f, 0.26f, 0.96f, 0.40f, 0.95f, 0.560f, 0.86f, 0.600f, 0.40f, 0.600f, 0.600f),   // 尾端
+            St(-1.000f, 0.10f, 0.86f, 0.96f, 0.16f, 0.985f, 0.38f, 0.975f, 0.600f, 0.88f, 0.660f, 0.40f, 0.660f, 0.660f),
+            St(-0.500f, 0.08f, 0.88f, 0.97f, 0.14f, 0.995f, 0.38f, 0.985f, 0.680f, 0.86f, 0.730f, 0.38f, 0.700f, 0.700f),
+            St( 0.000f, 0.07f, 0.88f, 0.975f, 0.13f, 0.997f, 0.38f, 0.985f, 0.720f, 0.82f, 0.760f, 0.36f, 0.720f, 0.740f), // 後軸 (後フェンダーの頂点)
+            St( 0.600f, 0.07f, 0.88f, 0.97f, 0.13f, 0.99f, 0.36f, 0.97f, 0.620f, 0.78f, 0.660f, 0.40f, 0.800f, 0.860f),   // エンジンカウル
+            St( 1.100f, 0.07f, 0.88f, 0.965f, 0.13f, 0.985f, 0.36f, 0.96f, 0.560f, 0.74f, 0.600f, 0.44f, 0.930f, 1.000f), // 操縦席の後ろ
+            St( 1.550f, 0.07f, 0.88f, 0.96f, 0.13f, 0.98f, 0.36f, 0.955f, 0.540f, 0.72f, 0.580f, 0.45f, 0.960f, 1.003f),  // 屋根の頂点
+            St( 1.950f, 0.07f, 0.88f, 0.96f, 0.13f, 0.98f, 0.36f, 0.955f, 0.540f, 0.72f, 0.580f, 0.46f, 0.800f, 0.840f),  // 前窓の中ほど
+            St( 2.300f, 0.07f, 0.88f, 0.965f, 0.13f, 0.985f, 0.36f, 0.965f, 0.580f, 0.80f, 0.620f, 0.40f, 0.600f, 0.600f), // カウル
+            St( 2.662f, 0.07f, 0.88f, 0.97f, 0.13f, 0.99f, 0.38f, 0.975f, 0.660f, 0.84f, 0.680f, 0.44f, 0.540f, 0.520f),  // 前軸 (前フェンダーがノーズより高い)
+            St( 3.100f, 0.07f, 0.86f, 0.95f, 0.13f, 0.97f, 0.32f, 0.95f, 0.500f, 0.82f, 0.520f, 0.44f, 0.420f, 0.400f),
+            St( 3.450f, 0.07f, 0.80f, 0.88f, 0.12f, 0.90f, 0.22f, 0.87f, 0.300f, 0.76f, 0.320f, 0.40f, 0.300f, 0.290f),
+            St( 3.590f, 0.08f, 0.70f, 0.76f, 0.11f, 0.77f, 0.16f, 0.74f, 0.200f, 0.64f, 0.210f, 0.34f, 0.210f, 0.210f),   // ノーズ
+        };
+
+        static void PaintB787(float z, float x, float y, float u, out Color32 col, out float metal, out float smooth)
+        {
+            var orange = new Color32(245, 107, 15, 255);
+            var green = new Color32(12, 130, 70, 255);
+            var white = new Color32(238, 238, 232, 255);
+            var black = new Color32(12, 12, 13, 255);
+            var glass = new Color32(10, 13, 18, 255);
+            metal = 0.15f; smooth = 0.80f;
+            // キャノピー (前窓と横の窓)
+            bool gSide = In(u, 5.75f, 6.35f) && In(z, 1.28f + (u - 5.75f) * 0.2f, 2.10f - (u - 5.75f) * 0.5f);
+            bool gFront = u > 6.50f && In(z, 1.72f, 2.26f);
+            if (gSide || gFront) { col = glass; metal = 0f; smooth = 0.96f; return; }
+            if (y < 0.115f) { col = black; metal = 0f; smooth = 0.3f; return; }                                          // 床の縁
+            if (z > 3.30f && In(x, 0.52f, 0.80f) && In(y, 0.17f, 0.27f)) { col = new Color32(240, 240, 225, 255); metal = 0.1f; smooth = 0.95f; return; }   // ヘッドライト
+            if (z < -1.02f && In(x, 0.55f, 0.92f) && In(y, 0.42f, 0.50f)) { col = new Color32(210, 14, 16, 255); metal = 0f; smooth = 0.9f; return; }       // テール
+            if (z < -1.05f && x < 0.50f && In(y, 0.24f, 0.52f)) { col = black; metal = 0f; smooth = 0.2f; return; }     // 後ろの開口
+            // 塗り分け: 斜めの帯で緑とオレンジを分け、境目に白い線。車体の右と左で同じ絵を使う
+            float band = z * 0.55f + x * 0.9f + y * 0.6f;
+            float ph = Mathf.Repeat(band, 1.9f);
+            col = ph < 0.95f ? orange : green;
+            if (Mathf.Abs(ph - 0.95f) < 0.035f || ph < 0.035f || ph > 1.865f) col = white;
+            // ゼッケンの白い丸 (側面と鼻先)
+            float dz = z - 1.55f, dy = y - 0.36f;
+            if (In(u, 2.6f, 5.0f) && dz * dz + dy * dy < 0.17f * 0.17f) col = white;
+            float nz = z - 3.20f;
+            if (u > 5.5f && z > 2.9f && nz * nz + x * x < 0.17f * 0.17f) col = white;
+        }
+
+        void BuildB787(Transform hull, bool withMast, MatFn Mat, Material black, Material glass,
+                       Material lamp, Material tail, Material alu, Material lit)
+        {
+            float k = kB787Scale;
+            var shell = new Shell(kB787Sections, k, new[] { 0f, 2.662f }, 0.400f, TireRadius / k, 0.62f);
+            AddShell(hull, shell, PaintB787, lit);
+            var green = Paint(Mat(new Color(0.05f, 0.51f, 0.27f), 0.80f, 0.15f));
+            // リアウイング: 屋根の高さの大きな黒い翼、緑の翼端板、中央の 2 本の柱
+            Cube("WingPlate", hull, new Vector3(0f, 0.985f * k, -1.02f * k), new Vector3(1.90f * k, 0.035f * k, 0.42f * k), black, -6f);
+            foreach (float sx in new[] { -1f, 1f })
+            {
+                Cube("WingEnd", hull, new Vector3(sx * 0.955f * k, 0.90f * k, -1.02f * k), new Vector3(0.02f * k, 0.30f * k, 0.50f * k), green);
+                Cube("WingStay", hull, new Vector3(sx * 0.22f * k, 0.82f * k, -0.96f * k), new Vector3(0.03f * k, 0.32f * k, 0.22f * k), black);
+                var mir = Prim(PrimitiveType.Sphere, "Mirror", hull, green);
+                mir.localPosition = new Vector3(sx * 0.80f * k, 0.72f * k, 2.20f * k);
+                mir.localScale = new Vector3(0.14f * k, 0.09f * k, 0.09f * k);
+            }
+            if (withMast) Mast(hull, black, alu, 0.150f, 0.100f);
         }
     }
 }
