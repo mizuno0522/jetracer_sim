@@ -621,6 +621,8 @@ def default_course(use_shortcut=True, narrow_divider=True):
 
     course = Course(center, walls, width_m=0.60, wall_colors=colors,
                     gimmicks=[], slots=PARKING_SLOTS)
+    course.kind = 'minicar'
+    course.name = 'minicar'
     course.narrow_divider = bool(narrow_divider)
     course.use_shortcut = bool(use_shortcut)
 
@@ -634,3 +636,83 @@ def default_course(use_shortcut=True, narrow_divider=True):
     gims.sort(key=lambda g: g[1])
     course.gimmicks = gims
     return course
+
+
+# =====================================================================
+# 実車スケールのサーキット (config/courses/<name>.yaml。富士は tools/make_fuji_course.py が書き出す)
+# =====================================================================
+CIRCUIT_NAMES = ('fuji',)
+
+
+def find_circuit(name_or_path):
+    """名前 (fuji) か yaml のパスから、サーキット定義のパスを返す。"""
+    p = os.path.expanduser(name_or_path)
+    if os.path.isfile(p):
+        return p
+    here = os.path.dirname(os.path.realpath(__file__))
+    cands = [os.path.join(here, '..', 'config', 'courses', f'{name_or_path}.yaml')]
+    try:
+        from ament_index_python.packages import get_package_share_directory
+        cands.insert(0, os.path.join(get_package_share_directory('minicar_sim'), 'config', 'courses',
+                                     f'{name_or_path}.yaml'))
+    except Exception:
+        pass
+    for c in cands:
+        if os.path.isfile(c):
+            return os.path.normpath(c)
+    raise FileNotFoundError(f'サーキットの定義が見つからない: {name_or_path}')
+
+
+def _offset_polyline(center, d):
+    """閉じた中心線 (始点を末尾に重ねない) を左に d [m] ずらした点列。頂点の法線は前後の接線の平均。"""
+    nxt = np.roll(center, -1, axis=0)
+    prv = np.roll(center, 1, axis=0)
+    t = nxt - prv
+    t /= np.maximum(1e-9, np.hypot(t[:, 0], t[:, 1]))[:, None]
+    n = np.stack([-t[:, 1], t[:, 0]], axis=1)
+    return center + d * n
+
+
+def circuit_course(name_or_path='fuji'):
+    """
+    実車スケールのサーキット。壁はコース端からランオフ (runoff_m) だけ外側のバリア (左右の閉じた折れ線)。
+    ギミック・駐車枠・矢印信号は無い。コース外の判定はコース端 + off_track_margin_m、
+    衝突はバリアまでの余裕 collision_clear_m (yaml の値。vehicle_sim がこちらを使う)。
+    """
+    import yaml
+    path = find_circuit(name_or_path)
+    with open(path) as f:
+        d = yaml.safe_load(f)['course']
+    pts = np.asarray(d['centerline'], dtype=np.float64)
+    if np.hypot(*(pts[0] - pts[-1])) < 1e-6:
+        pts = pts[:-1]
+    half = float(d['width_m']) / 2.0
+    bar = half + float(d.get('runoff_m', 0.0))
+    walls = []
+    for side in (bar, -bar):
+        q = _offset_polyline(pts, side)
+        q2 = np.roll(q, -1, axis=0)
+        walls.extend(np.hstack([q, q2]).tolist())
+    center = np.vstack([pts, pts[:1]])          # 閉ループ (default_course と同じく始点を末尾に重ねる)
+    course = Course(center, walls, width_m=float(d['width_m']),
+                    wall_colors=['barrier'] * len(walls), gimmicks=[], slots=[])
+    course.kind = 'circuit'
+    course.name = str(d.get('name', name_or_path))
+    course.title = str(d.get('title', course.name))
+    course.path = path
+    course.runoff = float(d.get('runoff_m', 0.0))
+    course.step = float(d.get('step_m', 2.0))
+    course.off_track_margin = float(d.get('off_track_margin_m', 3.0))
+    course.collision_clear = float(d.get('collision_clear_m', 0.3))
+    course.corners = list(d.get('corners', []))
+    course.narrow_divider = False
+    course.use_shortcut = True
+    return course
+
+
+def course_by_name(name='minicar', use_shortcut=True, narrow_divider=True):
+    """'minicar' (既定・規約 p.24 のコース) か、サーキットの名前 / yaml のパス。"""
+    name = (name or 'minicar').strip()
+    if name in ('', 'minicar', 'default'):
+        return default_course(use_shortcut=use_shortcut, narrow_divider=narrow_divider)
+    return circuit_course(name)

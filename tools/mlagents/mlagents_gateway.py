@@ -53,8 +53,12 @@ class MlAgentsGateway(Node):
         self.declare_parameter('service_timeout_s', 5.0)
         prof = load_profile(find_profile(self.get_parameter('vehicle_profile_file').value))
         vo = float(self.get_parameter('v_max_override_mps').value)
+        cl = prof.get('cmd_limits', {})        # 実車プロファイルの指令制限 (無ければ cmd_shaper の既定)
         self.lim = ShaperLimits(delta_max_rad=float(prof['delta_max_rad']),
-                                v_max_mps=vo if vo > 0 else float(prof['v_max_mps']))
+                                v_max_mps=vo if vo > 0 else float(prof['v_max_mps']),
+                                steer_rate_rad_s=float(cl.get('steer_rate_rad_s', ShaperLimits.steer_rate_rad_s)),
+                                accel_mps2=float(cl.get('accel_mps2', ShaperLimits.accel_mps2)),
+                                decel_mps2=float(cl.get('decel_mps2', ShaperLimits.decel_mps2)))
         self.shaper = ActionShaper(self.lim)
         self.n_steps = max(1, int(self.get_parameter('decision_steps').value))
         self.seed_base = int(self.get_parameter('seed_base').value)

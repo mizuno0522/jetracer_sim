@@ -99,9 +99,14 @@ class JoyTeleop(Node):
             prof = load_profile(find_profile(self.get_parameter('vehicle_profile_file').value))
             vo = float(self.get_parameter('v_max_override_mps').value)
             rate = float(self.get_parameter('rate_hz').value)
-            self.shaper = ActionShaper(ShaperLimits(delta_max_rad=float(prof['delta_max_rad']),
-                                                    v_max_mps=vo if vo > 0 else float(prof['v_max_mps']),
-                                                    control_dt=1.0 / rate))
+            cl = prof.get('cmd_limits', {})
+            self.shaper = ActionShaper(ShaperLimits(
+                delta_max_rad=float(prof['delta_max_rad']),
+                v_max_mps=vo if vo > 0 else float(prof['v_max_mps']),
+                steer_rate_rad_s=float(cl.get('steer_rate_rad_s', ShaperLimits.steer_rate_rad_s)),
+                accel_mps2=float(cl.get('accel_mps2', ShaperLimits.accel_mps2)),
+                decel_mps2=float(cl.get('decel_mps2', ShaperLimits.decel_mps2)),
+                control_dt=1.0 / rate))
             qos = QoSProfile(reliability=QoSReliabilityPolicy.RELIABLE, history=QoSHistoryPolicy.KEEP_LAST, depth=1)
             self.pub_act = self.create_publisher(ActuatorCmd, '/actuator_cmd', qos)
         self.create_timer(1.0 / float(self.get_parameter('rate_hz').value), self.tick)

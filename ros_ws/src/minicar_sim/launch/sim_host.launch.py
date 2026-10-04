@@ -29,7 +29,10 @@ from launch_ros.parameter_descriptions import ParameterValue
 def generate_launch_description():
     sim_pkg = get_package_share_directory('minicar_sim')
     sim_params = os.path.join(sim_pkg, 'config', 'sim.yaml')
-    imu_params = os.path.join(sim_pkg, 'config', 'imu_sim.yaml')
+    course = LaunchConfiguration('course')
+    # 実車スケールのコースは IMU の取付・レンジ・路面振動が違う (imu_sim_real.yaml)
+    imu_params = PythonExpression(["'", os.path.join(sim_pkg, 'config', 'imu_sim.yaml'), "' if '", course,
+                                   "' == 'minicar' else '", os.path.join(sim_pkg, 'config', 'imu_sim_real.yaml'), "'"])
     rviz_dir = os.path.join(sim_pkg, 'rviz')
 
     profile = LaunchConfiguration('vehicle_profile')
@@ -49,6 +52,11 @@ def generate_launch_description():
     lockstep = PythonExpression(["'", sim_mode, "' == 'lockstep'"])
 
     return LaunchDescription([
+        DeclareLaunchArgument('course', default_value='minicar',
+                              description='minicar (規約 p.24) | fuji (富士スピードウェイ・実車スケール。'
+                                          'vehicle_profile:=real_nd|real_rx7|real_b787 と組み合わせる。docs/fuji.md)'),
+        DeclareLaunchArgument('ml_maxsteps', default_value='1800',
+                              description='ML-Agents の 1 エピソードの判断回数の上限 (15 Hz。富士は 3600 = 4 分)'),
         DeclareLaunchArgument('vehicle_profile', default_value='jetracer_tt02',
                               description='config/vehicle_profile/<name>.yaml (m05 で旧車両)'),
         DeclareLaunchArgument('sim_mode', default_value='realtime',
@@ -109,6 +117,7 @@ def generate_launch_description():
         Node(package='minicar_sim', executable='vehicle_sim.py', name='vehicle_sim', output='screen',
              parameters=[sim_params, {
                  'vehicle_profile_file': profile,
+                 'course': course,
                  'sim_mode': sim_mode,
                  'use_camera': ParameterValue(LaunchConfiguration('use_camera'), value_type=bool),
                  'arrow_follow': ParameterValue(LaunchConfiguration('arrow_follow'), value_type=bool),
@@ -126,7 +135,7 @@ def generate_launch_description():
              }]),
 
         Node(package='imu_sim', executable='imu_sim_node', name='imu_sim', output='screen',
-             parameters=[{'config_file': imu_params,
+             parameters=[{'config_file': ParameterValue(imu_params, value_type=str),
                           'seed': ParameterValue(seed, value_type=int),
                           'use_sim_time': ParameterValue(lockstep, value_type=bool)}]),
 
@@ -152,6 +161,10 @@ def generate_launch_description():
                  '-sound', LaunchConfiguration('sound'),
                  PythonExpression(["'-mlagents' if '", LaunchConfiguration('mlagents'), "' == 'true' else '-nomlagents'"]),
                  '-demo', LaunchConfiguration('demo'),
+                 '-maxsteps', LaunchConfiguration('ml_maxsteps'),
+                 # コースの描画は course.json (ミニカー) か course_<コース>_<profile>.json (StreamingAssets の中。
+                 # COURSE=fuji ./scripts/export_course.sh <profile> が作る。カメラの取付が車ごとに違うので profile ごと)
+                 '-course', PythonExpression(["'course.json' if '", course, "' == 'minicar' else 'course_", course, "_", profile, ".json'"]),
                  '-demodir', LaunchConfiguration('demo_dir'),
                  '-record', LaunchConfiguration('record'),
                  '-recordfps', LaunchConfiguration('record_fps'),

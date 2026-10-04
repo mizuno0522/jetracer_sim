@@ -200,6 +200,16 @@ namespace Minicar
             {
                 m_Chase[i] = MakeChaseCamera($"AicChaseP{i + 1}", cars[i]);
                 m_Onboard[i] = MakeOnboardCamera($"AicOnboardP{i + 1}", cars[i], data.camera, selfLayers[i]);
+                if (data.IsCircuit)
+                {
+                    // 実車スケール: 遠くまで描く。車体 (Root) は拡大してあるので追従視点の距離は自動で伸びる
+                    foreach (var cam in new[] { m_Chase[i], m_Onboard[i] })
+                    {
+                        cam.nearClipPlane = 0.2f;
+                        cam.farClipPlane = 12000f;
+                        cam.clearFlags = CameraClearFlags.Skybox;
+                    }
+                }
             }
             m_FpsT0 = Time.unscaledTime;
         }
@@ -221,7 +231,8 @@ namespace Minicar
         static Camera MakeOnboardCamera(string name, Transform car, CameraData c, int selfLayer)
         {
             var cam = MakeCamera(name, car, ~((1 << RvizLayout.OverviewOnlyLayer) | (1 << selfLayer)));
-            cam.transform.localPosition = new Vector3(0f, c.mount_height_m, 0f);
+            // 取付高さは世界の長さ [m]。車体 (親) を拡大していても同じ高さになるよう縮尺で割る
+            cam.transform.localPosition = new Vector3(0f, c.mount_height_m / Mathf.Max(1e-3f, car.lossyScale.y), 0f);
             cam.transform.localRotation = Quaternion.Euler(c.pitch_deg, 0f, 0f);
             float f = (c.width * 0.5f) / Mathf.Tan(c.fov_deg * 0.5f * Mathf.Deg2Rad);
             cam.fieldOfView = 2f * Mathf.Atan((c.height * 0.5f) / f) * Mathf.Rad2Deg;
@@ -771,8 +782,9 @@ namespace Minicar
                 }
             }
 
-            // 走行レーン (幅 0.6 m) の帯
-            for (int s = 0; s < m_Center.Length - 1; s++) Line(m_Center[s], m_Center[s + 1], 0.30f * pxPerM);
+            // 走行レーン (ミニカーは幅 0.6 m、サーキットはコース幅) の帯
+            float laneHalf = m_Data.IsCircuit && m_Data.circuit != null && m_Data.circuit.width_m > 0f ? m_Data.circuit.width_m * 0.5f : 0.30f;
+            for (int s = 0; s < m_Center.Length - 1; s++) Line(m_Center[s], m_Center[s + 1], Mathf.Max(1.2f, laneHalf * pxPerM));
             Flush(new Color(0.42f, 0.50f, 0.66f, 0.55f));
             // 壁: 白と赤 (⑤狭い道の中央仕切りも含む。予選でも設置される)
             foreach (string color in new[] { "white", "red" })
@@ -786,7 +798,7 @@ namespace Minicar
             // 1 本の線は実際の走りと合わない)。周回・セクタの判定は描画と無関係に中心線で行う
             // スタートライン (中心線の始点を横切る)
             Vector2 dir = (m_Center[1] - m_Center[0]).normalized, nrm = new Vector2(-dir.y, dir.x);
-            Line(m_Center[0] - nrm * 0.30f, m_Center[0] + nrm * 0.30f, 2.6f);
+            Line(m_Center[0] - nrm * laneHalf * 1.6f, m_Center[0] + nrm * laneHalf * 1.6f, 2.6f);
             Flush(new Color(1f, 0.92f, 0.25f, 1f));
 
             var tex = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };

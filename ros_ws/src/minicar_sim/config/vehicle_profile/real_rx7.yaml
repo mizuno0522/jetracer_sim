@@ -1,0 +1,56 @@
+# マツダ RX-7 (FD 系・イエロー・2 ローター ターボ) の実車スケール (course:=fuji 用)。
+# ★公表されている寸法・車重・最高速から置いた概算で、実測ではない。物理は vehicle_sim (摩擦円つき自転車モデル) のまま。
+#   最高速 約 250 km/h (70 m/s)・0-100 km/h 約 5 s に合わせた駆動力
+# 制動は全輪で受けるよう drive: all・drive_split 0.9 にしている (vehicle_sim の制動上限は「駆動輪の荷重 × μ」のため。
+# 加速は駆動力 motor.force_n が律速するので、2WD を all にした影響はほぼ出ない)。
+vehicle_profile:
+  name: real_rx7
+  wheelbase_m: 2.425
+  track_m: 1.46
+  mass_kg: 1350
+  cg_height_m: 0.46
+  length_m: 4.285
+  width_m: 1.76
+  delta_max_rad: 0.43          # 前輪の最大切れ角 (最小回転半径から)
+  v_max_mps: 70.0              # 最高速。cmd_shaper / gateway の速度 1.0 に当たる
+  drive: all
+  drive_split: [0.9, 0.1]
+  tire_dia_m: 0.64
+  tire_mu: 1.05                  # スポーツタイヤ。1.0 よりわずかに高く
+  motor:                         # 駆動力 F(v) = force_n × (1 − v / v_free_mps)。エンジン＋変速機の包絡を直線で近似
+    force_n: 7400
+    v_free_mps: 77.0
+    accel_time_constant_s: 0.35
+  servo:                         # ステアリング (ラック) の追従
+    tau_s: 0.05
+    rate_limit_rad_s: 1.2
+  esc:
+    type: car
+    deadband_mps: 0.3
+    reverse_via_neutral_ms: 0
+    brake_decel_mps2: 9.8        # 全制動 (≈ μg)
+    coast_decel_mps2: 0.5         # 惰行 (転がり＋空気抵抗の平均)
+  suspension:
+    roll_per_ms2: 0.006
+    pitch_per_ms2: 0.005
+  collision:                     # 壁・車どうしの剛体当たり (車体を円 3 つで近似。後軸からの前後位置)
+    disc_radius_m: 0.88
+    disc_offsets_m: [-0.05, 1.212, 2.475]
+  cmd_limits:                    # 人の運転・ML-Agents の指令に掛ける制限 (TT-02 は cmd_shaper の既定)
+    accel_mps2: 5.0
+    decel_mps2: 9.3
+    steer_rate_rad_s: 1.2
+  camera:                        # ボンネット上の前向きカメラ。画像は TT-02 と同じ 224×224・15 Hz (推論側の契約)
+    width: 224
+    height: 224
+    rate_hz: 15.0
+    hfov_deg: 100.0
+    vfov_deg: 0.0                # 0 = 正方画素
+    k1: 0.0
+    k2: 0.0
+    mount_height_m: 0.95
+    mount_x_m: 0.0
+    pitch_deg: 3.0
+    crop_top_frac: 0.0
+    realism:
+      enable: false

@@ -46,7 +46,7 @@ namespace Minicar
         public float Rpm => m_Rpm;
 
         Voice m_Voice;
-        float m_Volume = 0.6f, m_VMax = 3f;
+        float m_Volume = 0.6f, m_VMax = 3f, m_ALatMax = 4.4f;
         int m_Gear = 1;
         float m_PrevV, m_ALongF, m_ShiftDip;
         bool m_HasPrev;
@@ -58,7 +58,8 @@ namespace Minicar
         float m_Lp, m_Road, m_Wind1, m_Wind2, m_SqY1, m_SqY2, m_TurboPh, m_Smooth;
         uint m_Rng = 22222;
 
-        public static EngineAudio Create(GameObject host, CarStyle style, float volume, float vmax)
+        /// vmax: この車速で最高速 (最終段のレッドゾーン)、aLatMax: スキールが鳴り始める横加速度の基準 [m/s²]
+        public static EngineAudio Create(GameObject host, CarStyle style, float volume, float vmax, float aLatMax = 4.4f)
         {
             // 音を聴く耳 (AudioListener) が無ければ付ける。カメラはコードで作っているので無いことがある
             if (Object.FindFirstObjectByType<AudioListener>() == null) host.AddComponent<AudioListener>();
@@ -69,6 +70,7 @@ namespace Minicar
             e.m_Voice = VoiceOf(style);
             e.m_Volume = Mathf.Clamp01(volume);
             e.m_VMax = Mathf.Max(0.1f, vmax);
+            e.m_ALatMax = Mathf.Max(0.5f, aLatMax);
             e.m_SampleRate = AudioSettings.outputSampleRate;
             // OnAudioFilterRead を確実に呼ばせるため、無音のループを鳴らしておく (中身はフィルタで上書き)
             src.clip = AudioClip.Create("silence", e.m_SampleRate, 1, e.m_SampleRate, false);
@@ -96,10 +98,11 @@ namespace Minicar
             float rpm = Mathf.Min(vc.Red, RpmAt(m_Gear));
 
             // アクセル開度の推定: 加速していれば踏んでいる。一定速でも少しは踏んでいる
-            float thr = Mathf.Clamp01(m_ALongF / 1.5f + (frac > 0.03f ? 0.25f : 0.05f));
+            float thr = Mathf.Clamp01(m_ALongF / (0.35f * m_ALatMax) + (frac > 0.03f ? 0.25f : 0.05f));
             if (m_ShiftDip > 0f) { m_ShiftDip -= dt; thr *= 0.3f; }
-            // スキール: 横 0.45 g (実測のフルロック) の 85 % 超、または強いブレーキ
-            float slip = Mathf.Clamp01((Mathf.Abs(aLat) / 4.4f - 0.85f) * 5f) + (m_ALongF < -3f && frac > 0.15f ? 0.5f : 0f);
+            // スキール: 横加速度の上限 (ミニカーは実測のフルロック 0.45 g、実車は μg) の 85 % 超、または強いブレーキ
+            float slip = Mathf.Clamp01((Mathf.Abs(aLat) / m_ALatMax - 0.85f) * 5f)
+                       + (m_ALongF < -0.7f * m_ALatMax && frac > 0.15f ? 0.5f : 0f);
 
             m_Rpm = rpm; m_Thr = thr; m_SpeedFrac = frac; m_Slip = Mathf.Clamp01(slip);
             m_Gain = Muted ? 0f : m_Volume;

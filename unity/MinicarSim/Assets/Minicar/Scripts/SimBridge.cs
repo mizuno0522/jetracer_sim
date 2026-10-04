@@ -51,6 +51,8 @@ namespace Minicar
         public double[] LatestState => m_State;
         public ROSConnection Ros => m_Ros;
         EngineAudio m_Engine;            // 自車のエンジン音 (-sound on|off)
+        float m_ViewScale = 1f;          // 追従視点の距離の倍率 (実車スケールでは車体と同じ倍率)
+        bool Circuit => m_Course != null && m_Course.Data != null && m_Course.Data.IsCircuit;
         MinicarAgent m_Agent;            // ML-Agents (-mlagents のときだけ)
         CarModel m_OwnCar, m_Opponent, m_Rival, m_Rival2;
         double[] m_RivalState, m_Rival2State;
@@ -177,9 +179,14 @@ namespace Minicar
             string sound = Arg("-sound", "auto");
             if (sound == "auto" || sound == "") sound = m_OwnCar.Style == CarStyle.Default ? "off" : "on";
             if (sound == "on")
+            {
+                var v = m_Course.Data.vehicle;
+                string vmaxDef = v != null && v.v_max_mps > 0f ? v.v_max_mps.ToString(System.Globalization.CultureInfo.InvariantCulture) : "3.0";
+                float alat = v != null && v.a_lat_max_mps2 > 0f ? v.a_lat_max_mps2 : 4.4f;
                 m_Engine = EngineAudio.Create(gameObject, m_OwnCar.Style,
                     float.Parse(Arg("-volume", "0.6"), System.Globalization.CultureInfo.InvariantCulture),
-                    float.Parse(Arg("-soundvmax", "3.0"), System.Globalization.CultureInfo.InvariantCulture));
+                    float.Parse(Arg("-soundvmax", vmaxDef), System.Globalization.CultureInfo.InvariantCulture), alat);
+            }
             // ML-Agents: -mlagents で有効 (sim_mode:=lockstep と mlagents_gateway.py が前提。docs/mlagents.md)
             if (Array.IndexOf(Environment.GetCommandLineArgs(), "-mlagents") >= 0)
                 m_Agent = MinicarAgent.Create(this, Arg);
@@ -299,13 +306,13 @@ namespace Minicar
             { name = name + "RT", antiAliasing = 1 };
             var go = new GameObject(name);
             var cam = go.AddComponent<Camera>();
-            cam.nearClipPlane = 0.02f;
-            cam.farClipPlane = 30f;
+            cam.nearClipPlane = Circuit ? 0.2f : 0.02f;
+            cam.farClipPlane = Circuit ? 12000f : 30f;      // 実車スケール: コース全体と遠景の山まで
             ApplyIntrinsics(cam, c);
             cam.clearFlags = CameraClearFlags.SolidColor;
             // 背景: realism.background_gray が負なら Unity 既定のスカイボックス (水色)、それ以外は単色
             float bgv = (m_Real != null && m_Real.enable) ? m_Real.background_gray : 110f;
-            if (bgv < 0f) cam.clearFlags = CameraClearFlags.Skybox;
+            if (bgv < 0f || Circuit) cam.clearFlags = CameraClearFlags.Skybox;
             byte bg = (byte)Mathf.Clamp(bgv, 0, 255);
             cam.backgroundColor = new Color32(bg, bg, bg, 255);     // 会場の背景 (既定は OpenCV 描画と同じ 110)
             int hide = (1 << selfLayer) | (1 << RvizLayout.OverviewOnlyLayer);
@@ -382,14 +389,29 @@ namespace Minicar
             // 画面表示用の追従カメラ (配信には使わない)
             m_ViewCam = new GameObject("ChaseCamera").AddComponent<Camera>();
             m_ViewCam.fieldOfView = 50f;
-            m_ViewCam.nearClipPlane = 0.02f;
-            m_ViewCam.farClipPlane = 60f;
+            m_ViewCam.nearClipPlane = Circuit ? 0.2f : 0.02f;
+            m_ViewCam.farClipPlane = Circuit ? 12000f : 60f;
+            if (Circuit) m_ViewCam.clearFlags = CameraClearFlags.Skybox;
             m_ViewCam.clearFlags = CameraClearFlags.SolidColor;
             m_ViewCam.backgroundColor = new Color32(40, 42, 46, 255);
             // 接続前 (/sim/render_state 未着) はコース全体を斜め上から見せる。
             // 原点のままだと床下から写って何も見えない
-            m_ViewCam.transform.position = RosFrame.ToUnity(5.1f, -3.2f, 6.5f);
-            m_ViewCam.transform.LookAt(RosFrame.ToUnity(5.1f, 3.2f, 0f));
+            PlaceOverview();
+        }
+
+        // 俯瞰: コース全体を斜め上から (ミニカーは従来の位置、サーキットは外接矩形から)
+        void PlaceOverview()
+        {
+            if (!Circuit)
+            {
+                m_ViewCam.transform.position = RosFrame.ToUnity(5.1f, -3.2f, 6.5f);
+                m_ViewCam.transform.LookAt(RosFrame.ToUnity(5.1f, 3.2f, 0f));
+                return;
+            }
+            var b = m_Course.CircuitBounds;
+            float cx = (b[0] + b[2]) * 0.5f, cy = (b[1] + b[3]) * 0.5f, w = b[2] - b[0], h = b[3] - b[1];
+            m_ViewCam.transform.position = RosFrame.ToUnity(cx, cy - h * 0.9f, Mathf.Max(w, h) * 0.55f);
+            m_ViewCam.transform.LookAt(RosFrame.ToUnity(cx, cy, 0f));
         }
 
         void BuildCars()
@@ -409,6 +431,18 @@ namespace Minicar
             // 3 台レースの 2 台目の相手 (緑)。/sim/rival2_state が来たときだけ出す
             m_Rival2 = new CarModel("Rival2", new Color(0.20f, 0.75f, 0.30f), kRival2Layer, true,
                                     CarModel.ParseStyle(Arg("-rival2car", "")));
+            // 実車スケールのコース: 車体を vehicle_profile の全長に合わせて拡大する (見た目だけ)
+            var veh = m_Course.Data.vehicle;
+            if (m_Course.Data.IsCircuit && veh != null && veh.length_m > 0f)
+            {
+                foreach (var car in new[] { m_OwnCar, m_Opponent, m_Rival, m_Rival2 })
+                    car.SetScale(veh.length_m / car.ModelLength);
+                // センサマストは実車には無いので、拡大した見た目では隠す
+                foreach (var car in new[] { m_OwnCar, m_Rival, m_Rival2 })
+                    foreach (var t in car.Root.GetComponentsInChildren<Transform>(true))
+                        if (t.name.StartsWith("Mast")) t.gameObject.SetActive(false);
+            }
+            m_ViewScale = m_OwnCar.Scale;
             m_Rival2.Root.gameObject.SetActive(false);
             m_Rival2Label = Arg("-rival2label", "GREEN");
         }
@@ -503,19 +537,19 @@ namespace Minicar
             if (m_Follow == 2)
             {
                 // 俯瞰: コース全体を斜め上から
-                m_ViewCam.transform.position = RosFrame.ToUnity(5.1f, -3.2f, 6.5f);
-                m_ViewCam.transform.LookAt(RosFrame.ToUnity(5.1f, 3.2f, 0f));
+                PlaceOverview();
                 m_ChaseInit = false;
                 return;
             }
             // 追従カメラ: 車の斜め後ろ上から。位置だけ一次遅れで追い、揺れを抑える
             var car = (m_Follow == 1 && m_RivalState != null) ? m_Rival.Root : m_OwnCar.Root;
-            Vector3 center = car.position + car.forward * 0.105f;
-            Vector3 want = center - car.forward * 0.95f + car.right * 0.25f + Vector3.up * 0.42f;
+            float k = m_ViewScale;          // 実車スケールでは距離も車体と同じ倍率
+            Vector3 center = car.position + car.forward * 0.105f * k;
+            Vector3 want = center - car.forward * 0.95f * k + car.right * 0.25f * k + Vector3.up * 0.42f * k;
             if (!m_ChaseInit) { m_ChasePos = want; m_ChaseInit = true; }
             m_ChasePos = Vector3.Lerp(m_ChasePos, want, 1f - Mathf.Exp(-dt / 0.18f));
             m_ViewCam.transform.position = m_ChasePos;
-            m_ViewCam.transform.LookAt(center + Vector3.up * 0.06f + car.forward * 0.25f);
+            m_ViewCam.transform.LookAt(center + (Vector3.up * 0.06f + car.forward * 0.25f) * k);
 
             if (m_ShotDir != "" && Time.unscaledTime >= m_NextShot)
             {
@@ -577,7 +611,7 @@ namespace Minicar
                 m_Course.Divider.SetActive(S(F.NarrowDivider) > 0.5);
 
             int dir = (int)S(F.ArrowDir);
-            if (dir != m_ArrowDirShown)
+            if (dir != m_ArrowDirShown && m_Course.ArrowFrontMaterial != null)
             {
                 m_ArrowDirShown = dir;
                 var old = m_Course.ArrowFrontMaterial.mainTexture;

@@ -86,6 +86,12 @@ tensorboard --logdir results        # Environment/Cumulative Reward、minicar/pr
 - 学習した方策で走らせるだけなら `mlagents-learn <同じ yaml> --run-id=<同じ> --resume --inference`
 - 結果の方策は `results/<run-id>/MinicarDriver.onnx`
 
+## 富士スピードウェイ (実車スケール)
+
+同じ手順で `course:=fuji vehicle_profile:=real_<車> ml_maxsteps:=3600` を足し、gateway に
+`-p vehicle_profile_file:=real_<車> -p reward_file:=tools/mlagents/config/reward_fuji.yaml` を渡す ([docs/fuji.md](fuji.md))。
+デモと学習はコース・車ごとに分ける (`demo:=fuji_rx7_01` など。`demo_path` も分けたフォルダへ)。
+
 ## 報酬を変える
 
 `tools/mlagents/config/reward.yaml` を直して gateway を上げ直すだけ (sim と Unity は触らない)。項目名の打ち間違いは起動時に止まる。

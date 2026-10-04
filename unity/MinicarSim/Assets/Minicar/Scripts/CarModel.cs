@@ -37,6 +37,29 @@ namespace Minicar
 
         public CarStyle Style { get; }
 
+        /// 見た目の全長 [m] (縮尺 1 のとき)。実車スケールのコースでは vehicle_profile の全長に合わせて SetScale する
+        public float ModelLength
+        {
+            get
+            {
+                switch (Style)
+                {
+                    case CarStyle.B787: return 0.486f;
+                    case CarStyle.Roadster: return 0.428f;
+                    case CarStyle.Rx7: return 0.448f;
+                    default: return 0.401f;
+                }
+            }
+        }
+        public float Scale { get; private set; } = 1f;
+
+        /// 車体全体の縮尺 (サーキットでは約 10 倍)。タイヤの回転と姿勢の量もこれに合わせる
+        public void SetScale(float s)
+        {
+            Scale = Mathf.Max(0.01f, s);
+            Root.localScale = Vector3.one * Scale;
+        }
+
         /// "b787" | "nd" (roadster) | "rx7" | それ以外 = Default
         public static CarStyle ParseStyle(string s)
         {
@@ -371,7 +394,7 @@ namespace Minicar
             foreach (var p in m_SteerPivots)
                 p.localRotation = Quaternion.Euler(0f, -steer * Mathf.Rad2Deg, 0f);
 
-            m_SpinDeg = Mathf.Repeat(m_SpinDeg + v / TireRadius * Mathf.Rad2Deg * dt, 360f);
+            m_SpinDeg = Mathf.Repeat(m_SpinDeg + v / (TireRadius * Scale) * Mathf.Rad2Deg * dt, 360f);
             foreach (var s in m_Spinners)
                 s.localRotation = Quaternion.Euler(m_SpinDeg, 0f, 0f);
 

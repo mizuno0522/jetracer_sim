@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Minicar
 {
-    public class CourseBuilder : MonoBehaviour
+    public partial class CourseBuilder : MonoBehaviour
     {
         public CourseData Data { get; private set; }
         public GameObject Divider { get; private set; }
@@ -45,12 +45,26 @@ namespace Minicar
 
         public void Build()
         {
-            string path = Path.Combine(Application.streamingAssetsPath, "course.json");
+            // -course <file>: StreamingAssets からの相対か絶対パス (既定 course.json。富士は course_fuji_<profile>.json)
+            string file = SimBridge.Arg("-course", "course.json");
+            string path = Path.IsPathRooted(file) ? file : Path.Combine(Application.streamingAssetsPath, file);
+            if (!File.Exists(path))
+            {
+                Debug.LogError($"[CourseBuilder] {path} が無い。COURSE=<名前> ./scripts/export_course.sh <profile> で作って StreamingAssets へ置く");
+                path = Path.Combine(Application.streamingAssetsPath, "course.json");
+            }
             Data = JsonUtility.FromJson<CourseData>(File.ReadAllText(path));
+            Debug.Log($"[CourseBuilder] {path} kind={(Data.IsCircuit ? "circuit" : "minicar")}");
             m_Lit = Resources.Load<Material>("Mat_Lit");
             m_Unlit = Resources.Load<Material>("Mat_Unlit");
             m_Root = new GameObject("Course").transform;
             Realism = Data.realism ?? new RealismData();
+            if (Data.IsCircuit)
+            {
+                Realism.enable = false;         // 屋内会場の演出 (カーペット・観戦者・天井光) は使わない
+                BuildCircuit();
+                return;
+            }
             if (Realism.enable)
             {
                 kCarpet = new Color32((byte)Realism.carpet_r, (byte)Realism.carpet_g, (byte)Realism.carpet_b, 255);
