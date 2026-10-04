@@ -940,11 +940,11 @@ def rx7_mat(z, x, y, u):
     """CarModel.Shell.PaintRx7 の大きな塗り分けだけ (窓・黒い樹脂・尾端の帯)。細い合わせ目は省く"""
     x = abs(x)
     fr = (u - 5.5) / 0.9
-    if (5.55 <= u <= 6.35 and -0.06 + fr * 0.42 <= z <= 1.63 - fr * 0.55) or (u > 6.62 and (1.07 <= z <= 1.74 or -0.40 <= z <= 0.33)):
+    if (5.46 <= u <= 6.42 and -0.12 + fr * 0.42 <= z <= 1.64 - fr * 0.55) or (u > 6.56 and 1.06 <= z <= 1.75) or (u > 6.50 and -0.42 <= z <= 0.34):
         return 'glass'
     if (z > 2.75 and y < 0.185) or (z < -0.55 and y < 0.27 and x < 0.62):
         return 'black'
-    if z > 3.20 and x < 0.27 and 0.225 <= y <= 0.33:
+    if z > 3.12 and x < 0.36 and 0.235 <= y <= 0.335:
         return 'black'
     if z < -0.86 and 0.625 <= y <= 0.765 and x < 0.72:
         return 'tail' if any(math.hypot(x - (0.27 + 0.17 * k), y - 0.695) < 0.062 for k in (1, 2)) else 'black'
@@ -954,11 +954,7 @@ def rx7_mat(z, x, y, u):
 def nd_mat(z, x, y, u):
     """CarModel.Shell.PaintNd の大きな塗り分けだけ (窓・黒い幌)"""
     x = abs(x)
-    fr = (u - 5.5) / 0.9
-    sr = 0.42 + fr * 0.06
-    if (5.55 <= u <= 6.35 and sr <= z <= 1.50 - fr * 0.50) or (u > 6.62 and 1.02 <= z <= 1.59):
-        return 'glass'
-    if u > 5.5 and -0.25 <= z <= 1.02 and not (u < 6.45 and z > sr):
+    if u > 6.02 and 0.12 <= z <= 1.58:           # 幌を開けた室内
         return 'black'
     if (z > 2.60 and y < 0.185) or (z < -0.45 and y < 0.27 and x < 0.60) or (z > 3.0 and x < 0.32 and 0.235 <= y <= 0.36):
         return 'black'

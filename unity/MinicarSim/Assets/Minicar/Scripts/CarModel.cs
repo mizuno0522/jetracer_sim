@@ -150,7 +150,14 @@ namespace Minicar
                     spin.SetParent(pivot, false);
                     m_Spinners[k++] = spin;
 
-                    if (tt02) { BuildWheel(spin, sx, tire, style == CarStyle.B787 ? Mat(new Color(0.93f, 0.93f, 0.91f), 0.6f, 0.1f) : rim, black, alu); continue; }
+                    if (tt02)
+                    {
+                        // 787B は白、RX-7 は金色の 6 本スポーク、ND は銀の 5 本
+                        var wrim = style == CarStyle.B787 ? Mat(new Color(0.93f, 0.93f, 0.91f), 0.6f, 0.1f)
+                                 : style == CarStyle.Rx7 ? Mat(new Color(0.78f, 0.60f, 0.24f), 0.72f, 0.9f) : rim;
+                        BuildWheel(spin, sx, tire, wrim, black, alu, style == CarStyle.Rx7 ? 6 : 5);
+                        continue;
+                    }
                     var t = Prim(PrimitiveType.Cylinder, "Tire", spin, tire);
                     t.localRotation = Quaternion.Euler(0f, 0f, 90f);
                     t.localScale = new Vector3(TireRadius * 2f, TireWidth * 0.5f, TireRadius * 2f);
