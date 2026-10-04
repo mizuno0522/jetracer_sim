@@ -389,7 +389,7 @@ namespace Minicar
             // 画面表示用の追従カメラ (配信には使わない)
             m_ViewCam = new GameObject("ChaseCamera").AddComponent<Camera>();
             m_ViewCam.fieldOfView = 50f;
-            m_ViewCam.nearClipPlane = Circuit ? 0.2f : 0.02f;
+            m_ViewCam.nearClipPlane = Circuit ? 0.5f : 0.02f;
             m_ViewCam.farClipPlane = Circuit ? 12000f : 60f;
             if (Circuit) m_ViewCam.clearFlags = CameraClearFlags.Skybox;
             m_ViewCam.clearFlags = CameraClearFlags.SolidColor;

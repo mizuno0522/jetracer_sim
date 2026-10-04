@@ -205,7 +205,7 @@ namespace Minicar
                     // 実車スケール: 遠くまで描く。車体 (Root) は拡大してあるので追従視点の距離は自動で伸びる
                     foreach (var cam in new[] { m_Chase[i], m_Onboard[i] })
                     {
-                        cam.nearClipPlane = 0.2f;
+                        cam.nearClipPlane = cam == m_Chase[i] ? 0.5f : 0.2f;   // 追従視点は手前に何も無いので、深度の精度を遠くへ回す
                         cam.farClipPlane = 12000f;
                         cam.clearFlags = CameraClearFlags.Skybox;
                     }
