@@ -152,6 +152,15 @@ namespace Minicar
                 fov = 34f;
                 return true;
             }
+            if (view == "carface")
+            {
+                // 正面の少し左・低い位置から (ノーズの形の確認用)
+                Vector2 e = car + (t * 1.55f + nrm * 0.45f) * len;
+                eye = RosFrame.ToUnity(e.x, e.y, 0.22f * len);
+                look = RosFrame.ToUnity(car.x + t.x * 0.55f * len, car.y + t.y * 0.55f * len, 0.12f * len);
+                fov = 30f;
+                return true;
+            }
             if (view == "carfront" || view == "carside" || view == "carrear")
             {
                 Vector2 off = view == "carfront" ? t * 1.25f + nrm * 0.95f : view == "carside" ? nrm * 1.7f : t * -1.25f + nrm * 0.95f;
