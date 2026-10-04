@@ -13,6 +13,14 @@
 
 配信するセンサ画像 (車載カメラ) は段階によらず同じ (AA なし・後処理は実カメラ風の SensorPost だけ)。
 
+medium 以上で実車スケールのコースには、次も足す (Built-in 版):
+
+- 画面表示の後処理 `ViewPost` (明るい所のにじみ・コントラスト・周辺減光)。表示用のカメラだけで、車載カメラには掛けない
+- 周りの景色の映り込み (路面の上に置いたプローブを起動時に 1 回だけ写す)。車の塗装とガラスに空と地平線が映る
+
+ノート PC (内蔵 + 単体 GPU) では、launch と `scripts/shots.sh` が `DRI_PRIME=1` を既定にして単体 GPU を使う。
+基準の数値は [render_baseline.md](render_baseline.md)。
+
 ## HDRP 版のプロジェクト
 
 元の `unity/MinicarSim` (Built-in) はそのまま残し、**HDRP 版は別のプロジェクト `unity/MinicarSimHDRP` をスクリプトで作る** (リポジトリには入れない)。

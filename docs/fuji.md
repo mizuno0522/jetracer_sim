@@ -83,9 +83,21 @@ python3 tools/mlagents/mlagents_gateway.py --ros-args -p vehicle_profile_file:=r
   向きは「最終のパナソニックコーナーの向こう」「メインスタンドからピット越し」「A パドックから 100R・ADVAN・300R 越し」に見える側
   (コースの線形が推定なので方位は景色に合わせた)。太陽は富士山の反対側の空 (朝、正面に日が当たる)
 - **地形**: コースの外 25 m までは平らな芝生。そこから丘が立ち上がり、富士山の裾野へゆるく上る (御殿場・小山の裾野はなだらか)
-- **森**: コースの周り 1.5 km に約 2.6 万本。広葉樹・針葉樹 各 3 種の絵 (枝と数千の葉の固まりを 3D に置いて陰影をつけたもの) を十字の板にして立てる。
+- **森**: コースの周り 1.5 km に約 7.3 万本 (間隔 13 m。サーキットの周りはほとんど森)。広葉樹・針葉樹 各 3 種の絵 (枝と数千の葉の固まりを 3D に置いて陰影をつけたもの) を十字の板にして立てる。
   林の縁は入り組み、草地にも所々一本木。地面は森の下が暗い樹冠の色、草地は黄緑のむら
 - **空**: 積雲の帯 (半径 40 km のドーム)。遠くは指数のかすみ (2 km で 10 %・18 km の富士山で 63 %)
+- **コース脇** (`CourseBuilder.Trackside.cs`): コーナーの外側に金網 (高さ 3.6 m のデブリフェンス) と支柱、バリアの後ろに色の看板 (文字なし)
+- **光**: medium 以上では、周りの景色の映り込みと画面表示の後処理 (にじみ・コントラスト・周辺減光) を足す ([docs/hdrp.md](hdrp.md))
+
+### 車体 (`CarModel.Shell.cs`)
+
+RX-7 (FD3S)・ロードスター ND・787B は、実車の寸法 (m) で書いた断面を前後につないだ 1 枚の曲面 (シェル) で作る。
+
+- 断面は制御点 9 個の 2 次 B スプライン (底 → 側面 → 肩 → 窓の付け根 → 屋根)。表は `kRx7Sections`・`kNdSections`・`kB787Sections`
+- ホイールアーチは、車軸の前後でアーチの縁より下の側面をホイールハウス (内壁・天井) に置き換える。縁より上の面は変わらない
+- 窓・パネルの合わせ目・ランプ・黒い樹脂・塗り分けは、曲面に貼る 1 枚の絵に実車の座標で描く (`PaintRx7`・`PaintNd`・`PaintB787`)
+- 形を直すときは断面の表の数値を変え、`./scripts/shots.sh fuji <車>` の `*_view_carfront/carside/carrear.png` で確かめる
+- 従来のボディ (ミニカーの会場) は変えていない
 
 テクスチャはすべて実行時に式とシードで作る (画像ファイルなし。起動時に数秒かかる)。車体は `vehicle` の全長に合わせて拡大し (センサマストは隠す)、
 追従視点の距離も同じ倍率にする。Unity を使わずに見た目を確かめるには:
@@ -102,11 +114,14 @@ Unity の実際の画面で確かめるには、プレイヤーを撮影・計�
 
 ```bash
 ./scripts/shots.sh fuji rx7      # → shots/fuji_rx7_<日時>/ に 12 枚・sheet.png (一覧)・bench.md (GPU・組み立て時間・fps)
+                                 #   富士ではさらに名所と車の視点 6 枚 (NN_view_grandstand / panasonic / scenic / carfront / carside / carrear.png)
+SHOTVIEWS=carside QUALITY=medium BENCH=0 SHOTS=0 ./scripts/shots.sh fuji nd    # 視点・画質・位置を選ぶ
 ./scripts/shots.sh minicar       # ミニカーの会場 (s = 0・8・15・22 m)
 python3 tools/shot_sheet.py shots/<変更前> shots/<変更後> --out /tmp/ab.png   # 左右に並べて比べる
 ```
 
-プレイヤーの引数で直接使うなら `-shots "0,1250" -shotdir <dir> -shotsize 1920x1080 -bench 600` (`SimBridge.Shots.cs`)。
+プレイヤーの引数で直接使うなら `-shots "0,1250" -shotviews panasonic,carside -shotdir <dir> -shotsize 1920x1080 -bench 600` (`SimBridge.Shots.cs`)。
+名所の視点 (grandstand・panasonic・scenic) は `preview_circuit.py` の同名の視点と同じ位置・向き。
 
 画質の段階 (`-quality low | medium | high | auto`、既定 auto = GPU を見て選ぶ) と HDRP 版は [docs/hdrp.md](hdrp.md)。
 
