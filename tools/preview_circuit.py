@@ -924,15 +924,15 @@ class Shell:
             zs += [za + self.arch_r * 0.999 * math.cos(math.pi * i / 20) for i in range(21)]
             zs += [za - self.arch_r * 1.001, za + self.arch_r * 1.001]
         zs.sort()
-        cf, cd = (0.93, 0.78, 0.52, 0.0), (0.008, 0.016, 0.021, 0.022)
-        out = [(z0, z0 - cd[i], cf[i]) for i in (3, 2, 1, 0)]
+        cf, cd = (0.95, 0.84, 0.66, 0.40, 0.0), (0.010, 0.021, 0.031, 0.038, 0.040)
+        out = [(z0, z0 - cd[i], cf[i]) for i in (4, 3, 2, 1, 0)]
         prev = -1e9
         for z in zs:
             if z < z0 or z > z1 or z - prev < 0.0005:
                 continue
             out.append((z, z, 1.0))
             prev = z
-        out += [(z1, z1 + cd[i], cf[i]) for i in range(4)]
+        out += [(z1, z1 + cd[i], cf[i]) for i in range(5)]
         return out
 
 
