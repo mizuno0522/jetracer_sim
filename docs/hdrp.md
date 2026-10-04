@@ -56,6 +56,6 @@ HDRP 版を launch で使うときは `unity_player:=~/jetracer/unity/player_hdr
 - **学習 (ML-Agents)・ミニカーの会場の検出器の評価は Built-in 版で行う。** HDRP 版は色空間 (Linear)・光の計算が違うので、センサ画像の見え方が変わる。HDRP 版は表示・動画用
 - Built-in 版は Gamma 色空間、HDRP 版は Linear なので、同じ光の強さでも中間の明るさが少し明るく出る (例: 0.55 → 約 0.76)。露出 (`kCircuitEV`・`kLegacyEV`) で合わせる
 - HDRP は Linux では Vulkan が要る。AMD は Mesa (RADV)、NVIDIA は独自ドライバで動く。内蔵 GPU やビデオメモリ 4 GB 未満では重い (Built-in 版の medium を使う)
-- HDRP の API は Unity 6 (HDRP 17) を前提に書いてあり、まだ実機でコンパイルしていない。③ でエラーが出たら `RenderCompat.Hdrp.cs` か `Editor/HdrpSetup.cs` を直す。
+- 評価用 PC (Unity 6000.0.83f1・HDRP 17・RX 5300M) で全段が通ることを確かめた (2026-10-05)。直したのは Global Settings の型の参照 1 か所と露出 (`kCircuitEV` 14.4 → 12.9)。速さは [render_baseline.md](render_baseline.md)。③ でエラーが出たら `RenderCompat.Hdrp.cs` か `Editor/HdrpSetup.cs` を直す。
   Global Settings の警告が出たら、エディタで `unity/MinicarSimHDRP` を開き Window > Rendering > HDRP Wizard の Fix All を 1 回押して、`STEPS="3 install"` で続ける
 - 元に戻す: `unity/MinicarSimHDRP` と `~/jetracer/unity/player_hdrp` を消すだけ (元のプロジェクトは変わっていない)

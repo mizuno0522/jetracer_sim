@@ -24,6 +24,19 @@
 
 センサ配信はどれも 15.0 Hz (設計値どおり)。
 
+### HDRP 版 (`~/jetracer/unity/player_hdrp`、Vulkan・RADV)
+
+| コース | 画質 | レイアウト | 平均 | 99 % | 最悪 |
+|---|---|---|---|---|---|
+| 富士 | medium | chase | 47.7 fps | 31.96 ms | 41.35 ms |
+| 富士 | high | chase | 36.0 fps | — | — |
+
+Built-in 版の同じ条件 (medium 273.5 fps・high 251.8 fps) の 1/6〜1/7。合格条件は high の 30 fps は満たすが、medium の 60 fps に届かない。
+
+```bash
+JETRACER_UNITY_PLAYER=$HOME/jetracer/unity/player_hdrp QUALITY=medium LAYOUT=chase ./scripts/shots.sh fuji rx7
+```
+
 ```bash
 QUALITY=medium LAYOUT=chase SHOTS=0 SHOTVIEWS= ./scripts/shots.sh fuji rx7     # → shots/…/bench.md
 ```

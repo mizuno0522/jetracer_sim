@@ -22,7 +22,7 @@ namespace Minicar
     public static partial class RenderCompat
     {
         const float kSunLux = 100000f;
-        const float kCircuitEV = 14.4f;            // log2(kSunLux / (1.2 · π · 1.2)) ≈ 14.43 (Built-in の太陽 1.2 と同じ明るさ)
+        const float kCircuitEV = 12.9f;            // 式の値は log2(kSunLux / (1.2 · π · 1.2)) ≈ 14.43 だが、実機では 1.5 段ほど暗く写った (2026-10-05)。画面で合わせた値
         const float kLegacyEV = -1.915f;           // log2(1 / (1.2 · π)): 光の強さを Built-in の値のまま使うときの露出
         static float Multiplier(float ev) => 1f / (1.2f * Mathf.Pow(2f, ev));
 
