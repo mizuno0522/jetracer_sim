@@ -26,6 +26,7 @@ def main():
     ap.add_argument('--vmax', type=float, default=50.0)
     ap.add_argument('--alat', type=float, default=8.0)
     ap.add_argument('--decel', type=float, default=6.0)
+    ap.add_argument('--lateral', type=float, default=0.0, help='中心線から左へずらす量 [m] (複数台で並走するとき)')
     a = ap.parse_args()
     d = json.load(open(a.course))
     c = np.array(d['centerline_shortcut']).reshape(-1, 2)
@@ -42,6 +43,7 @@ def main():
             j = (i + 1) % n
             vlim[i] = min(vlim[i], math.sqrt(vlim[j] ** 2 + 2 * a.decel * seg[i]))
     wb = d['vehicle']['wheelbase_m']
+    c = c + np.stack([-t[:, 1], t[:, 0]], 1) * a.lateral       # 走る線 (中心線を横へずらす)
 
     rclpy.init()
     node = Node('centerline_driver')
