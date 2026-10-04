@@ -331,49 +331,6 @@ namespace Minicar
             }
         }
 
-        // 観客席 (コントロールライン付近の外側) とピット棟 (内側)。メインストレートの向きに沿って置く
-        void BuildPaddock(float bar)
-        {
-            int n = m_C.Length;
-            Vector2 t = (m_C[1] - m_C[0]).normalized, nrm = m_N[0];
-            float yaw = Mathf.Atan2(t.y, t.x);
-            // コースの重心の側が内側
-            Vector2 mid = Vector2.zero;
-            foreach (var p in m_C) mid += p;
-            mid /= n;
-            float inSide = Vector2.Dot(mid - m_C[0], nrm) > 0f ? 1f : -1f;
-            Quaternion rot = RosFrame.Yaw(yaw);
-
-            // 観客席: 階段状の 14 段、長さ 260 m。段の上面に観客、上に屋根
-            var crowd = ProcTex.Material(m_Lit, ProcTex.Crowd(91), null, 0.05f, 0f, new Vector2(8f, 8f));
-            var concrete = Lit(new Color32(150, 150, 146, 255), Speckle(128, 0.25f, 92), 0.1f, new Vector2(20f, 2f));
-            var roof = Lit(new Color32(205, 208, 212, 255), null, 0.6f);
-            float side = -inSide, len = 260f;
-            for (int r = 0; r < 14; r++)
-            {
-                float d = bar + 6f + r * 0.9f, z = 0.4f + r * 0.45f;
-                Vector2 p = m_C[0] + nrm * side * d;
-                Box("StandStep", RosFrame.ToUnity(p.x, p.y, z * 0.5f), new Vector3(0.9f, z, len), rot, concrete);
-                var top = Box("StandCrowd", RosFrame.ToUnity(p.x, p.y, z + 0.02f), new Vector3(0.86f, 0.04f, len), rot, crowd);
-                top.GetComponent<Renderer>().sharedMaterial.mainTextureScale = new Vector2(1f, len / 8f);
-            }
-            Vector2 rp = m_C[0] + nrm * side * (bar + 12f);
-            Box("StandRoof", RosFrame.ToUnity(rp.x, rp.y, 10.5f), new Vector3(16f, 0.3f, len + 6f), rot, roof);
-            for (int k = -4; k <= 4; k++)
-            {
-                Vector2 pp = m_C[0] + nrm * side * (bar + 19f) + t * (k * len / 8.5f);
-                Box("StandPillar", RosFrame.ToUnity(pp.x, pp.y, 5.3f), new Vector3(0.4f, 10.6f, 0.4f), rot, roof);
-            }
-
-            // ピット棟: 長さ 300 m・奥行 14 m・高さ 9 m。ガレージの扉の帯
-            var wall = Lit(new Color32(196, 198, 202, 255), Speckle(128, 0.15f, 93), 0.3f, new Vector2(30f, 1f));
-            var door = Lit(new Color32(48, 52, 60, 255), null, 0.5f);
-            Vector2 pb = m_C[0] + nrm * inSide * (bar + 22f);
-            Box("PitBuilding", RosFrame.ToUnity(pb.x, pb.y, 4.5f), new Vector3(14f, 9f, 300f), rot, wall);
-            Vector2 pd = m_C[0] + nrm * inSide * (bar + 14.9f);
-            Box("PitDoors", RosFrame.ToUnity(pd.x, pd.y, 2.2f), new Vector3(0.2f, 4.2f, 296f), rot, door);
-        }
-
         // 地形 (色の地図 × 芝の細部)・森 (十字の板の木)・空の雲。中身は Landscape.cs
         void BuildLandscape(Landscape land)
         {

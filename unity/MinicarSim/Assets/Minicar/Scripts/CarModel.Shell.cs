@@ -632,25 +632,7 @@ namespace Minicar
             St( 3.572f, 0.080f, 0.700f, 0.760f, 0.110f, 0.770f, 0.160f, 0.740f, 0.200f, 0.640f, 0.210f, 0.340f, 0.210f, 0.210f),   // ノーズ
         };
 
-        // 5×7 の点の文字 (ゼッケンとスポンサー名)。1 行 = 5 ビット、上の行から
-        static readonly Dictionary<char, int[]> kFont = new Dictionary<char, int[]>
-        {
-            { '5', new[] { 31, 16, 30, 1, 1, 17, 14 } }, { 'R', new[] { 30, 17, 17, 30, 20, 18, 17 } }, { 'E', new[] { 31, 16, 16, 30, 16, 16, 31 } },
-            { 'N', new[] { 17, 25, 21, 19, 17, 17, 17 } }, { 'O', new[] { 14, 17, 17, 17, 17, 17, 14 } }, { 'W', new[] { 17, 17, 17, 21, 21, 27, 17 } },
-            { 'C', new[] { 14, 17, 16, 16, 16, 17, 14 } }, { 'H', new[] { 17, 17, 17, 31, 17, 17, 17 } }, { 'A', new[] { 14, 17, 17, 31, 17, 17, 17 } },
-            { 'G', new[] { 14, 17, 16, 23, 17, 17, 15 } },
-        };
-
-        /// (a, b) が文字列の中か。a = 読む向きの位置 [m] (左端 0)、b = 下端からの高さ [m]、h = 文字の高さ
-        static bool Text(string t, float a, float b, float h)
-        {
-            if (a < 0f || b < 0f || b >= h) return false;
-            float cw = h * 6f / 7f;                     // 1 文字の送り (5 点 + 間 1 点)
-            int k = (int)(a / cw);
-            if (k >= t.Length || !kFont.TryGetValue(t[k], out var g)) return false;
-            int col = (int)((a - k * cw) / (h / 7f)), row = 6 - (int)(b / (h / 7f));
-            return col < 5 && row >= 0 && row < 7 && ((g[row] >> (4 - col)) & 1) != 0;
-        }
+        static bool Text(string t, float a, float b, float h) => DotFont.At(t, a, b, h);
 
         /// 787B (1991 年ル・マン優勝車・ゼッケン 55) の塗り分け。x は右が正。
         /// 上から見て X 字に色が入れ替わる: 左前と右後ろが緑、右前と左後ろがオレンジ。境目は白い破線 (縫い目)。
