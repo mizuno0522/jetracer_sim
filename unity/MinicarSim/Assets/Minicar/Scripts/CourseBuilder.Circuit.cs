@@ -1,9 +1,9 @@
 // 実車スケールのサーキット (course.json の kind = "circuit") を組み立てる。形状の定義元は course.py の circuit_course
 // (中心線 = centerline_shortcut、幅・ランオフ = circuit)。ここは「どう見えるか」だけ。
 //
-//   芝 (濃淡・刈り込みの縞) → 舗装のランオフ → グラベル (コーナー外側) → アスファルト (骨材・補修跡・法線マップ)
+//   舗装のランオフ → グラベル (コーナー外側) → アスファルト (骨材・補修跡・法線マップ)
 //   → 走行ラインのタイヤ痕・ブレーキングの黒い筋 → 白線 → 縁石 (紅白・凹凸・剥げ) → ガードレール (波形鋼板と支柱)
-//   → コントロールライン (市松) → 距離板 (300/200/100) → 観客席・ピット棟 → 木立 → 遠景の山 → 屋外光とかすみ
+//   → コントロールライン (市松) → 距離板 (300/200/100) → 観客席・ピット棟 → 地形・森・山・雲 (Landscape.cs) → 屋外光とかすみ
 // テクスチャは ProcTex が実行時に作る (画像ファイルなし)。メッシュの uv は m 単位で、材質の tile で 1 枚の大きさを決める。
 using System;
 using System.Collections.Generic;
@@ -13,9 +13,6 @@ namespace Minicar
 {
     public partial class CourseBuilder
     {
-        static readonly Color32 kMountain = new Color32(70, 82, 104, 255);
-        static readonly Color32 kSnow = new Color32(236, 240, 246, 255);
-
         Vector2[] m_C;          // 中心線 (閉ループ・始点を末尾に重ねない)
         Vector2[] m_N;          // 左向きの法線
         float[] m_K;            // 符号つき曲率 (+左)
@@ -36,15 +33,9 @@ namespace Minicar
             var b = CircuitBounds;
             int n = m_C.Length;
 
-            // ---- 地面 ----
-            ProcTex.Grass(512, 21, out var grassA, out var grassN);
-            var grass = ProcTex.Material(m_Lit, grassA, grassN, 0.08f, 0.6f, new Vector2(1f, 1f));
-            float gx0 = b[0] - 1500f, gy0 = b[1] - 1500f, gx1 = b[2] + 1500f, gy1 = b[3] + 1500f;
-            grass.mainTextureScale = new Vector2((gy1 - gy0) / 24f, (gx1 - gx0) / 24f);
-            grass.SetTextureScale("_BumpMap", grass.mainTextureScale);
-            // 芝はコースより 0.4 m 下 (遠くで深度の精度が足りず、上の帯とちらつかないように)。
-            // 以降の帯 (ランオフ・グラベル・縁石・白線・アスファルト) は横に並べて重ねない
-            FloorRect("Grass", gx0, gy0, gx1, gy1, -0.4f, grass);
+            // ---- 地面 (地形・森・山・雲は Landscape) ----
+            var land = new Landscape(m_C, bar, b);
+            BuildLandscape(land);
 
             ProcTex.Gravel(256, 41, out var grvA, out var grvN);
             var gravel = ProcTex.Material(m_Lit, grvA, grvN, 0.02f, 0.9f, new Vector2(4f, 4f));
@@ -102,8 +93,6 @@ namespace Minicar
             BuildControlLine(half);
             BuildBrakeBoards(half + 2.5f);
             BuildPaddock(bar);
-            BuildTrees(bar);
-            BuildMountain(b);
             BuildOutdoorLighting();
         }
 
@@ -384,125 +373,44 @@ namespace Minicar
             Box("PitDoors", RosFrame.ToUnity(pd.x, pd.y, 2.2f), new Vector3(0.2f, 4.2f, 296f), rot, door);
         }
 
-        // 木立: コースの外 25〜125 m に 1,400 本 (幹と樹冠を 1 つのメッシュにまとめる。樹冠は 3 色)。
-        // コントロールラインの前後 350 m (観客席・ピット) には置かない
-        void BuildTrees(float bar)
+        // 地形 (色の地図 × 芝の細部)・森 (十字の板の木)・空の雲。中身は Landscape.cs
+        void BuildLandscape(Landscape land)
         {
-            int n = m_C.Length;
-            var trunks = new MeshBuilder();
-            var crowns = new[] { new MeshBuilder(), new MeshBuilder(), new MeshBuilder() };
-            int placed = 0;
-            float total = m_S[n];
-            for (int k = 0; k < 6000 && placed < 1400; k++)
-            {
-                int i = (int)(ProcTex.Hash(k, 1, 7) * n) % n;
-                if (m_S[i] < 350f || m_S[i] > total - 350f) continue;
-                float side = ProcTex.Hash(k, 2, 7) < 0.5f ? -1f : 1f;
-                float d = bar + 25f + 100f * ProcTex.Hash(k, 3, 7);
-                Vector2 p = m_C[i] + m_N[i] * side * d + (m_C[(i + 1) % n] - m_C[i]).normalized * (ProcTex.Hash(k, 4, 7) - 0.5f) * 8f;
-                // ほかの区間のコースに近すぎる (内側の空き地が狭い) 所には置かない
-                bool clear = true;
-                for (int j = 0; j < n && clear; j += 2) if ((m_C[j] - p).sqrMagnitude < (bar + 20f) * (bar + 20f)) clear = false;
-                if (!clear) continue;
-                float h = 9f + 9f * ProcTex.Hash(k, 5, 7), r = h * (0.26f + 0.08f * ProcTex.Hash(k, 6, 7));
-                Vector3 b = RosFrame.ToUnity(p.x, p.y, 0f);
-                trunks.Box(b + Vector3.up * h * 0.15f, new Vector3(0.5f, h * 0.3f, 0.5f));
-                crowns[placed % 3].Cone(b + Vector3.up * h * 0.25f, r, h * 0.75f, 7);
-                placed++;
-            }
-            MeshObject("TreeTrunks", trunks.ToMesh(), Lit(new Color32(70, 52, 36, 255), null, 0.05f));
-            var greens = new[] { new Color32(42, 74, 40, 255), new Color32(56, 88, 44, 255), new Color32(34, 62, 38, 255) };
-            for (int c = 0; c < 3; c++) MeshObject("TreeCrowns", crowns[c].ToMesh(), Lit(greens[c], Speckle(64, 0.4f, 94 + c), 0.05f, new Vector2(2f, 2f)));
-        }
+            ProcTex.GrassDetail(512, 21, out var detA, out var detN);
+            var ground = new Material(m_Lit) { color = Color.white, mainTexture = land.ColorMap(2048) };
+            ground.SetFloat("_Glossiness", 0.06f);
+            ground.SetFloat("_Metallic", 0f);
+            ground.SetTexture("_BumpMap", ProcTex.FlatNormal());
+            ground.EnableKeyword("_NORMALMAP");
+            ground.SetTexture("_DetailAlbedoMap", detA);
+            ground.SetTexture("_DetailNormalMap", detN);
+            ground.SetFloat("_DetailNormalMapScale", 0.6f);
+            ground.SetTextureScale("_DetailAlbedoMap", new Vector2(1f / 12f, 1f / 12f));
+            ground.SetFloat("_UVSec", 1f);                 // 細部は uv1 (m 単位)
+            ground.EnableKeyword("_DETAIL_MULX2");
+            MeshObject("Terrain", land.TerrainMesh(), ground);
 
-        /// 小さな形をためて 1 つのメッシュにする (描画の呼び出し回数を減らす)
-        class MeshBuilder
-        {
-            readonly List<Vector3> m_V = new List<Vector3>();
-            readonly List<Vector2> m_UV = new List<Vector2>();
-            readonly List<int> m_T = new List<int>();
-
-            public void Box(Vector3 c, Vector3 s)
+            var mats = new Material[6];
+            for (int k = 0; k < 6; k++)
             {
-                Vector3 h = s * 0.5f;
-                Vector3[] q =
-                {
-                    new Vector3(-h.x, -h.y, -h.z), new Vector3(h.x, -h.y, -h.z), new Vector3(h.x, h.y, -h.z), new Vector3(-h.x, h.y, -h.z),
-                    new Vector3(-h.x, -h.y, h.z), new Vector3(h.x, -h.y, h.z), new Vector3(h.x, h.y, h.z), new Vector3(-h.x, h.y, h.z),
-                };
-                int[][] faces = { new[] { 0, 3, 2, 1 }, new[] { 5, 6, 7, 4 }, new[] { 4, 7, 3, 0 }, new[] { 1, 2, 6, 5 } };
-                foreach (var f in faces)
-                {
-                    int b = m_V.Count;
-                    foreach (int k in f) { m_V.Add(c + q[k]); m_UV.Add(Vector2.zero); }
-                    m_T.AddRange(new[] { b, b + 1, b + 2, b, b + 2, b + 3 });
-                }
+                mats[k] = new Material(m_Lit) { color = Color.white, mainTexture = ProcTex.Tree(k < 3 ? 0 : 1, 500 + k) };
+                mats[k].SetFloat("_Glossiness", 0.02f);
+                mats[k].SetFloat("_Metallic", 0f);
+                ProcTex.MakeCutout(mats[k], 0.45f);
             }
+            var trees = land.Trees();
+            foreach (var kv in Landscape.TreeMeshes(trees)) MeshObject("Trees", kv.Value, mats[kv.Key.Item3]);
+            Debug.Log($"[CourseBuilder] landscape: grid {land.Xs.Length}x{land.Ys.Length}, trees {trees.Count}");
 
-            public void Cone(Vector3 baseC, float r, float h, int seg)
+            var vc = Resources.Load<Material>("Mat_VertexColor");
+            if (vc != null)
             {
-                int top = m_V.Count;
-                m_V.Add(baseC + Vector3.up * h); m_UV.Add(new Vector2(0.5f, 1f));
-                for (int i = 0; i <= seg; i++)
-                {
-                    float a = i * Mathf.PI * 2f / seg;
-                    m_V.Add(baseC + new Vector3(Mathf.Cos(a) * r, 0f, Mathf.Sin(a) * r));
-                    m_UV.Add(new Vector2(i / (float)seg, 0f));
-                }
-                for (int i = 0; i < seg; i++) m_T.AddRange(new[] { top, top + 2 + i, top + 1 + i });
+                var sky = new Material(vc) { mainTexture = ProcTex.Clouds(77), renderQueue = 2900 };
+                var go = MeshObject("SkyDome", land.SkyDome(), sky);
+                var r = go.GetComponent<Renderer>();
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                r.receiveShadows = false;
             }
-
-            public Mesh ToMesh()
-            {
-                var m = new Mesh { indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
-                m.SetVertices(m_V);
-                m.SetUVs(0, m_UV);
-                m.SetTriangles(m_T, 0);
-                m.RecalculateNormals();
-                m.RecalculateBounds();
-                return m;
-            }
-        }
-
-        // 遠景の山: コースの中心から北西 9 km に、高さ 1.8 km・裾の半径 3 km の円錐 (コースから見上げて約 11°)。雪の帽子つき。
-        // 裾はコースから 5 km 以上離れる (近すぎると壁のように見え、空を覆う)
-        void BuildMountain(float[] b)
-        {
-            Vector2 mid = new Vector2((b[0] + b[2]) * 0.5f, (b[1] + b[3]) * 0.5f);
-            Vector2 p = mid + new Vector2(-0.70f, 0.72f).normalized * 9000f;
-            const float H = 1800f, R0 = 3000f, RTop = 420f, Snow = 1250f;
-            MeshObject("Mountain", Cone(p, 0f, H, R0, RTop), Lit(kMountain, Speckle(128, 0.25f, 95), 0.05f, new Vector2(1f, 1f)));
-            MeshObject("MountainSnow", Cone(p, Snow, H + 5f, R0 * 1.01f, RTop * 1.01f), Lit(kSnow, null, 0.2f));   // 同じ円錐の上の部分 (少し外に出す)
-        }
-
-        // 裾広がりの円錐 (頂上は平ら気味)。z0〜z1 の部分だけ。rBase は z=0 の半径、rTop は z=z1 での半径
-        static Mesh Cone(Vector2 c, float z0, float z1, float rBase, float rTop)
-        {
-            const int seg = 48;
-            float r0 = z0 <= 0f ? rBase : Mathf.Lerp(rBase, rTop, z0 / z1);
-            var v = new List<Vector3>();
-            var tri = new List<int>();
-            for (int i = 0; i <= seg; i++)
-            {
-                float a = i * Mathf.PI * 2f / seg;
-                float wob = 1f + 0.04f * Mathf.Sin(a * 5f) + 0.03f * Mathf.Sin(a * 11f + 1f);   // 稜線を少し波打たせる
-                v.Add(RosFrame.ToUnity(c.x + Mathf.Cos(a) * r0 * wob, c.y + Mathf.Sin(a) * r0 * wob, z0));
-                v.Add(RosFrame.ToUnity(c.x + Mathf.Cos(a) * rTop * wob, c.y + Mathf.Sin(a) * rTop * wob, z1));
-            }
-            for (int i = 0; i < seg; i++)
-            {
-                int a = 2 * i;
-                tri.AddRange(new[] { a, a + 1, a + 2, a + 1, a + 3, a + 2 });
-            }
-            int top = v.Count;
-            v.Add(RosFrame.ToUnity(c.x, c.y, z1 + 20f));
-            for (int i = 0; i < seg; i++) tri.AddRange(new[] { 2 * i + 1, top, 2 * i + 3 });
-            var m = new Mesh();
-            m.SetVertices(v);
-            m.SetTriangles(tri, 0);
-            m.RecalculateNormals();
-            m.RecalculateBounds();
-            return m;
         }
 
         void BuildOutdoorLighting()
@@ -523,10 +431,9 @@ namespace Minicar
             RenderSettings.ambientEquatorColor = new Color(0.50f, 0.53f, 0.52f);
             RenderSettings.ambientGroundColor = new Color(0.24f, 0.26f, 0.20f);
             RenderSettings.fog = true;           // 遠くを霞ませる (遠景の山とコースのつながり)
-            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogMode = FogMode.Exponential;   // 2 km で 16 %・9 km (山) で 55 %
             RenderSettings.fogColor = new Color(0.72f, 0.79f, 0.86f);
-            RenderSettings.fogStartDistance = 600f;
-            RenderSettings.fogEndDistance = 20000f;
+            RenderSettings.fogDensity = 0.00009f;
             QualitySettings.shadowDistance = 180f;
             QualitySettings.shadowCascades = 4;
             QualitySettings.anisotropicFiltering = AnisotropicFiltering.ForceEnable;

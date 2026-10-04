@@ -74,10 +74,22 @@ python3 tools/mlagents/mlagents_gateway.py --ros-args -p vehicle_profile_file:=r
 
 ## Unity の描画
 
-`course_fuji_<profile>.json` (`kind: circuit`) を読むと、ミニカーの会場の代わりに次を組み立てる (`CourseBuilder.Circuit.cs`):
-芝の地面・舗装のランオフ・コース (アスファルト)・白線・縁石 (半径 220 m より急なところに紅白 3 m ごと)・バリア・
-コントロールライン (市松)・ブレーキングの目安の距離板 (300 m 以上の直線の先のコーナー手前に 300 / 200 / 100)・遠景の山 (一般的な形)・
-屋外の太陽光と遠景のかすみ。車体は `vehicle` の全長に合わせて拡大し (センサマストは隠す)、追従視点の距離も同じ倍率にする。
+`course_fuji_<profile>.json` (`kind: circuit`) を読むと、ミニカーの会場の代わりに次を組み立てる (`CourseBuilder.Circuit.cs`・`Landscape.cs`):
+舗装のランオフ・コース (アスファルト)・白線・縁石 (半径 220 m より急なところに紅白 3 m ごと)・バリア・コントロールライン (市松)・
+ブレーキングの目安の距離板 (300 m 以上の直線の先のコーナー手前に 300 / 200 / 100)・観客席とピット棟、そのまわりの景色:
+
+- **地形**: コースの外 25 m までは平らな芝生。そこから丘が立ち上がり、遠くほど起伏が大きい。北西 9 km に高さ 1.8 km の山 (上ほど急な斜面・谷筋・雪)
+- **森**: コースの周り 1.5 km に約 2.6 万本。広葉樹・針葉樹 各 3 種の絵 (枝と数千の葉の固まりを 3D に置いて陰影をつけたもの) を十字の板にして立てる。
+  林の縁は入り組み、草地にも所々一本木。地面は森の下が暗い樹冠の色、草地は黄緑のむら
+- **空**: 積雲の帯 (半径 10 km のドーム)。遠くは指数のかすみ (2 km で 16 %・9 km で 55 %)
+
+テクスチャはすべて実行時に式とシードで作る (画像ファイルなし。起動時に数秒かかる)。車体は `vehicle` の全長に合わせて拡大し (センサマストは隠す)、
+追従視点の距離も同じ倍率にする。Unity を使わずに見た目を確かめるには:
+
+```bash
+python3 tools/preview_circuit.py --course unity/course_fuji_real_rx7.json --s 1250 --out /tmp/chase.png           # 追従視点
+python3 tools/preview_circuit.py --course unity/course_fuji_real_rx7.json --s 2600 --view scenic --out /tmp/view.png  # 景色
+```
 
 ## まだ無いもの
 
