@@ -3,12 +3,15 @@
 // 同じ式で絵を描く。式を変えたらそちらも合わせる。座標は ROS (x 前・y 左・z 上、m)。
 //
 //   地形: コースの外 25 m までは平ら (芝の高さ −0.4 m)。そこから 350 m かけて丘 (高さ ±20 m 前後) が立ち上がり、
-//         遠く (1.5〜7 km) ほど起伏が大きくなる。北西へゆるく上り、9 km 先に山 (高さ 1,800 m・裾の半径 4.5 km・
-//         上ほど急な凹んだ斜面・谷筋)。格子はコースの周り 1.5 km まで 25 m、外へ行くほど粗く (最大 150 m)。
+//         遠く (1.5〜7 km) ほど起伏が大きくなる。富士スピードウェイは富士山の東の裾野にあるので、18 km 先に富士山
+//         (コースから 3,150 m 上・裾の半径 22 km・上ほど急な凹んだ斜面・平らな山頂・谷筋に残る雪の筋) を置き、
+//         その長い裾野の上りがコースのまわりまで続く。向きは「最終のパナソニックコーナーの向こう」「パドックから
+//         100R・ADVAN・300R 越し」に富士山が見える側 (コースの線形が推定なので方位は景色に合わせて決めている)。
+//         格子はコースの周り 1.5 km まで 25 m、外へ行くほど粗く (10 km まで最大 150 m、その先 400 m) して ±30 km。
 //   地肌: 地形全体に 1 枚の色の地図 (芝生・草地・森の樹冠・山の森→低木→岩→雪) を貼り、芝の細部を 12 m ごとに重ねる。
 //   森:   コースの周り 1.5 km の中に、18 m 格子から森の濃さに応じて木を立てる (林の縁は入り組み、草地にも所々一本木)。
 //         広葉樹・針葉樹 各 3 種の絵。樹種は場所でまとまる。
-//   雲:   半径 10 km の空のドーム (雲の帯の絵)。かすみの影響を受けない材質で描く。
+//   雲:   半径 40 km の空のドーム (雲の帯の絵)。かすみの影響を受けない材質で描く。
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -20,18 +23,20 @@ namespace Minicar
     {
         // ---- 定数 (preview_circuit.py の Landscape と同じ) ----
         public const float Inner = 1500f;           // コースの範囲からこの距離までが細かい格子・森
-        public const float Outer = 14000f;          // 地形の端 (コースの中心から)
-        public const float MountainDist = 9000f, MountainH = 1800f, MountainR = 4500f;
-        public static readonly Vector2 NW = new Vector2(-0.70f, 0.72f).normalized;
+        public const float Outer = 30000f;          // 地形の端 (コースの中心から)
+        // 富士山: 山頂まで 18 km・裾野からの高さ 3,200 m。断面は指数の裾 (山頂から 5 km で半分・10 km で 1/4) で、上ほど急 (25°前後)
+        public const float MountainDist = 18000f, MountainH = 3200f, MountainR = 30000f, MountainL = 6500f;
+        public static readonly Vector2 FujiDir = new Vector2(-0.25f, -0.97f).normalized;   // コースの中心 → 山頂
         public const float TreeGrid = 18f;
-        public const float SkyR = 10000f;
+        public const float SkyR = 40000f;           // 雲のドーム (富士山 18 km より遠く)
 
         public readonly float[] Xs, Ys;             // 格子線 (ROS x, y)
         public readonly float[] H, D;               // 高さ・コースの中心線からの距離 [j * nx + i]
-        public readonly Vector2 Mid, Peak;
+        public readonly Vector2 Mid, Peak, Hoei, HoeiCrater;
         public readonly float Bar;
         readonly float[] m_B;                       // コースの範囲
         readonly Vector2 m_Start;                   // コントロールライン
+        readonly float m_MidMountain;               // コースの中心での山の高さ (コースは平らに置くので差し引く)
 
         public Landscape(Vector2[] center, float bar, float[] bounds)
         {
@@ -39,7 +44,12 @@ namespace Minicar
             m_B = bounds;
             m_Start = center[0];
             Mid = new Vector2((bounds[0] + bounds[2]) * 0.5f, (bounds[1] + bounds[3]) * 0.5f);
-            Peak = Mid + NW * MountainDist;
+            Peak = Mid + FujiDir * MountainDist;
+            // 宝永山 (南東の中腹の火口と盛り上がり)。東の御殿場・小山から見ると左 (南) の肩のこぶ。見る向きの左へ、少し手前に
+            Vector2 left = new Vector2(-FujiDir.y, FujiDir.x);      // 富士山を見る向きの左 (東から見て南)
+            Hoei = Peak + left * 3300f;                                 // 真横 = 稜線に出る
+            HoeiCrater = Hoei + (Hoei - Peak).normalized * 450f;
+            m_MidMountain = Mountain(Mid.x, Mid.y, out _);
             Xs = Axis(bounds[0], bounds[2], Mid.x);
             Ys = Axis(bounds[1], bounds[3], Mid.y);
             int nx = Xs.Length, ny = Ys.Length;
@@ -74,7 +84,7 @@ namespace Minicar
             });
         }
 
-        /// 格子線: コースの範囲 ± Inner は 25 m、その外は 1.08 倍ずつ粗く (最大 150 m) して中心 ± Outer まで
+        /// 格子線: コースの範囲 ± Inner は 25 m、その外は 1.08 倍ずつ粗く (中心から 10 km まで最大 150 m、その先 400 m) して中心 ± Outer まで
         static float[] Axis(float lo, float hi, float mid)
         {
             var a = new List<float>();
@@ -82,18 +92,18 @@ namespace Minicar
             int n = Mathf.CeilToInt((x1 - x0) / 25f);
             for (int k = 0; k <= n; k++) a.Add(x0 + k * 25f);
             float last = a[a.Count - 1], s = 25f;
-            while (last < mid + Outer) { s = Mathf.Min(150f, s * 1.08f); last += s; a.Add(last); }
+            while (last < mid + Outer) { s = Mathf.Min(last - mid < 10000f ? 150f : 400f, s * 1.08f); last += s; a.Add(last); }
             float first = a[0];
             s = 25f;
             var lead = new List<float>();
-            while (first > mid - Outer) { s = Mathf.Min(150f, s * 1.08f); first -= s; lead.Add(first); }
+            while (first > mid - Outer) { s = Mathf.Min(mid - first < 10000f ? 150f : 400f, s * 1.08f); first -= s; lead.Add(first); }
             lead.Reverse();
             lead.AddRange(a);
             return lead.ToArray();
         }
 
         // ------------------------------------------------------------ 形
-        /// 山の分の高さと谷筋のノイズ g (0〜1)
+        /// 富士山の高さ (裾野 = 0) と谷筋のノイズ g (0〜1)
         public float Mountain(float x, float y, out float g)
         {
             float dx = x - Peak.x, dy = y - Peak.y;
@@ -101,10 +111,15 @@ namespace Minicar
             g = 0.5f;
             if (r >= MountainR) return 0f;
             float u = Mathf.Atan2(dy, dx) / (2f * Mathf.PI) + 0.5f;
-            g = ProcTex.Fbm(u, r / MountainR * 0.5f, 40, 3, 311);
-            float t = Mathf.Min(1f - r / MountainR, 0.93f) / 0.93f;            // 頂上は半径 300 m ほど平ら
-            float skirt = Mathf.Pow(t, 1.7f);                                  // 上ほど急 (凹んだ斜面)
-            return MountainH * skirt * (1f + 0.40f * (g - 0.5f) * Mathf.Min(1f, 2.5f * (1f - t) + 0.25f));   // 谷筋は裾ほど深い (頂上はなだらか)
+            g = ProcTex.Fbm(u, r / MountainR * 0.5f, 90, 3, 311);              // 放射状の谷筋 (雪の筋になる)
+            float re = Mathf.Max(r, 350f);                                     // 山頂は半径 350 m ほど平ら (火口の縁)
+            float e0 = Mathf.Exp(-MountainR / MountainL);
+            float skirt = (Mathf.Exp(-re / MountainL) - e0) / (Mathf.Exp(-350f / MountainL) - e0);
+            float h = MountainH * skirt * (1f + 0.18f * (g - 0.5f) * Mathf.Min(1f, r / 2500f));   // 谷筋は浅く (富士山の肌はなめらか)
+            // 宝永山: 盛り上がり (+330 m・半径 1.1 km) と、その下側の火口 (−380 m・半径 600 m)
+            float hx = x - Hoei.x, hy = y - Hoei.y, cx = x - HoeiCrater.x, cy = y - HoeiCrater.y;
+            h += 330f * Mathf.Exp(-(hx * hx + hy * hy) / (1100f * 1100f)) - 380f * Mathf.Exp(-(cx * cx + cy * cy) / (600f * 600f));
+            return Mathf.Max(0f, h);
         }
 
         public float Height(float x, float y, float d)
@@ -112,10 +127,13 @@ namespace Minicar
             float ramp = ProcTex.Smooth(Bar + 25f, Bar + 350f, d);
             float mx = x - Mid.x, my = y - Mid.y;
             float dc = Mathf.Sqrt(mx * mx + my * my);
-            float amp = 1f + 2.5f * ProcTex.Smooth(1500f, 7000f, dc);
+            float amp = 1f + 0.8f * ProcTex.Smooth(1500f, 7000f, dc);   // 御殿場・小山の裾野はなだらか
             float hill = 34f * (ProcTex.FbmW(x, y, 110f, 4, 301) - 0.45f) + 10f * (ProcTex.FbmW(x, y, 30f, 3, 307) - 0.5f);
-            float tilt = 0.010f * Mathf.Max(0f, mx * NW.x + my * NW.y);
-            return -0.4f + ramp * (hill * amp + tilt) + Mountain(x, y, out _);
+            // 富士山の裾野の上り (コースの中心で 0)。コースのそば (ramp = 0) は平ら
+            float mtn = Mountain(x, y, out _);
+            float foot = mtn - m_MidMountain;
+            hill *= 1f - ProcTex.Smooth(300f, 1200f, mtn);                  // 富士山の斜面はなめらか (丘の起伏を消す)
+            return -0.4f + ramp * (hill * amp + foot);
         }
 
         /// 森の濃さ 0〜1 (コースのそばは 0)
@@ -144,7 +162,7 @@ namespace Minicar
         // ------------------------------------------------------------ 色
         static readonly Color Lawn = new Color(0.27f, 0.38f, 0.17f), MeadowA = new Color(0.30f, 0.41f, 0.18f), MeadowB = new Color(0.46f, 0.46f, 0.26f);
         static readonly Color Canopy = new Color(0.12f, 0.19f, 0.11f), Scrub = new Color(0.34f, 0.31f, 0.22f);
-        static readonly Color Rock = new Color(0.34f, 0.28f, 0.26f), Snow = new Color(0.92f, 0.94f, 0.97f);
+        static readonly Color Rock = new Color(0.30f, 0.24f, 0.23f), Snow = new Color(0.94f, 0.95f, 0.98f);   // 赤みがかった黒い火山の岩
 
         /// 地図の 1 点の色。h = 高さ、d = コースからの距離
         public Color Ground(float x, float y, float h, float d)
@@ -154,16 +172,17 @@ namespace Minicar
             Color meadow = Color.Lerp(MeadowA, MeadowB, ProcTex.Smooth(0.35f, 0.75f, tone));
             Color canopy = Canopy * (0.75f + 0.5f * ProcTex.FbmW(x, y, 14f, 3, 333));
             float forest = Forest(x, y, d);
-            // 山の裾は森、上へ行くと低木 → 岩 → 雪。雪の境目は谷筋で下がる
-            forest = Mathf.Max(forest, ProcTex.Smooth(20f, 200f, m) * 0.9f) * (1f - ProcTex.Smooth(850f, 1050f, m));
+            // 富士山: 中腹は森 (樹林帯)、森林限界 (山の高さ 1,900 m ≒ 標高 2,500 m) を越えると低木 → 黒っぽい火山の岩 → 雪。雪の境目は谷筋で下がる
+            forest = Mathf.Max(forest, ProcTex.Smooth(150f, 500f, m) * 0.9f) * (1f - ProcTex.Smooth(1700f, 1900f, m));   // 裾野から樹林帯
             Color c = Color.Lerp(meadow, canopy, forest);
             c = Color.Lerp(Lawn, c, ProcTex.Smooth(Bar + 10f, Bar + 30f, d));
             float n = ProcTex.FbmW(x, y, 80f, 3, 337);
-            c = Color.Lerp(c, Scrub, ProcTex.Smooth(900f, 1100f, m + 80f * (n - 0.5f)));
-            c = Color.Lerp(c, Rock * (0.8f + 0.4f * g), ProcTex.Smooth(1100f, 1250f, m + 80f * (n - 0.5f)));
-            float snowLine = 1380f - 700f * (g - 0.5f) + 60f * (n - 0.5f);
+            c = Color.Lerp(c, Scrub, ProcTex.Smooth(1700f, 1900f, m + 120f * (n - 0.5f)));
+            c = Color.Lerp(c, Rock * (0.8f + 0.4f * g), ProcTex.Smooth(1900f, 2100f, m + 120f * (n - 0.5f)));
+            // 雪: 標高 2,200 m 前後 (裾野から 1,650 m) まで。谷筋に沿って下へ伸び、尾根は岩が出る (春の富士山の筋)
+            float snowLine = 1650f - 1300f * (g - 0.5f) + 120f * (n - 0.5f);
             c = Color.Lerp(c, Snow, ProcTex.Smooth(snowLine, snowLine + 40f, m));
-            c *= Mathf.Lerp(1f, 0.75f + 0.5f * g, ProcTex.Smooth(50f, 300f, m));      // 谷筋は暗く、尾根は明るく
+            c *= Mathf.Lerp(1f, 0.80f + 0.4f * g, ProcTex.Smooth(400f, 900f, m));     // 谷筋は暗く、尾根は明るく
             c.a = 1f;
             return c;
         }

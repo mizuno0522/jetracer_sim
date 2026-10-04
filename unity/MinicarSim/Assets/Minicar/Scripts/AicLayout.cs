@@ -206,7 +206,7 @@ namespace Minicar
                     foreach (var cam in new[] { m_Chase[i], m_Onboard[i] })
                     {
                         cam.nearClipPlane = cam == m_Chase[i] ? 0.5f : 0.2f;   // 追従視点は手前に何も無いので、深度の精度を遠くへ回す
-                        cam.farClipPlane = 30000f;
+                        cam.farClipPlane = 50000f;
                         cam.clearFlags = CameraClearFlags.Skybox;
                     }
                 }

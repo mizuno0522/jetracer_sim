@@ -5,7 +5,7 @@
 //         Unlit/Texture・Sprites/Default (矢印板・文字・雲のドーム・軌跡) は HDRP でもそのまま描ける (光の影響を受けない) ので触らない
 //   光と露出: サーキット = 太陽 100,000 lux・物理的な空・露出 EV100 14.4 (今の Built-in の明るさに合わせた値)。
 //             ミニカーの会場 = 今の光の強さのまま、露出 EV100 −1.9 (= log2(1/(1.2π))) で Built-in と同じ明るさになるように換算
-//   霞: サーキットだけ。今の指数の霞 (密度 0.00009/m) と同じ減衰 (平均自由行程 11.1 km)・高さ 2.5 km で薄れる
+//   霞: サーキットだけ。今の指数の霞 (密度 0.000055/m) と同じ減衰 (平均自由行程 18 km)・高さ 2.5 km で薄れる
 //   段階 (RenderQuality): low = 後処理なし (HDRP 既定の AO・ブルーム・ブラーも 0)・影 150 m / medium = AO・ブルーム・影 300 m / high = 影 600 m・立体の霧・立体の雲
 //   センサカメラ: 後処理 (トーンマップ・ブルーム) と AO を掛けない。★それでも Built-in と画像は変わるので、学習は Built-in のプロジェクトで行う
 //
@@ -111,10 +111,10 @@ namespace Minicar
                 profile.Add<PhysicallyBasedSky>(true);
                 var fog = profile.Add<Fog>(true);
                 fog.enabled.value = true;
-                fog.meanFreePath.value = 11111f;
+                fog.meanFreePath.value = 18000f;
                 fog.baseHeight.value = 0f;
                 fog.maximumHeight.value = 2500f;
-                fog.maxFogDistance.value = 30000f;
+                fog.maxFogDistance.value = 50000f;
                 fog.enableVolumetricFog.value = RenderQuality.Current == QualityTier.High;
             }
             else

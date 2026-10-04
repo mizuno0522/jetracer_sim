@@ -267,17 +267,21 @@ def grass_detail(size, seed):
 
 class Landscape:
     """Landscape.cs と同じ地形・色・木の置き方"""
-    INNER, OUTER = 1500.0, 14000.0
-    MD, MH, MR = 9000.0, 1800.0, 4500.0
-    NW = np.array([-0.70, 0.72]) / np.hypot(-0.70, 0.72)
-    TREE_GRID, SKY_R = 18.0, 10000.0
+    INNER, OUTER = 1500.0, 30000.0
+    MD, MH, MR, ML = 18000.0, 3200.0, 30000.0, 6500.0
+    FUJI = np.array([-0.25, -0.97]) / np.hypot(-0.25, -0.97)
+    TREE_GRID, SKY_R = 18.0, 40000.0
 
     def __init__(self, tr, bounds):
         self.bar = tr.bar
         self.b = bounds
         self.start = tr.C[0]
         self.mid = np.array([(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2])
-        self.peak = self.mid + self.NW * self.MD
+        self.peak = self.mid + self.FUJI * self.MD
+        left = np.array([-self.FUJI[1], self.FUJI[0]])
+        self.hoei = self.peak + left * 3300
+        self.hoei_c = self.hoei + (self.hoei - self.peak) / np.linalg.norm(self.hoei - self.peak) * 450
+        self.mid_m = float(self.mountain(np.array(self.mid[0]), np.array(self.mid[1]))[0])
         self.xs = self.axis(bounds[0], bounds[2], self.mid[0])
         self.ys = self.axis(bounds[1], bounds[3], self.mid[1])
         X, Y = np.meshgrid(self.xs, self.ys)
@@ -296,12 +300,12 @@ class Landscape:
         a = [x0 + k * 25 for k in range(n + 1)]
         last, s = a[-1], 25.0
         while last < mid + self.OUTER:
-            s = min(150.0, s * 1.08)
+            s = min(150.0 if last - mid < 10000 else 400.0, s * 1.08)
             last += s
             a.append(last)
         first, s, lead = a[0], 25.0, []
         while first > mid - self.OUTER:
-            s = min(150.0, s * 1.08)
+            s = min(150.0 if mid - first < 10000 else 400.0, s * 1.08)
             first -= s
             lead.append(first)
         return np.array(lead[::-1] + a)
@@ -310,19 +314,26 @@ class Landscape:
         dx, dy = x - self.peak[0], y - self.peak[1]
         r = np.hypot(dx, dy)
         u = np.arctan2(dy, dx) / (2 * np.pi) + 0.5
-        g = fbm(u, np.clip(r / self.MR, 0, 1) * 0.5, 40, 3, 311)
-        t = np.minimum(1 - r / self.MR, 0.93) / 0.93
-        m = self.MH * np.clip(t, 0, None) ** 1.7 * (1 + 0.40 * (g - 0.5) * np.minimum(1, 2.5 * (1 - t) + 0.25))
+        g = fbm(u, np.clip(r / self.MR, 0, 1) * 0.5, 90, 3, 311)
+        re = np.maximum(r, 350.0)
+        e0 = math.exp(-self.MR / self.ML)
+        skirt = (np.exp(-re / self.ML) - e0) / (math.exp(-350.0 / self.ML) - e0)
+        m = self.MH * skirt * (1 + 0.18 * (g - 0.5) * np.minimum(1, r / 2500))
+        m = m + 330 * np.exp(-((x - self.hoei[0]) ** 2 + (y - self.hoei[1]) ** 2) / 1100 ** 2) \
+              - 380 * np.exp(-((x - self.hoei_c[0]) ** 2 + (y - self.hoei_c[1]) ** 2) / 600 ** 2)
+        m = np.maximum(0, m)
         inside = r < self.MR
         return np.where(inside, m, 0.0), np.where(inside, g, 0.5)
 
     def height(self, x, y, d):
         ramp = smooth(self.bar + 25, self.bar + 350, d)
         mx, my = x - self.mid[0], y - self.mid[1]
-        amp = 1 + 2.5 * smooth(1500, 7000, np.hypot(mx, my))
+        amp = 1 + 0.8 * smooth(1500, 7000, np.hypot(mx, my))
         hill = 34 * (fbmw(x, y, 110, 4, 301) - 0.45) + 10 * (fbmw(x, y, 30, 3, 307) - 0.5)
-        tilt = 0.010 * np.maximum(0, mx * self.NW[0] + my * self.NW[1])
-        return -0.4 + ramp * (hill * amp + tilt) + self.mountain(x, y)[0]
+        mtn = self.mountain(x, y)[0]
+        foot = mtn - self.mid_m
+        hill = hill * (1 - smooth(300, 1200, mtn))
+        return -0.4 + ramp * (hill * amp + foot)
 
     def forest(self, x, y, d):
         return smooth(0.40, 0.56, fbmw(x, y, 400, 4, 321)) * smooth(self.bar + 18, self.bar + 34, d)
@@ -340,16 +351,16 @@ class Landscape:
         tone = fbmw(x, y, 60, 3, 331)
         meadow = lerp(np.array([0.30, 0.41, 0.18]), np.array([0.46, 0.46, 0.26]), smooth(0.35, 0.75, tone)[..., None])
         canopy = np.array([0.12, 0.19, 0.11]) * (0.75 + 0.5 * fbmw(x, y, 14, 3, 333))[..., None]
-        f = np.maximum(self.forest(x, y, d), smooth(20, 200, m) * 0.9) * (1 - smooth(850, 1050, m))
+        f = np.maximum(self.forest(x, y, d), smooth(150, 500, m) * 0.9) * (1 - smooth(1700, 1900, m))
         c = lerp(meadow, canopy, f[..., None])
         c = lerp(np.array([0.27, 0.38, 0.17]), c, smooth(self.bar + 10, self.bar + 30, d)[..., None])
         n = fbmw(x, y, 80, 3, 337)
-        c = lerp(c, np.array([0.34, 0.31, 0.22]), smooth(900, 1100, m + 80 * (n - 0.5))[..., None])
-        rock = np.array([0.34, 0.28, 0.26]) * (0.8 + 0.4 * g)[..., None]
-        c = lerp(c, rock, smooth(1100, 1250, m + 80 * (n - 0.5))[..., None])
-        sl = 1380 - 700 * (g - 0.5) + 60 * (n - 0.5)
-        c = lerp(c, np.array([0.92, 0.94, 0.97]), smooth(sl, sl + 40, m)[..., None])
-        return c * lerp(1, 0.75 + 0.5 * g, smooth(50, 300, m))[..., None]
+        c = lerp(c, np.array([0.34, 0.31, 0.22]), smooth(1700, 1900, m + 120 * (n - 0.5))[..., None])
+        rock = np.array([0.30, 0.24, 0.23]) * (0.8 + 0.4 * g)[..., None]
+        c = lerp(c, rock, smooth(1900, 2100, m + 120 * (n - 0.5))[..., None])
+        sl = 1650 - 1300 * (g - 0.5) + 120 * (n - 0.5)
+        c = lerp(c, np.array([0.94, 0.95, 0.98]), smooth(sl, sl + 40, m)[..., None])
+        return c * lerp(1, 0.80 + 0.4 * g, smooth(400, 900, m))[..., None]
 
     def color_map(self, size, cache=None):
         if cache and os.path.exists(cache):
@@ -468,10 +479,10 @@ class Track:
 
 # ------------------------------------------------------------ 描画
 STYLE = {'real_rx7': 'BuildRx7', 'real_nd': 'BuildRoadster', 'real_b787': 'BuildB787'}
-SUN = np.array([0.35, -0.55, 0.76])      # Unity の Euler(42, -35) を ROS 座標に直したもの (おおよそ)
+SUN = np.array([0.42, 0.64, 0.643])      # CourseBuilder.SunDir (富士山の反対側の空・仰角 40°)
 SUN /= np.linalg.norm(SUN)
 FOG = np.array([0.72, 0.79, 0.86])
-FOG_DENSITY = 0.00009                   # Unity: 指数のかすみ (CourseBuilder.BuildOutdoorLighting)
+FOG_DENSITY = 0.000055                   # Unity: 指数のかすみ (CourseBuilder.BuildOutdoorLighting)
 
 
 def fogk(d):
@@ -492,9 +503,21 @@ def render(data, s_car, view, W, H, ss=2):
         eye = np.array([*(car_xy - t * 0.95 * k + nrm * -0.25 * k), 0.42 * k])
         look = np.array([*(car_xy + t * 0.35 * k), 0.06 * k])
         vfov = 50.0
+    elif view in ('grandstand', 'panasonic'):
+        # 名所: メインスタンドの上段からピット越しの富士山 / 最終のパナソニックコーナーの外から、コーナーと富士山
+        n0 = tr.N[0]
+        inside = 1 if ((tr.C.mean(0) - tr.C[0]) @ n0) > 0 else -1
+        if view == 'grandstand':
+            eye = np.array([*(tr.C[0] - n0 * inside * (tr.bar + 15)), 8.0])
+        else:
+            pc = [c for c in data['circuit']['corners'] if 'パナソニック' in c['name']][0]
+            corner = np.array([pc['x'], pc['y']])
+            eye = np.array([*(corner - land.FUJI * 70 + np.array([-land.FUJI[1], land.FUJI[0]]) * 25), 4.0])
+        look = np.array([*(land.peak), land.MH * 0.32])
+        vfov = 46.0
     elif view == 'scenic':        # 景色の確認用: コースの脇から遠景 (山の方向) を見る
         eye = np.array([*(car_xy - t * 8 + nrm * 6), 2.5])
-        look = np.array([*(land.peak), 900.0])
+        look = np.array([*(land.peak), land.MH * 0.40])
         vfov = 50.0
     else:
         cam = data['camera']
@@ -802,6 +825,12 @@ def car_parts(method):
     for m in re.finditer(r'Part\("(\w+)", hull, Loft\((?:new\[\]\s*\{(.*?)\}|(\w+)), ([\d.]+)f, true\), (\w+)\)', blk, re.S):
         secs = vec(m.group(2)) if m.group(2) else arrays[m.group(3)]
         lofts.append((secs, float(m.group(4)), m.group(5)))
+    # 曲面の胴 BodyLoft(new[] { S(z, 半幅, 下端, 上端, 峰), ... }, n, archR[, pinch])
+    svec = lambda t: [tuple(float(x.rstrip('f')) for x in v.split(',')) for v in re.findall(r'S\(([^)]*)\)', t)]
+    sarrays = {m.group(1): svec(m.group(2)) for m in re.finditer(r'var (\w+) = new\[\]\s*\{(.*?)\};', blk, re.S)}
+    for m in re.finditer(r'Part\("(\w+)", hull, BodyLoft\((?:new\[\]\s*\{(.*?)\}|(\w+)), ([\d.]+)f, ([\d.]+)f(?:, ([\d.]+)f)?\), (\w+)\)', blk, re.S):
+        secs = svec(m.group(2)) if m.group(2) else sarrays[m.group(3)]
+        lofts.append(('body', secs, float(m.group(4)), float(m.group(5)), float(m.group(6) or 0), m.group(7)))
     cubes = []
     for m in re.finditer(r'Cube\("(\w+)", hull, new Vector3\(([^)]*)\), new Vector3\(([^)]*)\), (\w+)(?:, (-?[\d.]+)f)?\)', blk):
         pos = [float(x.rstrip('f').replace('sx *', '').strip() or 0) if 'sx' not in x else None for x in m.group(2).split(',')]
@@ -840,6 +869,58 @@ def loft_quads(secs, n_exp, ring=28):
     return quads, caps
 
 
+def bodyloft_quads(secs, n, arch_r, pinch, wheelbase=0.257, tire_r=0.032, ring=40):
+    """CarModel.BodyLoft と同じ曲面の胴 (断面を Catmull-Rom で 4 mm ごとに・肩の峰・上すぼまり・車輪のアーチ)"""
+    e = 2.0 / n
+    z0, z1 = secs[0][0], secs[-1][0]
+    rings = max(2, math.ceil((z1 - z0) / 0.004) + 1)
+
+    def sec_at(z):
+        k = 0
+        while k < len(secs) - 2 and z > secs[k + 1][0]:
+            k += 1
+        t = min(1.0, max(0.0, (z - secs[k][0]) / max(1e-6, secs[k + 1][0] - secs[k][0])))
+        p0, p1, p2, p3 = secs[max(0, k - 1)], secs[k], secs[k + 1], secs[min(len(secs) - 1, k + 2)]
+        cr = lambda i: 0.5 * (2 * p1[i] + (-p0[i] + p2[i]) * t + (2 * p0[i] - 5 * p1[i] + 4 * p2[i] - p3[i]) * t * t
+                              + (-p0[i] + 3 * p1[i] - 3 * p2[i] + p3[i]) * t ** 3)
+        return max(0.002, cr(1)), p1[2] + (p2[2] - p1[2]) * t, cr(3), max(0.0, cr(4))
+    R = []
+    cent = []
+    for j in range(rings):
+        z = z0 + (z1 - z0) * j / (rings - 1)
+        hw, lo, hi, hump = sec_at(z)
+        if arch_r > 0:
+            for axle in (0.0, wheelbase):
+                dz = z - axle
+                if abs(dz) < arch_r:
+                    lo = max(lo, tire_r + math.sqrt(arch_r ** 2 - dz ** 2) * 0.92)
+        lo = min(lo, hi - 0.006)
+        cy, hh = (lo + hi) / 2, (hi - lo) / 2
+        ringv = []
+        for i in range(ring):
+            th = i * 2 * math.pi / ring
+            c, sn = math.cos(th), math.sin(th)
+            x = hw * math.copysign(abs(c) ** e, c)
+            y = cy + hh * math.copysign(abs(sn) ** e, sn)
+            if sn > 0:
+                tt = abs(x) / max(1e-5, hw)
+                y += hump * math.exp(-((tt - 0.72) / 0.20) ** 2) * sn ** 0.6
+                x *= 1 - pinch * sn * sn
+            ringv.append((x, y, z))
+        R.append(ringv)
+        cent.append((0.0, cy, z))
+    out = []
+    for j in range(rings - 1):
+        for i in range(ring):
+            q = [R[j][i], R[j][(i + 1) % ring], R[j + 1][(i + 1) % ring], R[j + 1][i]]
+            out.append((q, cent[j]))
+    for j, dz in ((0, -1.0), (rings - 1, 1.0)):
+        m = tuple(sum(v[k] for v in R[j]) / ring for k in range(3))
+        for i in range(ring):
+            out.append(([m, R[j][i], R[j][(i + 1) % ring]], (m[0], m[1], m[2] - dz)))
+    return out
+
+
 def box_quads(pos, size, pitch):
     hx, hy, hz = (v / 2 for v in size)
     cp, sp = math.cos(math.radians(pitch)), math.sin(math.radians(pitch))
@@ -860,7 +941,13 @@ def draw_car(im, proj, eye, xy, t, nrm, k, style):
         w = xy + t * z * k - nrm * x * k
         return np.array([w[0], w[1], y * k])
     items = []                # (面, 材質, 外向きの基準点 [車体座標]): 面の重心から基準点を引いた向きが外
-    for secs, nexp, mat in lofts:
+    for lf in lofts:
+        if lf[0] == 'body':
+            _, secs, nexp, arch_r, pinch, mat = lf
+            for q, ref in bodyloft_quads(secs, nexp, arch_r, pinch):
+                items.append((q, mat, ref))
+            continue
+        secs, nexp, mat = lf
         quads, caps = loft_quads(secs, nexp)
         for q in quads:
             zc = sum(p[2] for p in q) / len(q)
@@ -924,12 +1011,29 @@ def draw_car(im, proj, eye, xy, t, nrm, k, style):
             fres = 0.04 + 0.96 * (1 - max(0.0, float(nvec @ vdir))) ** 5
             col = base * ((0.42 + 0.72 * dif) * (1 - 0.6 * mt) + glow) + spec + fres * np.array([0.80, 0.86, 0.92]) * 0.8 + sky * np.array([0.55, 0.68, 0.85]) * (1 - mt)
         polys.append((np.linalg.norm(c - eye), P, col))
+    # 深度つきで描く (面は 4 mm ほどと小さいので、面ごとの一定の深度で足りる)。奥から順に、手前のものだけを上書き
     polys.sort(key=lambda q: -q[0])
-    for _, P, col in polys:
+    Wd, Hd = im.size
+    zb = np.full((Hd, Wd), np.inf)
+    arr = np.asarray(im).copy()
+    for dist, P, col in polys:
         sp, z = proj(P)
         if (z < 0.2).any():
             continue
-        dr.polygon([tuple(q) for q in sp], fill=tuple(int(v) for v in np.clip(col * 255, 0, 255)))
+        x0, y0 = np.floor(sp.min(0)).astype(int)
+        x1, y1 = np.ceil(sp.max(0)).astype(int) + 1
+        x0, y0, x1, y1 = max(0, x0), max(0, y0), min(Wd, x1), min(Hd, y1)
+        if x1 <= x0 or y1 <= y0:
+            continue
+        m = Image.new('L', (x1 - x0, y1 - y0), 0)
+        ImageDraw.Draw(m).polygon([(q[0] - x0, q[1] - y0) for q in sp], fill=255)
+        mk = np.asarray(m) > 0
+        d = float(z.mean())
+        reg = zb[y0:y1, x0:x1]
+        w = mk & (d < reg + 1e-4)
+        reg[w] = d
+        arr[y0:y1, x0:x1][w] = np.clip(col * 255, 0, 255).astype(np.uint8)
+    im.paste(Image.fromarray(arr))
 
 
 def hud(im, data):
@@ -1026,7 +1130,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--course', required=True)
     ap.add_argument('--s', type=float, default=1250.0)
-    ap.add_argument('--view', default='chase', choices=['chase', 'onboard', 'scenic'])
+    ap.add_argument('--view', default='chase', choices=['chase', 'onboard', 'scenic', 'grandstand', 'panasonic'])
     ap.add_argument('--out', required=True)
     ap.add_argument('--size', default='1280x720')
     ap.add_argument('--hud', action='store_true')

@@ -418,6 +418,9 @@ namespace Minicar
             }
         }
 
+        /// 太陽の向き (ROS 座標・太陽へ向かう単位ベクトル)
+        public static readonly Vector3 SunDir = new Vector3(0.42f, 0.64f, 0.643f).normalized;
+
         void BuildOutdoorLighting()
         {
             var go = new GameObject("Sun");
@@ -430,15 +433,16 @@ namespace Minicar
             sun.shadowStrength = 0.8f;
             sun.shadowBias = 0.05f;
             sun.shadowNormalBias = 0.4f;
-            go.transform.rotation = Quaternion.Euler(42f, -35f, 0f);
+            // 太陽は富士山の反対側の空 (仰角 40°) から: 富士山の正面に日が当たる朝の景色 (preview_circuit.py の SUN と同じ)
+            go.transform.rotation = Quaternion.LookRotation(-RosFrame.ToUnity(SunDir.x, SunDir.y, SunDir.z));
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
             RenderSettings.ambientSkyColor = new Color(0.60f, 0.68f, 0.80f);
             RenderSettings.ambientEquatorColor = new Color(0.50f, 0.53f, 0.52f);
             RenderSettings.ambientGroundColor = new Color(0.24f, 0.26f, 0.20f);
             RenderSettings.fog = true;           // 遠くを霞ませる (遠景の山とコースのつながり)
-            RenderSettings.fogMode = FogMode.Exponential;   // 2 km で 16 %・9 km (山) で 55 %
+            RenderSettings.fogMode = FogMode.Exponential;   // 2 km で 10 %・18 km (富士山) で 63 %
             RenderSettings.fogColor = new Color(0.72f, 0.79f, 0.86f);
-            RenderSettings.fogDensity = 0.00009f;
+            RenderSettings.fogDensity = 0.000055f;
             QualitySettings.shadowDistance = 180f;
             QualitySettings.shadowCascades = 4;
             QualitySettings.anisotropicFiltering = AnisotropicFiltering.ForceEnable;

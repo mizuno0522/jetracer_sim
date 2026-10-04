@@ -316,7 +316,7 @@ namespace Minicar
             var go = new GameObject(name);
             var cam = go.AddComponent<Camera>();
             cam.nearClipPlane = Circuit ? 0.2f : 0.02f;
-            cam.farClipPlane = Circuit ? 30000f : 30f;      // 実車スケール: コース全体と遠景の山 (14 km 先まで) まで
+            cam.farClipPlane = Circuit ? 50000f : 30f;      // 実車スケール: 富士山 (18 km 先・裾は 30 km まで) と雲のドーム (40 km) まで
             ApplyIntrinsics(cam, c);
             cam.clearFlags = CameraClearFlags.SolidColor;
             // 背景: realism.background_gray が負なら Unity 既定のスカイボックス (水色)、それ以外は単色
@@ -399,7 +399,7 @@ namespace Minicar
             m_ViewCam = new GameObject("ChaseCamera").AddComponent<Camera>();
             m_ViewCam.fieldOfView = 50f;
             m_ViewCam.nearClipPlane = Circuit ? 0.5f : 0.02f;
-            m_ViewCam.farClipPlane = Circuit ? 30000f : 60f;
+            m_ViewCam.farClipPlane = Circuit ? 50000f : 60f;
             m_ViewCam.clearFlags = Circuit ? CameraClearFlags.Skybox : CameraClearFlags.SolidColor;   // サーキットは空を描く
             m_ViewCam.backgroundColor = new Color32(40, 42, 46, 255);
             // 接続前 (/sim/render_state 未着) はコース全体を斜め上から見せる。

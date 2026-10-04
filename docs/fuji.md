@@ -78,10 +78,14 @@ python3 tools/mlagents/mlagents_gateway.py --ros-args -p vehicle_profile_file:=r
 舗装のランオフ・コース (アスファルト)・白線・縁石 (半径 220 m より急なところに紅白 3 m ごと)・バリア・コントロールライン (市松)・
 ブレーキングの目安の距離板 (300 m 以上の直線の先のコーナー手前に 300 / 200 / 100)・観客席とピット棟、そのまわりの景色:
 
-- **地形**: コースの外 25 m までは平らな芝生。そこから丘が立ち上がり、遠くほど起伏が大きい。北西 9 km に高さ 1.8 km の山 (上ほど急な斜面・谷筋・雪)
+- **富士山**: 富士スピードウェイは富士山の東の裾野。18 km 先にコースから 3,200 m 上の富士山 (山頂から 5 km で半分の高さになる上ほど急な裾・平らな山頂・
+  左の肩に宝永山のこぶと火口・標高 2,200 m 前後まで谷筋に沿って伸びる雪の筋・その下は黒い火山の岩と樹林帯)。見上げる角度は実際と同じ約 10°。
+  向きは「最終のパナソニックコーナーの向こう」「メインスタンドからピット越し」「A パドックから 100R・ADVAN・300R 越し」に見える側
+  (コースの線形が推定なので方位は景色に合わせた)。太陽は富士山の反対側の空 (朝、正面に日が当たる)
+- **地形**: コースの外 25 m までは平らな芝生。そこから丘が立ち上がり、富士山の裾野へゆるく上る (御殿場・小山の裾野はなだらか)
 - **森**: コースの周り 1.5 km に約 2.6 万本。広葉樹・針葉樹 各 3 種の絵 (枝と数千の葉の固まりを 3D に置いて陰影をつけたもの) を十字の板にして立てる。
   林の縁は入り組み、草地にも所々一本木。地面は森の下が暗い樹冠の色、草地は黄緑のむら
-- **空**: 積雲の帯 (半径 10 km のドーム)。遠くは指数のかすみ (2 km で 16 %・9 km で 55 %)
+- **空**: 積雲の帯 (半径 40 km のドーム)。遠くは指数のかすみ (2 km で 10 %・18 km の富士山で 63 %)
 
 テクスチャはすべて実行時に式とシードで作る (画像ファイルなし。起動時に数秒かかる)。車体は `vehicle` の全長に合わせて拡大し (センサマストは隠す)、
 追従視点の距離も同じ倍率にする。Unity を使わずに見た目を確かめるには:
@@ -89,6 +93,8 @@ python3 tools/mlagents/mlagents_gateway.py --ros-args -p vehicle_profile_file:=r
 ```bash
 python3 tools/preview_circuit.py --course unity/course_fuji_real_rx7.json --s 1250 --out /tmp/chase.png           # 追従視点
 python3 tools/preview_circuit.py --course unity/course_fuji_real_rx7.json --s 2600 --view scenic --out /tmp/view.png  # 景色
+python3 tools/preview_circuit.py --course unity/course_fuji_real_rx7.json --view grandstand --out /tmp/gs.png     # メインスタンドから富士山
+python3 tools/preview_circuit.py --course unity/course_fuji_real_rx7.json --view panasonic --out /tmp/pana.png    # 最終コーナーと富士山
 ```
 
 Unity の実際の画面で確かめるには、プレイヤーを撮影・計測モードで起動する (ROS 不要・画面が要る)。決めた位置 (既定 s = 0・1250・2600・3300 m) に
