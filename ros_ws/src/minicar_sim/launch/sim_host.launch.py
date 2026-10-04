@@ -103,6 +103,7 @@ def generate_launch_description():
         DeclareLaunchArgument('mlagents', default_value='false',
                               description='true で Unity に ML-Agents のエージェントを作る (sim_mode:=lockstep と '
                                           'tools/mlagents/mlagents_gateway.py が要る。docs/mlagents.md)'),
+        DeclareLaunchArgument('ml_port', default_value='5004', description='学習器 (mlagents-learn) のポート'),
         DeclareLaunchArgument('demo', default_value='',
                               description='ML-Agents: 人の運転を <名前>.demo に記録する (mlagents:=true のとき)'),
         DeclareLaunchArgument('demo_dir', default_value=os.path.join(os.getcwd(), 'demos'),
@@ -164,6 +165,8 @@ def generate_launch_description():
                  '-quality', LaunchConfiguration('quality'),
                  PythonExpression(["'-mlagents' if '", LaunchConfiguration('mlagents'), "' == 'true' else '-nomlagents'"]),
                  '-demo', LaunchConfiguration('demo'),
+                 # ビルドしたプレイヤーは、この引数が無いと学習器 (mlagents-learn) に繋ぎに行かない (エディタだけ既定で 5004 に繋ぐ)
+                 '--mlagents-port', LaunchConfiguration('ml_port'),
                  '-maxsteps', LaunchConfiguration('ml_maxsteps'),
                  # コースの描画は course.json (ミニカー) か course_<コース>_<profile>.json (StreamingAssets の中。
                  # COURSE=fuji ./scripts/export_course.sh <profile> が作る。カメラの取付が車ごとに違うので profile ごと)

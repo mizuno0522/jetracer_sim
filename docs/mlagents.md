@@ -26,8 +26,11 @@ mlagents-learn (PyTorch) ◀──gRPC 5004──▶ Unity MinicarSim (MinicarAg
 #        初回にエディタで開くと取り込まれる。プレイヤーを作り直す (docs/unity.md の手順 2)
 # 学習器: Python 3.10.12 の仮想環境 (ROS の Python と分ける)
 conda create -n mlagents python=3.10.12 && conda activate mlagents
-pip install torch~=2.2.1 --index-url https://download.pytorch.org/whl/cu121
-pip install mlagents==1.1.0
+pip install torch~=2.2.1 --index-url https://download.pytorch.org/whl/cu121     # NVIDIA の GPU が無ければ …/whl/cpu
+pip install mlagents==1.1.0 "setuptools<70"                                      # mlagents-learn は pkg_resources (古い setuptools) を使う
+# conda を使わない場合 (評価用 PC はこちら。~/jetracer/venv_mlagents):
+#   python3 -m venv --without-pip ~/jetracer/venv_mlagents && curl -sS https://bootstrap.pypa.io/get-pip.py | ~/jetracer/venv_mlagents/bin/python
+#   source ~/jetracer/venv_mlagents/bin/activate   (以降は conda activate mlagents の代わりにこれ)
 # ゲームパッド
 sudo apt install ros-humble-joy
 ```
@@ -60,13 +63,18 @@ ros2 run joy game_controller_node & python3 tools/teleop/joy_teleop.py
 
 - 実時間 15 Hz で進む。画面下に `ML-Agents: human driving ● REC` と周回・報酬が出る
 - 壁に当たるかコースを出るとエピソードが切れて、スタート位置に戻る。**＋** でも区切れる
-- Unity を閉じると `demos/pro_run01.demo` に書き出される (`demo_dir`、既定は launch を起動したフォルダの `demos/`)。**閉じずに落とすと書き出されない**
+- Unity を閉じると `demos/prorun01.demo` に書き出される (ML-Agents がファイル名を英数字だけにするので、下線は消える) (`demo_dir`、既定は launch を起動したフォルダの `demos/`)。**閉じずに落とすと書き出されない**
 - 5〜10 周を目安に。うまく走れた周だけを残したいときは、周回ごとに別の名前で記録して選ぶ
 - キーボードでも記録できる (←→ ハンドル、↑ アクセル、↓ ブレーキ)。プロコンが来ていればそちらを使う
 
 ## 3. 学習する (模倣 → PPO)
 
-先に学習器を上げ、そのあと Unity を起動する (Unity は起動時に 5004 番の学習器を探す)。
+先に学習器を上げ、そのあと Unity を起動する。launch は Unity に `--mlagents-port 5004` (`ml_port:=`) を渡す
+(ビルドしたプレイヤーはこの引数が無いと学習器に繋ぎに行かず、学習器が「Unity の返事が無い」と時間切れで落ちる)。
+学習器に `--timeout-wait 120` を付けておくと、sim の起動が遅いときにも待てる。
+
+評価用 PC で確認済み (2026-10-05、富士・RX-7): 模倣 + PPO が回り、`MinicarDriver.onnx` の書き出し・`--resume` での再開・
+`--inference` での走行まで通る。速さは毎秒 6〜7 判断 (torch は CPU 版)。
 
 ```bash
 # 端末 0: 学習器 (リポジトリ直下で。demo_path: demos はここからの相対)
