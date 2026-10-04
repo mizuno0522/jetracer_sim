@@ -424,14 +424,16 @@ namespace Minicar
             bool top = u > 6.55f, side = In(u, 2.6f, 5.4f);
 
             // ---- 窓 (ガラスと黒い縁)
-            float sideF = 1.64f - (u - 5.5f) / 0.9f * 0.55f, sideR = -0.12f + (u - 5.5f) / 0.9f * 0.42f;   // 傾いた A ピラーと C ピラー
-            bool gSide = In(u, 5.46f, 6.42f) && In(z, sideR, sideF);
-            bool gFront = u > 6.56f && In(z, 1.06f, 1.75f);
+            float sideF = 1.66f - (u - 5.5f) / 0.9f * 0.06f,      // 前の縁は前窓の付け根まで (A ピラーの傾きは曲面の形が作る)
+                  sideR = -0.12f + (u - 5.5f) / 0.9f * 0.42f;   // 傾いた A ピラーと C ピラー
+            // A ピラーは細く: 横の窓 (〜6.47) と前窓 (6.50〜) の間は 0.03 だけ
+            bool gSide = In(u, 5.46f, 6.47f) && In(z, sideR, sideF);
+            bool gFront = u > 6.50f && In(z, 1.06f, 1.75f);
             bool gRear = u > 6.50f && In(z, -0.42f, 0.34f);
             if (gSide || gFront || gRear)
             {
-                bool edge = gSide ? (u < 5.50f || u > 6.38f || z < sideR + 0.025f || z > sideF - 0.025f || Mathf.Abs(z - (0.50f + (u - 5.5f) * 0.08f)) < 0.018f)
-                          : gFront ? (u < 6.60f || z < 1.085f || z > 1.725f)
+                bool edge = gSide ? (u < 5.49f || u > 6.455f || z < sideR + 0.025f || z > sideF - 0.025f || Mathf.Abs(z - (0.50f + (u - 5.5f) * 0.08f)) < 0.018f)
+                          : gFront ? (u < 6.515f || z < 1.075f || z > 1.735f)
                           : (u < 6.54f || z < -0.395f || z > 0.315f);
                 col = edge ? black : glass; metal = 0f; smooth = edge ? 0.45f : 0.96f;
                 return;
@@ -664,8 +666,10 @@ namespace Minicar
             float ax = Mathf.Abs(x), sgn = x >= 0f ? 1f : -1f;
             metal = 0.10f; smooth = 0.82f;
             // キャノピー (前窓と横の窓)
-            bool gSide = In(u, 5.75f, 6.35f) && In(z, 1.28f + (u - 5.75f) * 0.2f, 2.10f - (u - 5.75f) * 0.5f);
-            bool gFront = u > 6.50f && In(z, 1.72f, 2.26f);
+            // 前窓は横の窓まで回り込む。A ピラーは細い黒い枠だけ (u 6.44〜6.47)
+            bool gSide = In(u, 5.68f, 6.44f) && In(z, 1.26f + (u - 5.68f) * 0.2f, 2.24f - (u - 5.68f) * 0.30f);
+            bool gFront = u > 6.47f && In(z, 1.72f, 2.26f);
+            if (In(u, 6.44f, 6.47f) && In(z, 1.72f, 2.03f)) { col = black; metal = 0f; smooth = 0.4f; return; }
             if (gFront && z < 1.86f) { col = orange; return; }                                       // 前窓の上のオレンジの帯
             if (gSide || gFront) { col = glass; metal = 0f; smooth = 0.96f; return; }
             if (y < 0.10f) { col = black; metal = 0f; smooth = 0.3f; return; }

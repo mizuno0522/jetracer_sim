@@ -940,7 +940,7 @@ def rx7_mat(z, x, y, u):
     """CarModel.Shell.PaintRx7 の大きな塗り分けだけ (窓・黒い樹脂・尾端の帯)。細い合わせ目は省く"""
     x = abs(x)
     fr = (u - 5.5) / 0.9
-    if (5.46 <= u <= 6.42 and -0.12 + fr * 0.42 <= z <= 1.64 - fr * 0.55) or (u > 6.56 and 1.06 <= z <= 1.75) or (u > 6.50 and -0.42 <= z <= 0.34):
+    if (5.46 <= u <= 6.47 and -0.12 + fr * 0.42 <= z <= 1.66 - fr * 0.06) or (u > 6.50 and (1.06 <= z <= 1.75 or -0.42 <= z <= 0.34)):
         return 'glass'
     if (z > 2.75 and y < 0.185) or (z < -0.55 and y < 0.27 and x < 0.62):
         return 'black'
@@ -965,7 +965,7 @@ def nd_mat(z, x, y, u):
 
 def b787_mat(z, x, y, u):
     """CarModel.Shell.PaintB787 の大きな塗り分けだけ (キャノピー・オレンジと緑の斜めの帯)"""
-    if (5.75 <= u <= 6.35 and 1.28 + (u - 5.75) * 0.2 <= z <= 2.10 - (u - 5.75) * 0.5) or (u > 6.50 and 1.72 <= z <= 2.26):
+    if (5.68 <= u <= 6.44 and 1.26 + (u - 5.68) * 0.2 <= z <= 2.24 - (u - 5.68) * 0.30) or (u > 6.47 and 1.72 <= z <= 2.26):
         return 'glass'
     if y < 0.10:
         return 'black'
