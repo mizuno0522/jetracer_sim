@@ -402,6 +402,7 @@ namespace Minicar
             m_ViewCam.farClipPlane = Circuit ? 50000f : 60f;
             m_ViewCam.clearFlags = Circuit ? CameraClearFlags.Skybox : CameraClearFlags.SolidColor;   // サーキットは空を描く
             m_ViewCam.backgroundColor = new Color32(40, 42, 46, 255);
+            if (Circuit) ViewPost.Attach(m_ViewCam);
             // 接続前 (/sim/render_state 未着) はコース全体を斜め上から見せる。
             // 原点のままだと床下から写って何も見えない
             PlaceOverview();

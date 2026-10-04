@@ -56,6 +56,10 @@ namespace Minicar.EditorTools
             var post = Shader.Find("Minicar/SensorPost");
             if (post == null) Debug.LogError("[MinicarBuild] Minicar/SensorPost shader not found");
             else Save(new Material(post), "Mat_SensorPost");
+            // 画面表示の後処理 (Assets/Minicar/Shaders/ViewPost.shader)
+            var vpost = Shader.Find("Minicar/ViewPost");
+            if (vpost == null) Debug.LogError("[MinicarBuild] Minicar/ViewPost shader not found");
+            else Save(new Material(vpost), "Mat_ViewPost");
             MakeStandardVariants();
         }
 

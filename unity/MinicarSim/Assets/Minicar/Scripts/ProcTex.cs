@@ -372,6 +372,23 @@ namespace Minicar
             return t2;
         }
 
+        /// 金網 (ひし形の目)。線だけ不透明で、遠くでは全体が薄い灰色に見える (Fade で使う)
+        public static Texture2D WireMesh(int size)
+        {
+            var px = new Color32[size * size];
+            int cell = size / 8;
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    bool line = (x + y) % cell < 2 || ((x - y) % cell + cell) % cell < 2;
+                    px[y * size + x] = new Color32(200, 204, 210, (byte)(line ? 255 : 0));
+                }
+            var t = new Texture2D(size, size, TextureFormat.RGBA32, true) { name = "WireMesh", wrapMode = TextureWrapMode.Repeat, anisoLevel = 4 };
+            t.SetPixels32(px);
+            t.Apply(true);
+            return t;
+        }
+
         /// 透明 (Transparent・乗算済みアルファ) にする。色は透けて、映り込みとハイライトだけが残る (車のクリア層用)
         public static void MakeTransparent(Material m)
         {

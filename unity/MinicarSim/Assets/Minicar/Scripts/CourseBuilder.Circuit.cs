@@ -89,6 +89,7 @@ namespace Minicar
             armco.SetFloat("_Metallic", 0.35f);
             MeshObject("BarrierL", Fence(bar, c.barrier_height_m), armco);
             MeshObject("BarrierR", Fence(-bar, c.barrier_height_m), armco);
+            BuildTrackside(bar);
 
             BuildControlLine(half);
             BuildBrakeBoards(half + 2.5f);
@@ -377,7 +378,7 @@ namespace Minicar
         void BuildLandscape(Landscape land)
         {
             ProcTex.GrassDetail(512, 21, out var detA, out var detN);
-            var ground = new Material(m_Lit) { color = Color.white, mainTexture = land.ColorMap(2048) };
+            var ground = new Material(m_Lit) { color = new Color(0.80f, 0.78f, 0.74f), mainTexture = land.ColorMap(2048) };   // 芝が明るく鮮やかに出すぎるのを抑える
             ground.SetFloat("_Glossiness", 0.06f);
             ground.SetFloat("_Metallic", 0f);
             ground.SetTexture("_BumpMap", ProcTex.FlatNormal());
@@ -393,7 +394,7 @@ namespace Minicar
             var mats = new Material[6];
             for (int k = 0; k < 6; k++)
             {
-                mats[k] = new Material(m_Lit) { color = Color.white, mainTexture = ProcTex.Tree(k < 3 ? 0 : 1, 500 + k) };
+                mats[k] = new Material(m_Lit) { color = new Color(0.70f, 0.76f, 0.68f), mainTexture = ProcTex.Tree(k < 3 ? 0 : 1, 500 + k) };
                 mats[k].SetFloat("_Glossiness", 0.02f);
                 mats[k].SetFloat("_Metallic", 0f);
                 ProcTex.MakeCutout(mats[k], 0.45f);
@@ -427,7 +428,7 @@ namespace Minicar
             var sun = go.AddComponent<Light>();
             m_Ceiling = sun;
             sun.type = LightType.Directional;
-            sun.intensity = 1.2f;
+            sun.intensity = 1.35f;
             sun.color = new Color(1f, 0.95f, 0.86f);
             sun.shadows = LightShadows.Soft;
             sun.shadowStrength = 0.8f;
@@ -436,9 +437,9 @@ namespace Minicar
             // 太陽は富士山の反対側の空 (仰角 40°) から: 富士山の正面に日が当たる朝の景色 (preview_circuit.py の SUN と同じ)
             go.transform.rotation = Quaternion.LookRotation(-RosFrame.ToUnity(SunDir.x, SunDir.y, SunDir.z));
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.60f, 0.68f, 0.80f);
-            RenderSettings.ambientEquatorColor = new Color(0.50f, 0.53f, 0.52f);
-            RenderSettings.ambientGroundColor = new Color(0.24f, 0.26f, 0.20f);
+            RenderSettings.ambientSkyColor = new Color(0.50f, 0.58f, 0.72f);
+            RenderSettings.ambientEquatorColor = new Color(0.40f, 0.43f, 0.44f);
+            RenderSettings.ambientGroundColor = new Color(0.18f, 0.19f, 0.16f);
             RenderSettings.fog = true;           // 遠くを霞ませる (遠景の山とコースのつながり)
             RenderSettings.fogMode = FogMode.Exponential;   // 2 km で 10 %・18 km (富士山) で 63 %
             RenderSettings.fogColor = new Color(0.72f, 0.79f, 0.86f);

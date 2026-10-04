@@ -27,7 +27,7 @@ namespace Minicar
         // 富士山: 山頂まで 18 km・裾野からの高さ 3,200 m。断面は指数の裾 (山頂から 5 km で半分・10 km で 1/4) で、上ほど急 (25°前後)
         public const float MountainDist = 18000f, MountainH = 3200f, MountainR = 30000f, MountainL = 6500f;
         public static readonly Vector2 FujiDir = new Vector2(-0.25f, -0.97f).normalized;   // コースの中心 → 山頂
-        public const float TreeGrid = 18f;
+        public const float TreeGrid = 13f;
         public const float SkyR = 40000f;           // 雲のドーム (富士山 18 km より遠く)
 
         public readonly float[] Xs, Ys;             // 格子線 (ROS x, y)
@@ -139,7 +139,7 @@ namespace Minicar
         /// 森の濃さ 0〜1 (コースのそばは 0)
         public float Forest(float x, float y, float d)
         {
-            float f = ProcTex.Smooth(0.40f, 0.56f, ProcTex.FbmW(x, y, 400f, 4, 321));
+            float f = ProcTex.Smooth(0.30f, 0.44f, ProcTex.FbmW(x, y, 400f, 4, 321));      // サーキットの周りはほとんど森 (御殿場・小山の杉林)
             return f * ProcTex.Smooth(Bar + 18f, Bar + 34f, d);
         }
 

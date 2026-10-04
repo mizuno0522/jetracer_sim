@@ -270,7 +270,7 @@ class Landscape:
     INNER, OUTER = 1500.0, 30000.0
     MD, MH, MR, ML = 18000.0, 3200.0, 30000.0, 6500.0
     FUJI = np.array([-0.25, -0.97]) / np.hypot(-0.25, -0.97)
-    TREE_GRID, SKY_R = 18.0, 40000.0
+    TREE_GRID, SKY_R = 13.0, 40000.0
 
     def __init__(self, tr, bounds):
         self.bar = tr.bar
@@ -336,7 +336,7 @@ class Landscape:
         return -0.4 + ramp * (hill * amp + foot)
 
     def forest(self, x, y, d):
-        return smooth(0.40, 0.56, fbmw(x, y, 400, 4, 321)) * smooth(self.bar + 18, self.bar + 34, d)
+        return smooth(0.30, 0.44, fbmw(x, y, 400, 4, 321)) * smooth(self.bar + 18, self.bar + 34, d)
 
     def sample(self, F, x, y):
         i = np.clip(np.searchsorted(self.xs, x, 'right') - 1, 0, len(self.xs) - 2)
