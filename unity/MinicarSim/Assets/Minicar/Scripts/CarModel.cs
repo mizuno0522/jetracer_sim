@@ -139,7 +139,7 @@ namespace Minicar
                     spin.SetParent(pivot, false);
                     m_Spinners[k++] = spin;
 
-                    if (tt02) { BuildWheel(spin, sx, tire, style == CarStyle.B787 ? Mat(new Color(0.85f, 0.70f, 0.25f), 0.7f, 0.9f) : rim, black, alu); continue; }
+                    if (tt02) { BuildWheel(spin, sx, tire, style == CarStyle.B787 ? Mat(new Color(0.93f, 0.93f, 0.91f), 0.6f, 0.1f) : rim, black, alu); continue; }
                     var t = Prim(PrimitiveType.Cylinder, "Tire", spin, tire);
                     t.localRotation = Quaternion.Euler(0f, 0f, 90f);
                     t.localScale = new Vector3(TireRadius * 2f, TireWidth * 0.5f, TireRadius * 2f);

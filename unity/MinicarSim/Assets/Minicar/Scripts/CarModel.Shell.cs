@@ -207,7 +207,7 @@ namespace Minicar
 
             public Mesh BuildMesh()
             {
-                int nr = RingZ.Count, ringN = 2 * NU - 2;
+                int nr = RingZ.Count, ringN = 2 * NU - 1;
                 var verts = new List<Vector3>(nr * ringN);
                 var uvs = new List<Vector2>(nr * ringN);
                 var c = new Vector2[9]; var p = new Vector2[NU];
@@ -215,23 +215,23 @@ namespace Minicar
                 {
                     Section(RingZ[j], RingF[j], c, p, out _);
                     float z = RingPos[j] * Scale;
-                    // 右半分 (底 → 屋根) のあと、左半分 (屋根の手前 → 底の手前)。左右で同じ絵を使う
+                    // 右半分 (底 → 屋根) のあと、左半分 (屋根の手前 → 底)。絵は上半分が左・下半分が右 (左右で違う塗り分けができる)
                     for (int i = 0; i < NU; i++)
                     {
                         verts.Add(new Vector3(p[i].x * Scale, p[i].y * Scale, z));
-                        uvs.Add(new Vector2(RingU[j], i / (float)(NU - 1)));
+                        uvs.Add(new Vector2(RingU[j], 0.5f * i / (NU - 1)));
                     }
-                    for (int i = NU - 2; i >= 1; i--)
+                    for (int i = NU - 2; i >= 0; i--)
                     {
                         verts.Add(new Vector3(-p[i].x * Scale, p[i].y * Scale, z));
-                        uvs.Add(new Vector2(RingU[j], i / (float)(NU - 1)));
+                        uvs.Add(new Vector2(RingU[j], 1f - 0.5f * i / (NU - 1)));
                     }
                 }
                 var tris = new List<int>((nr - 1) * ringN * 6);
                 for (int j = 0; j < nr - 1; j++)
-                    for (int i = 0; i < ringN; i++)
+                    for (int i = 0; i < ringN - 1; i++)
                     {
-                        int a = j * ringN + i, b = j * ringN + (i + 1) % ringN, cc = a + ringN, d = b + ringN;
+                        int a = j * ringN + i, b = a + 1, cc = a + ringN, d = b + ringN;
                         tris.Add(a); tris.Add(cc); tris.Add(b); tris.Add(b); tris.Add(cc); tris.Add(d);
                     }
                 return Finish(verts, uvs, tris);
@@ -254,12 +254,13 @@ namespace Minicar
                     Section(ze, f, c, p, out int lip);
                     for (int iy = 0; iy < h; iy++)
                     {
-                        float v = iy / (float)(h - 1) * (NU - 1);
+                        float vv = iy / (float)(h - 1), sgn = vv <= 0.5f ? 1f : -1f;       // 絵の下半分 = 右 (x > 0)、上半分 = 左
+                        float v = (vv <= 0.5f ? vv : 1f - vv) * 2f * (NU - 1);
                         int i0 = Mathf.Min(NU - 2, (int)v);
                         Vector2 q = Vector2.Lerp(p[i0], p[i0 + 1], v - i0);
                         Color32 col; float metal, smooth;
                         if (v < lip - 0.6f) { col = new Color32(9, 9, 9, 255); metal = 0f; smooth = 0.1f; }     // ホイールハウスの中
-                        else paint(pos, q.x, q.y, v / K, out col, out metal, out smooth);
+                        else paint(pos, sgn * q.x, q.y, v / K, out col, out metal, out smooth);
                         ca[iy * w + ix] = col;
                         cg[iy * w + ix] = new Color32((byte)(metal * 255f), 255, 0, (byte)(smooth * 255f));    // G = 255: HDRP のマスクでは AO (遮りなし)
                     }
@@ -320,7 +321,7 @@ namespace Minicar
             if (!s_ShellCache.TryGetValue(Style, out var c))
             {
                 c.mesh = shell.BuildMesh();
-                shell.BuildTextures(paint, 2048, 1024, out c.albedo, out c.gloss);
+                shell.BuildTextures(paint, 2048, 2048, out c.albedo, out c.gloss);
                 s_ShellCache[Style] = c;
             }
             var m = new Material(lit) { color = Color.white, mainTexture = c.albedo };
@@ -406,9 +407,10 @@ namespace Minicar
 
         static bool In(float v, float a, float b) => v >= a && v <= b;
 
-        /// RX-7 の塗り分け (実車の m。x は半幅 ≥ 0、u は断面上の位置 0〜7: 5.5〜6.4 が側面の窓、6.6〜7 が上面)
+        /// RX-7 の塗り分け (実車の m。x は右が正、u は断面上の位置 0〜7: 5.5〜6.4 が側面の窓、6.6〜7 が上面)
         static void PaintRx7(float z, float x, float y, float u, out Color32 col, out float metal, out float smooth)
         {
+            x = Mathf.Abs(x);        // 左右対称
             var yellow = new Color32(247, 190, 14, 255);
             var black = new Color32(12, 12, 13, 255);
             var glass = new Color32(10, 13, 18, 255);
@@ -524,6 +526,7 @@ namespace Minicar
 
         static void PaintNd(float z, float x, float y, float u, out Color32 col, out float metal, out float smooth)
         {
+            x = Mathf.Abs(x);        // 左右対称
             var black = new Color32(12, 12, 13, 255);
             var glass = new Color32(10, 13, 18, 255);
             col = new Color32(168, 4, 10, 255); metal = 0.80f; smooth = 0.62f;        // ソウルレッドの下地
@@ -604,32 +607,90 @@ namespace Minicar
             St( 3.590f, 0.08f, 0.70f, 0.76f, 0.11f, 0.77f, 0.16f, 0.74f, 0.200f, 0.64f, 0.210f, 0.34f, 0.210f, 0.210f),   // ノーズ
         };
 
+        // 5×7 の点の文字 (ゼッケンとスポンサー名)。1 行 = 5 ビット、上の行から
+        static readonly Dictionary<char, int[]> kFont = new Dictionary<char, int[]>
+        {
+            { '5', new[] { 31, 16, 30, 1, 1, 17, 14 } }, { 'R', new[] { 30, 17, 17, 30, 20, 18, 17 } }, { 'E', new[] { 31, 16, 16, 30, 16, 16, 31 } },
+            { 'N', new[] { 17, 25, 21, 19, 17, 17, 17 } }, { 'O', new[] { 14, 17, 17, 17, 17, 17, 14 } }, { 'W', new[] { 17, 17, 17, 21, 21, 27, 17 } },
+            { 'C', new[] { 14, 17, 16, 16, 16, 17, 14 } }, { 'H', new[] { 17, 17, 17, 31, 17, 17, 17 } }, { 'A', new[] { 14, 17, 17, 31, 17, 17, 17 } },
+            { 'G', new[] { 14, 17, 16, 23, 17, 17, 15 } },
+        };
+
+        /// (a, b) が文字列の中か。a = 読む向きの位置 [m] (左端 0)、b = 下端からの高さ [m]、h = 文字の高さ
+        static bool Text(string t, float a, float b, float h)
+        {
+            if (a < 0f || b < 0f || b >= h) return false;
+            float cw = h * 6f / 7f;                     // 1 文字の送り (5 点 + 間 1 点)
+            int k = (int)(a / cw);
+            if (k >= t.Length || !kFont.TryGetValue(t[k], out var g)) return false;
+            int col = (int)((a - k * cw) / (h / 7f)), row = 6 - (int)(b / (h / 7f));
+            return col < 5 && row >= 0 && row < 7 && ((g[row] >> (4 - col)) & 1) != 0;
+        }
+
+        /// 787B (1991 年ル・マン優勝車・ゼッケン 55) の塗り分け。x は右が正。
+        /// 上から見て X 字に色が入れ替わる: 左前と右後ろが緑、右前と左後ろがオレンジ。境目は白い破線 (縫い目)。
+        /// 屋根の中央は銀白、側面に白い帯と青い文字、ドアと鼻先に白い丸のゼッケン、床の縁は黄色
         static void PaintB787(float z, float x, float y, float u, out Color32 col, out float metal, out float smooth)
         {
-            var orange = new Color32(245, 107, 15, 255);
-            var green = new Color32(12, 130, 70, 255);
-            var white = new Color32(238, 238, 232, 255);
+            var orange = new Color32(240, 92, 22, 255);
+            var green = new Color32(14, 122, 62, 255);
+            var white = new Color32(240, 240, 235, 255);
+            var blue = new Color32(26, 52, 150, 255);
             var black = new Color32(12, 12, 13, 255);
             var glass = new Color32(10, 13, 18, 255);
-            metal = 0.15f; smooth = 0.80f;
+            float ax = Mathf.Abs(x), sgn = x >= 0f ? 1f : -1f;
+            metal = 0.10f; smooth = 0.82f;
             // キャノピー (前窓と横の窓)
             bool gSide = In(u, 5.75f, 6.35f) && In(z, 1.28f + (u - 5.75f) * 0.2f, 2.10f - (u - 5.75f) * 0.5f);
             bool gFront = u > 6.50f && In(z, 1.72f, 2.26f);
             if (gSide || gFront) { col = glass; metal = 0f; smooth = 0.96f; return; }
-            if (y < 0.115f) { col = black; metal = 0f; smooth = 0.3f; return; }                                          // 床の縁
-            if (z > 3.30f && In(x, 0.52f, 0.80f) && In(y, 0.17f, 0.27f)) { col = new Color32(240, 240, 225, 255); metal = 0.1f; smooth = 0.95f; return; }   // ヘッドライト
-            if (z < -1.02f && In(x, 0.55f, 0.92f) && In(y, 0.42f, 0.50f)) { col = new Color32(210, 14, 16, 255); metal = 0f; smooth = 0.9f; return; }       // テール
-            if (z < -1.05f && x < 0.50f && In(y, 0.24f, 0.52f)) { col = black; metal = 0f; smooth = 0.2f; return; }     // 後ろの開口
-            // 塗り分け: 斜めの帯で緑とオレンジを分け、境目に白い線。車体の右と左で同じ絵を使う
-            float band = z * 0.55f + x * 0.9f + y * 0.6f;
-            float ph = Mathf.Repeat(band, 1.9f);
-            col = ph < 0.95f ? orange : green;
-            if (Mathf.Abs(ph - 0.95f) < 0.035f || ph < 0.035f || ph > 1.865f) col = white;
-            // ゼッケンの白い丸 (側面と鼻先)
-            float dz = z - 1.55f, dy = y - 0.36f;
-            if (In(u, 2.6f, 5.0f) && dz * dz + dy * dy < 0.17f * 0.17f) col = white;
-            float nz = z - 3.20f;
-            if (u > 5.5f && z > 2.9f && nz * nz + x * x < 0.17f * 0.17f) col = white;
+            if (y < 0.10f) { col = black; metal = 0f; smooth = 0.3f; return; }
+            if (y < 0.16f && In(u, 2.0f, 5.0f)) { col = new Color32(245, 205, 20, 255); return; }                       // 床の縁の黄色
+            // ヘッドライト: 左右のフェンダーの前に、透明なカバーの中の丸 2 灯
+            if (z > 3.02f && In(ax, 0.50f, 0.88f) && In(y, 0.15f, 0.36f) && u < 5.6f)
+            {
+                col = new Color32(26, 30, 34, 255); metal = 0.2f; smooth = 0.95f;
+                for (int k = 0; k < 2; k++)
+                {
+                    float lx = ax - (0.60f + 0.17f * k), ly = y - 0.25f;
+                    if (lx * lx + ly * ly < 0.07f * 0.07f) col = new Color32(250, 246, 225, 255);
+                }
+                return;
+            }
+            if (z < -1.02f && In(ax, 0.55f, 0.92f) && In(y, 0.42f, 0.50f)) { col = new Color32(210, 14, 16, 255); metal = 0f; smooth = 0.9f; return; }
+            if (z < -1.05f && ax < 0.50f && In(y, 0.24f, 0.52f)) { col = black; metal = 0f; smooth = 0.2f; return; }
+            if (In(u, 2.6f, 5.0f) && In(z, 1.95f, 2.25f) && In(y, 0.20f, 0.50f)) { col = black; metal = 0f; smooth = 0.15f; return; }   // 前輪の後ろの排熱口
+            // アーガイル: 座標を 28° 回した市松 (1.25 × 1.0 m)。左前のフェンダーが緑、鼻先の中央がオレンジ
+            const float cs = 0.883f, sn = 0.469f;
+            float zr = (z - 0.35f) * cs + x * sn, xr = x * cs - (z - 0.35f) * sn;
+            float fz = zr / 1.25f, fx = xr / 1.00f + 0.5f;
+            bool odd = ((Mathf.FloorToInt(fz) + Mathf.FloorToInt(fx)) & 1) != 0;
+            col = odd ? green : orange;
+            // 縫い目 (白い破線) を境目に
+            float ez = Mathf.Abs(fz - Mathf.Round(fz)) * 1.25f, ex = Mathf.Abs(fx - Mathf.Round(fx)) * 1.00f;
+            if ((ez < 0.022f && Mathf.Repeat(xr, 0.14f) < 0.085f) || (ex < 0.022f && Mathf.Repeat(zr, 0.14f) < 0.085f)) col = white;
+            // 屋根の中央 (操縦席の上) は銀白
+            if (u > 6.40f && In(z, 0.75f, 1.72f)) { col = new Color32(214, 216, 218, 255); metal = 0.3f; }
+            bool side = In(u, 2.6f, 5.2f);
+            // ゼッケン: 前輪の後ろの白い四角に黒い 55。読む向きは、右側面は後ろへ (-z)、左側面は前へ…ではなく、見る人から左 → 右
+            if (side && In(z, 1.42f, 1.90f) && In(y, 0.20f, 0.50f))
+            {
+                col = white;
+                float a = sgn > 0f ? z - 1.47f : 1.85f - z;
+                if (Text("55", a, y - 0.24f, 0.22f)) col = black;
+            }
+            // 鼻先: 白い帯に青い RENOWN (前から読む向き)、その後ろに白い丸の 55
+            if (u > 5.4f && In(z, 2.98f, 3.26f) && ax < 0.62f)
+            {
+                col = white;
+                if (Text("RENOWN", 0.56f - x, 3.24f - z, 0.22f)) col = blue;
+            }
+            float nz = z - 2.72f;
+            if (u > 5.5f && nz * nz + (x - 0.02f) * (x - 0.02f) < 0.18f * 0.18f)
+            {
+                col = white;
+                if (Text("55", 0.18f - x, 2.83f - z, 0.22f)) col = black;
+            }
         }
 
         void BuildB787(Transform hull, bool withMast, MatFn Mat, Material black, Material glass,
@@ -638,16 +699,17 @@ namespace Minicar
             float k = kB787Scale;
             var shell = new Shell(kB787Sections, k, new[] { 0f, 2.662f }, 0.400f, TireRadius / k, 0.62f);
             AddShell(hull, shell, PaintB787, lit);
-            var green = Paint(Mat(new Color(0.05f, 0.51f, 0.27f), 0.80f, 0.15f));
-            // リアウイング: 屋根の高さの大きな黒い翼、緑の翼端板、中央の 2 本の柱
-            Cube("WingPlate", hull, new Vector3(0f, 0.985f * k, -1.02f * k), new Vector3(1.90f * k, 0.035f * k, 0.42f * k), black, -6f);
+            var green = Paint(Mat(new Color(0.94f, 0.36f, 0.09f), 0.82f, 0.10f));      // 翼・翼端板・鏡はオレンジ
+            // リアウイング: 後端の低い位置の大きな翼 (オレンジ)。左右の翼端板で車体につながる。鏡はフェンダーの上の高い柱
+            Cube("WingPlate", hull, new Vector3(0f, 0.86f * k, -1.16f * k), new Vector3(1.96f * k, 0.035f * k, 0.46f * k), green, -5f);
             foreach (float sx in new[] { -1f, 1f })
             {
-                Cube("WingEnd", hull, new Vector3(sx * 0.955f * k, 0.90f * k, -1.02f * k), new Vector3(0.02f * k, 0.30f * k, 0.50f * k), green);
-                Cube("WingStay", hull, new Vector3(sx * 0.22f * k, 0.82f * k, -0.96f * k), new Vector3(0.03f * k, 0.32f * k, 0.22f * k), black);
+                Cube("WingEnd", hull, new Vector3(sx * 0.985f * k, 0.74f * k, -1.12f * k), new Vector3(0.02f * k, 0.36f * k, 0.56f * k), green);
+                Cube("WingStay", hull, new Vector3(sx * 0.25f * k, 0.74f * k, -1.08f * k), new Vector3(0.03f * k, 0.22f * k, 0.20f * k), black);
                 var mir = Prim(PrimitiveType.Sphere, "Mirror", hull, green);
-                mir.localPosition = new Vector3(sx * 0.80f * k, 0.72f * k, 2.20f * k);
-                mir.localScale = new Vector3(0.14f * k, 0.09f * k, 0.09f * k);
+                mir.localPosition = new Vector3(sx * 0.80f * k, 0.86f * k, 2.42f * k);
+                mir.localScale = new Vector3(0.16f * k, 0.11f * k, 0.10f * k);
+                Cube("MirrorStay", hull, new Vector3(sx * 0.80f * k, 0.76f * k, 2.42f * k), new Vector3(0.03f * k, 0.18f * k, 0.04f * k), green);
             }
             if (withMast) Mast(hull, black, alu, 0.150f, 0.100f);
         }

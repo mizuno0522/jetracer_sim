@@ -938,6 +938,7 @@ class Shell:
 
 def rx7_mat(z, x, y, u):
     """CarModel.Shell.PaintRx7 の大きな塗り分けだけ (窓・黒い樹脂・尾端の帯)。細い合わせ目は省く"""
+    x = abs(x)
     fr = (u - 5.5) / 0.9
     if (5.55 <= u <= 6.35 and -0.06 + fr * 0.42 <= z <= 1.63 - fr * 0.55) or (u > 6.62 and (1.07 <= z <= 1.74 or -0.40 <= z <= 0.33)):
         return 'glass'
@@ -952,6 +953,7 @@ def rx7_mat(z, x, y, u):
 
 def nd_mat(z, x, y, u):
     """CarModel.Shell.PaintNd の大きな塗り分けだけ (窓・黒い幌)"""
+    x = abs(x)
     fr = (u - 5.5) / 0.9
     sr = 0.42 + fr * 0.06
     if (5.55 <= u <= 6.35 and sr <= z <= 1.50 - fr * 0.50) or (u > 6.62 and 1.02 <= z <= 1.59):
@@ -969,9 +971,11 @@ def b787_mat(z, x, y, u):
     """CarModel.Shell.PaintB787 の大きな塗り分けだけ (キャノピー・オレンジと緑の斜めの帯)"""
     if (5.75 <= u <= 6.35 and 1.28 + (u - 5.75) * 0.2 <= z <= 2.10 - (u - 5.75) * 0.5) or (u > 6.50 and 1.72 <= z <= 2.26):
         return 'glass'
-    if y < 0.115:
+    if y < 0.10:
         return 'black'
-    return 'paint' if (z * 0.55 + x * 0.9 + y * 0.6) % 1.9 < 0.95 else 'green'
+    zr = (z - 0.35) * 0.883 + x * 0.469          # アーガイル (座標を 28° 回した 1.25 × 1.0 m の市松)
+    xr = x * 0.883 - (z - 0.35) * 0.469
+    return 'green' if (math.floor(zr / 1.25) + math.floor(xr / 1.00 + 0.5)) % 2 else 'paint'
 
 
 SHELL_MAT = {'BuildRx7': rx7_mat, 'BuildRoadster': nd_mat, 'BuildB787': b787_mat}
@@ -995,8 +999,10 @@ def shell_quads(method):
         ref = (0.0, (pa[0, 1] + pa[-1, 1]) / 2 * k, (za + zb) / 2 * k)
         for i in range(SHELL_NU - 1):
             mid = (pa[i] + pa[i + 1] + pb[i] + pb[i + 1]) / 4
-            mat = 'black' if i < max(la, lb) - 1 else matf((za + zb) / 2, mid[0], mid[1], (i + 0.5) / SHELL_K)
+            mat = 'black' if i < max(la, lb) - 1 else None
             for sx in (1, -1):
+                if mat is None or True:
+                    mat = 'black' if i < max(la, lb) - 1 else matf((za + zb) / 2, sx * mid[0], mid[1], (i + 0.5) / SHELL_K)
                 q = [(sx * pa[i, 0] * k, pa[i, 1] * k, za * k), (sx * pa[i + 1, 0] * k, pa[i + 1, 1] * k, za * k),
                      (sx * pb[i + 1, 0] * k, pb[i + 1, 1] * k, zb * k), (sx * pb[i, 0] * k, pb[i, 1] * k, zb * k)]
                 out.append((q, mat, ref))
