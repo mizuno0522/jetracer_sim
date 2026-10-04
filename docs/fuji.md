@@ -104,6 +104,9 @@ python3 tools/shot_sheet.py shots/<変更前> shots/<変更後> --out /tmp/ab.pn
 
 画質の段階 (`-quality low | medium | high | auto`、既定 auto = GPU を見て選ぶ) と HDRP 版は [docs/hdrp.md](hdrp.md)。
 
+エンジン音 (`EngineAudio.cs`) は同じ式の `tools/engine_sound.py` で WAV にして聴ける (アイドル → 全開で 5 速まで → アクセルを戻して減速 → 再加速):
+`python3 tools/engine_sound.py --car all --outdir /tmp --png` (`--legacy` で変更前の音)。
+
 ## まだ無いもの
 
 - 高低差 (坂の加減速・ピッチ)。`vehicle_sim` の坂は②坂道の区間だけ
