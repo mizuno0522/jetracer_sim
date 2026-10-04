@@ -3,6 +3,7 @@
 //   -shots "0,1250,2600,3300"   コントロールラインからの距離 s [m] の位置に自車を置いて撮る (コースの長さで折り返す)
 //   -shotdir <dir>               保存先 (既定 ./shots)
 //   -shotsize 1920x1080          追従視点・俯瞰の解像度 (車載カメラは配信している画像そのままの大きさ)
+//   -shotviews grandstand,panasonic,scenic,carfront,carside,carrear   名所と車の確認用の視点を追加で撮る (<番号>_view_<名前>.png)
 //   -bench 600                   撮影のあと、車をコースに沿って動かしながら N フレームの描画時間を計る (0 = 計らない)
 //
 // 1 つの位置につき 3 枚: <番号>_s<距離>_chase.png (追従視点)・_onboard.png (配信しているセンサ画像 = 後処理後)・
@@ -64,6 +65,26 @@ namespace Minicar
                 idx++;
             }
 
+            // 名所と車の確認用の視点 (-shotviews)。車は最初の位置 (panasonic はコーナーの手前) に置く
+            foreach (var raw in Arg("-shotviews", "").Split(','))
+            {
+                string view = raw.Trim().ToLowerInvariant();
+                if (view == "") continue;
+                float s = list.Count > 0 ? list[0] : 0f;
+                if (!PlaceView(view, ref s, len, out Vector3 eye, out Vector3 look, out float fov))
+                { Debug.LogWarning($"[Shots] unknown or unavailable view: {view}"); continue; }
+                for (int k = 0; k < 45; k++) { SetCars(s, 0.0); yield return null; }
+                yield return new WaitForEndOfFrame();
+                float oldFov = m_ViewCam.fieldOfView;
+                m_ViewCam.transform.position = eye;
+                m_ViewCam.transform.rotation = Quaternion.LookRotation(look - eye, Vector3.up);
+                m_ViewCam.fieldOfView = fov;
+                Save(Grab(m_ViewCam, w, h), $"{idx:00}_view_{view}.png");
+                m_ViewCam.fieldOfView = oldFov;
+                m_ChaseInit = false;
+                idx++;
+            }
+
             int frames = int.Parse(Arg("-bench", "600"));
             var report = new StringBuilder();
             report.AppendLine("# 描画の計測 (SimBridge -shots / -bench)");
@@ -110,6 +131,70 @@ namespace Minicar
             Debug.Log($"[Shots] done → {m_ShotDir}");
             yield return null;
             Application.Quit();
+        }
+
+        // ------------------------------------------------------------------ 視点
+        /// -shotviews の視点。grandstand・panasonic・scenic は tools/preview_circuit.py の同名の視点と同じ位置・向き (サーキットだけ)。
+        /// carfront・carside・carrear は自車を前斜め・真横・後ろ斜めから見る (距離は車長の倍数)
+        bool PlaceView(string view, ref float s, float len, out Vector3 eye, out Vector3 look, out float fov)
+        {
+            eye = look = Vector3.zero; fov = 46f;
+            PoseAt(s, 0f, out double cx, out double cy, out double yaw);
+            var car = new Vector2((float)cx, (float)cy);
+            var t = new Vector2(Mathf.Cos((float)yaw), Mathf.Sin((float)yaw));
+            var nrm = new Vector2(-t.y, t.x);
+            if (view == "carfront" || view == "carside" || view == "carrear")
+            {
+                Vector2 off = view == "carfront" ? t * 1.25f + nrm * 0.95f : view == "carside" ? nrm * 1.7f : t * -1.25f + nrm * 0.95f;
+                Vector2 e = car + off * len;
+                eye = RosFrame.ToUnity(e.x, e.y, (view == "carside" ? 0.16f : 0.30f) * len);
+                look = RosFrame.ToUnity(car.x, car.y, 0.13f * len);
+                fov = 32f;
+                return true;
+            }
+            var c = m_Course.Data.circuit;
+            if (!Circuit || c == null || c.bounds == null || c.bounds.Length < 4) return false;
+            var mid = new Vector2((c.bounds[0] + c.bounds[2]) * 0.5f, (c.bounds[1] + c.bounds[3]) * 0.5f);
+            Vector2 fuji = Landscape.FujiDir, peak = mid + fuji * Landscape.MountainDist;
+            float lookZ = Landscape.MountainH * 0.32f;
+            if (view == "grandstand")
+            {
+                Vector2 p0 = m_PathP[0], n0 = Normal(0), mean = Vector2.zero;
+                foreach (var q in m_PathP) mean += q;
+                mean /= m_PathP.Length;
+                float inside = Vector2.Dot(mean - p0, n0) > 0f ? 1f : -1f;
+                Vector2 e = p0 - n0 * inside * (c.width_m * 0.5f + c.runoff_m + 15f);
+                eye = RosFrame.ToUnity(e.x, e.y, 8f);
+            }
+            else if (view == "panasonic")
+            {
+                CornerData pc = null;
+                if (c.corners != null) foreach (var k in c.corners) if (k.name != null && k.name.Contains("パナソニック")) pc = k;
+                if (pc == null) return false;
+                var corner = new Vector2(pc.x, pc.y);
+                Vector2 e = corner - fuji * 70f + new Vector2(-fuji.y, fuji.x) * 25f;
+                eye = RosFrame.ToUnity(e.x, e.y, 4f);
+                int best = 0;
+                for (int i = 1; i < m_PathP.Length; i++)
+                    if ((m_PathP[i] - corner).sqrMagnitude < (m_PathP[best] - corner).sqrMagnitude) best = i;
+                s = m_PathS[best] - 3f * len;       // 車はコーナーに入る所
+            }
+            else if (view == "scenic")
+            {
+                Vector2 e = car - t * 8f + nrm * 6f;
+                eye = RosFrame.ToUnity(e.x, e.y, 2.5f);
+                lookZ = Landscape.MountainH * 0.40f;
+                fov = 50f;
+            }
+            else return false;
+            look = RosFrame.ToUnity(peak.x, peak.y, lookZ);
+            return true;
+        }
+
+        Vector2 Normal(int i)
+        {
+            Vector2 t = (m_PathP[(i + 1) % m_PathP.Length] - m_PathP[i]).normalized;
+            return new Vector2(-t.y, t.x);
         }
 
         // ------------------------------------------------------------------ 位置
