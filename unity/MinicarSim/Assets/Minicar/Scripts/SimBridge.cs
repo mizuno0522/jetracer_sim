@@ -157,6 +157,7 @@ namespace Minicar
             // 描画の上限。カメラは 30 Hz で配るので 60 で足りる (1 コマおきに配る)。120 では描画だけで CPU を
             // 使い、3 台レースで PC が詰まった (✎ 2026-09-28)。-fps で変えられる
             Application.targetFrameRate = int.Parse(Arg("-fps", "60"));
+            RenderQuality.Init();                 // -quality low|medium|high|auto (コースを組む前に決める)
             m_Course = GetComponent<CourseBuilder>();
             float t0 = Time.realtimeSinceStartup;
             m_Course.Build();
@@ -208,6 +209,9 @@ namespace Minicar
             string layout = Arg("-layout", "aic");
             SetLayout(layout == "rviz" ? Layout.Rviz : layout == "chase" ? Layout.Chase : Layout.Aic);
             m_Rviz.Update();            // 接続前から右パネルの視野を合わせておく
+            RenderQuality.ApplyBuiltin(Circuit);
+            // HDRP で動かしているときだけ材質・光・空・霞を HDRP 用に置き換える (Built-in では何もしない。docs/hdrp.md)
+            RenderCompat.AfterBuild(m_Course, new[] { m_SensorCam, m_RivalCam }, Circuit);
 
             // -shotdir <dir> [-shotinterval 秒]: 画面 (追従視点 + センサ画像) を一定間隔で PNG で保存 (見た目の確認用)
             // -record <file.mp4> [-recordfps 30] [-recordwidth 1280]: 画面をそのまま ffmpeg で録画 (ScreenRecorder)
@@ -221,10 +225,10 @@ namespace Minicar
             m_Ros.RegisterPublisher<ImageMsg>(kImageTopic);
             m_Ros.Subscribe<Float64MultiArrayMsg>(kStateTopic, OnState);
             // エピソード seed (vehicle_sim が LATCHED で出す)。照明・床・観戦者を引き直す
-            m_Ros.Subscribe<UInt32Msg>("/sim/episode", msg => m_Course.ApplyEpisode(msg.data));
+            m_Ros.Subscribe<UInt32Msg>("/sim/episode", msg => { m_Course.ApplyEpisode(msg.data); RenderCompat.Refresh(); });
             // 起動時の seed は引数 -seed で受ける (/sim/episode は LATCHED だが endpoint 経由の購読は
             // 接続前の latched メッセージを受け取れないため)。走行中の引き直し (lockstep Reset) は上の購読で
-            if (uint.TryParse(Arg("-seed", ""), out uint seed0)) m_Course.ApplyEpisode(seed0);
+            if (uint.TryParse(Arg("-seed", ""), out uint seed0)) { m_Course.ApplyEpisode(seed0); RenderCompat.Refresh(); }
             // 占有格子 (RViz の FusionGrid と同じもの)。全景に重ねる
             m_Ros.Subscribe<OccupancyGridMsg>("/fusion/local_map", msg => m_GridMsg[0] = msg);
             m_Ros.Subscribe<OccupancyGridMsg>("/sim/rival_local_map", msg => m_GridMsg[1] = msg);
@@ -473,6 +477,7 @@ namespace Minicar
             {
                 m_StateDirty = false;
                 ApplyState();
+                RenderCompat.Tick();
             }
 
             UpdateVisuals(Time.deltaTime);

@@ -75,7 +75,7 @@ namespace Minicar
             report.AppendLine($"| CPU | {SystemInfo.processorType} ×{SystemInfo.processorCount} |");
             report.AppendLine($"| Unity | {Application.unityVersion} |");
             report.AppendLine($"| コース | {Arg("-course", "course.json")} (circuit: {Circuit}) |");
-            report.AppendLine($"| 画質 | {Arg("-quality", "low")} |");
+            report.AppendLine($"| 画質 | {RenderQuality.Current} ({RenderQuality.Reason})、描画 {RenderCompat.PipelineName} |");
             report.AppendLine($"| 画面 | {Screen.width}x{Screen.height}、レイアウト {m_Layout} |");
             report.AppendLine($"| コースの組み立て | {m_BuildSeconds:F2} s |");
             if (frames > 0)

@@ -399,7 +399,12 @@ namespace Minicar
                 ProcTex.MakeCutout(mats[k], 0.45f);
             }
             var trees = land.Trees();
-            foreach (var kv in Landscape.TreeMeshes(trees)) MeshObject("Trees", kv.Value, mats[kv.Key.Item3]);
+            foreach (var kv in Landscape.TreeMeshes(trees))
+            {
+                var tg = MeshObject("Trees", kv.Value, mats[kv.Key.Item3]);
+                // 森の影は重い (2.6 万本)。-quality low では落とさない (RenderQuality)
+                if (!RenderQuality.TreeShadows) tg.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
             Debug.Log($"[CourseBuilder] landscape: grid {land.Xs.Length}x{land.Ys.Length}, trees {trees.Count}");
 
             var vc = Resources.Load<Material>("Mat_VertexColor");

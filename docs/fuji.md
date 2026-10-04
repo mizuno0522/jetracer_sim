@@ -102,6 +102,8 @@ python3 tools/shot_sheet.py shots/<変更前> shots/<変更後> --out /tmp/ab.pn
 
 プレイヤーの引数で直接使うなら `-shots "0,1250" -shotdir <dir> -shotsize 1920x1080 -bench 600` (`SimBridge.Shots.cs`)。
 
+画質の段階 (`-quality low | medium | high | auto`、既定 auto = GPU を見て選ぶ) と HDRP 版は [docs/hdrp.md](hdrp.md)。
+
 ## まだ無いもの
 
 - 高低差 (坂の加減速・ピッチ)。`vehicle_sim` の坂は②坂道の区間だけ

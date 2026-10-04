@@ -98,6 +98,8 @@ def generate_launch_description():
         DeclareLaunchArgument('rival2_car', default_value='', description='3 台目 (緑) のボディ'),
         DeclareLaunchArgument('sound', default_value='auto',
                               description='エンジン音: on | off | auto (ボディを選んだときだけ on)'),
+        DeclareLaunchArgument('quality', default_value='auto',
+                              description='画質: low | medium | high | auto (GPU を見て選ぶ。mlagents:=true なら low。docs/hdrp.md)'),
         DeclareLaunchArgument('mlagents', default_value='false',
                               description='true で Unity に ML-Agents のエージェントを作る (sim_mode:=lockstep と '
                                           'tools/mlagents/mlagents_gateway.py が要る。docs/mlagents.md)'),
@@ -159,6 +161,7 @@ def generate_launch_description():
                  '-rivalcar', LaunchConfiguration('rival_car'),
                  '-rival2car', LaunchConfiguration('rival2_car'),
                  '-sound', LaunchConfiguration('sound'),
+                 '-quality', LaunchConfiguration('quality'),
                  PythonExpression(["'-mlagents' if '", LaunchConfiguration('mlagents'), "' == 'true' else '-nomlagents'"]),
                  '-demo', LaunchConfiguration('demo'),
                  '-maxsteps', LaunchConfiguration('ml_maxsteps'),

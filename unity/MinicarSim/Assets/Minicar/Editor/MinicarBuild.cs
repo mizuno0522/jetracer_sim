@@ -23,7 +23,11 @@ namespace Minicar.EditorTools
         public static void Setup()
         {
             // ROS-TCP-Connector を ROS 2 の配線 (Header に seq が無い等) でコンパイルする
-            PlayerSettings.SetScriptingDefineSymbols(NamedBuildTarget.Standalone, "ROS2");
+            // HDRP 版 (scripts/migrate_hdrp.sh) が足す MINICAR_HDRP などは残す
+            var defs = new System.Collections.Generic.List<string>(
+                PlayerSettings.GetScriptingDefineSymbols(NamedBuildTarget.Standalone).Split(new[] { ';' }, System.StringSplitOptions.RemoveEmptyEntries));
+            if (!defs.Contains("ROS2")) defs.Insert(0, "ROS2");
+            PlayerSettings.SetScriptingDefineSymbols(NamedBuildTarget.Standalone, string.Join(";", defs));
 
             PlayerSettings.productName = "MinicarSim";
             PlayerSettings.companyName = "minicarbattle2026";
