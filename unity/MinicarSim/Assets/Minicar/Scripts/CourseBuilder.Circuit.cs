@@ -446,6 +446,32 @@ namespace Minicar
             QualitySettings.shadowDistance = 180f;
             QualitySettings.shadowCascades = 4;
             QualitySettings.anisotropicFiltering = AnisotropicFiltering.ForceEnable;
+            // 映り込み: コースの内側から周りの景色 (空・地平線・森) を 1 回だけ写し取り、全体の映り込みに使う。
+            // これが無いと車の塗装とガラスに空の一色しか映らず、平板に見える。low (学習) では作らない
+            if (RenderQuality.Current != QualityTier.Low)
+            {
+                // 置き場所は路面の上 (下半分に舗装が映る。芝の上に置くと全部が緑がかる)。観客席から離れた 1/4 周の地点
+                var pc = m_C[m_C.Length * 28 / 100];
+                var pg = new GameObject("EnvProbe");
+                pg.transform.position = RosFrame.ToUnity(pc.x, pc.y, 1.2f);
+                var probe = pg.AddComponent<ReflectionProbe>();
+                probe.mode = UnityEngine.Rendering.ReflectionProbeMode.Realtime;
+                probe.refreshMode = UnityEngine.Rendering.ReflectionProbeRefreshMode.ViaScripting;
+                probe.timeSlicingMode = UnityEngine.Rendering.ReflectionProbeTimeSlicingMode.NoTimeSlicing;
+                probe.resolution = 256;
+                probe.hdr = true;
+                probe.size = Vector3.one * 100000f;
+                probe.nearClipPlane = 1f;
+                probe.farClipPlane = 50000f;
+                StartCoroutine(RenderProbeLater(probe));
+            }
+        }
+
+        System.Collections.IEnumerator RenderProbeLater(ReflectionProbe probe)
+        {
+            yield return null;          // 地形・森・雲を組み終えてから
+            yield return null;
+            probe.RenderProbe();
         }
     }
 }
