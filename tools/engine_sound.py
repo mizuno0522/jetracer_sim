@@ -19,9 +19,12 @@ import wave
 import numpy as np
 
 VOICES = {
-    'b787': dict(pulses=4, cycle=4, idle=2400, red=9000, gears=[0.36, 0.52, 0.67, 0.83, 1.0], sharp=9.0, rasp=0.45,
-                 form_hz=[1150, 2600, 4300], form_gain=[1.0, 0.85, 0.45], form_q=2.2, pipe_hz=310, pipe_fb=0.42,
-                 drive=2.6, pop=1.0, whine=0.012, turbo=0.0, wind=0.6, level=0.55, vmax=330 / 3.6),
+    # 787B: 実車の録音と帯域ごとの強さを比べて合わせた (2026-10-05)。400〜1000 Hz が中心で、2.5 kHz より上は少ない。
+    # 低回転は 100〜250 Hz の粒。direct = 共鳴を通さない素の成分 (基音)、cut_hi・tilt = 高域の落とし方、wobble = 回転の揺らぎ
+    'b787': dict(pulses=4, cycle=4, idle=1900, red=9000, gears=[0.36, 0.52, 0.67, 0.83, 1.0], sharp=5.0, rasp=0.45,
+                 form_hz=[230, 640, 1500], form_gain=[1.3, 1.0, 0.75], form_q=1.6, pipe_hz=230, pipe_fb=0.42,
+                 drive=2.6, pop=1.0, whine=0.008, turbo=0.0, wind=0.5, level=0.55, vmax=330 / 3.6,
+                 direct=0.6, cut_hi=5000, tilt=3200, wobble=0.02),
     'rx7': dict(pulses=2, cycle=2, idle=900, red=8000, gears=[0.27, 0.42, 0.58, 0.75, 1.0], sharp=9.0, rasp=0.40,
                 form_hz=[620, 1500, 3100], form_gain=[1.0, 0.7, 0.35], form_q=2.0, pipe_hz=190, pipe_fb=0.35,
                 drive=2.0, pop=0.45, whine=0.0, turbo=1.0, wind=0.7, level=0.65, vmax=250 / 3.6),
@@ -44,6 +47,7 @@ class Engine:
         self.hp = self.hpx = self.lp = self.road = self.w1 = self.w2 = self.sq1 = self.sq2 = 0.0
         self.turbo_ph = self.whine_ph = self.smooth = 0.0
         self.pop_env, self.prev_thr = 0.0, 0.0
+        self.wob = self.lp2 = 0.0
         self.fx1, self.fx2, self.fy1, self.fy2 = [0.0] * 3, [0.0] * 3, [0.0] * 3, [0.0] * 3
         self.pipe = [0.0] * max(8, round(sr / v['pipe_hz']))
         self.pipe_idx = 0
@@ -92,7 +96,10 @@ class Engine:
         tau = 1 / (f0 * v['sharp'] * (0.7 + 0.6 * thr))
         jitter = v['rasp'] * (1.0 + (0.35 - 1.0) * load)
         grit = v['rasp'] * 0.35 * (1.0 + (0.15 - 1.0) * load)
-        cut = 1800 + (9000 - 1800) * max(0, min(1, 0.4 * thr + 0.6 * load))
+        cut_hi = v.get('cut_hi', 9000)
+        cut = 1800 + (cut_hi - 1800) * max(0, min(1, 0.4 * thr + 0.6 * load))
+        direct, wobble = v.get('direct', 0.25), v.get('wobble', 0.0)
+        a_tilt = 1 - math.exp(-2 * math.pi * v['tilt'] / sr) if v.get('tilt', 0) > 0 else 1.0
         a_lp = 1 - math.exp(-2 * math.pi * cut / sr)
         a_hp = math.exp(-2 * math.pi * 30 / sr)
         drive = 1 + v['drive'] * (0.3 + 0.7 * thr)
@@ -115,7 +122,7 @@ class Engine:
         fg = v['form_gain']
         pipe, plen = self.pipe, len(self.pipe)
         for i in range(n):
-            self.phase += f0 * dt
+            self.phase += f0 * (1 + wobble * self.wob) * dt
             self.since += dt
             if self.phase >= 1.0:
                 self.phase -= math.floor(self.phase)
@@ -125,12 +132,14 @@ class Engine:
                 if self.pop_env > 0.05 and v['pop'] > 0 and self.noise() > 0.55:
                     a += v['pop'] * 3.5 * self.pop_env * (0.5 + 0.5 * self.noise())
                 self.amp = a
+                if wobble > 0:
+                    self.wob += (self.noise() - self.wob) * 0.15
                 self.since = self.phase / max(1.0, f0)
             env = math.exp(-self.since / tau)
             x = self.amp * env * (1 + grit * self.noise())
             hp = a_hp * (self.hp + x - self.hpx)
             self.hpx, self.hp = x, hp
-            f = 0.25 * hp
+            f = direct * hp
             for k in range(3):
                 b0, a1, a2 = co[k]
                 y = b0 * hp - b0 * self.fx2[k] - a1 * self.fy1[k] - a2 * self.fy2[k]
@@ -141,7 +150,8 @@ class Engine:
             self.pipe_idx = (self.pipe_idx + 1) % plen
             sat = math.tanh(drive * p) / tdrive
             self.lp += (sat - self.lp) * a_lp
-            eng = self.lp * eng_amp
+            self.lp2 += (self.lp - self.lp2) * a_tilt
+            eng = self.lp2 * eng_amp
             nz = self.noise()
             self.road += (nz - self.road) * a_road
             self.w1 += (nz - self.w1) * a_w1

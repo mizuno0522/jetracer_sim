@@ -36,6 +36,10 @@ namespace Minicar
             public float Turbo;         // 過給音の量
             public float Wind;          // 風切り音の量
             public float Level;         // 全体の音量の合わせ
+            public float Direct;        // 共鳴を通さない素の成分 (基音の強さ)。0 なら 0.25
+            public float CutHi;         // 全開・高回転での高域の上限 [Hz]。0 なら 9000
+            public float Tilt;          // さらに高域を落とす 2 段目 [Hz]。0 なら無し
+            public float Wobble;        // 燃焼ごとの回転の揺らぎ (きれいすぎる倍音を崩す)
         }
 
         static Voice VoiceOf(CarStyle s)
@@ -43,10 +47,11 @@ namespace Minicar
             switch (s)
             {
                 case CarStyle.B787:
-                    return new Voice { Pulses = 4, Cycle = 4, Idle = 2400, Red = 9000, Gears = new[] { 0.36f, 0.52f, 0.67f, 0.83f, 1f },
-                                       Sharp = 9f, Rasp = 0.45f, FormHz = new[] { 1150f, 2600f, 4300f }, FormGain = new[] { 1f, 0.85f, 0.45f },
-                                       FormQ = 2.2f, PipeHz = 310f, PipeFb = 0.42f, Drive = 2.6f, Pop = 1f, Whine = 0.012f,
-                                       Turbo = 0f, Wind = 0.6f, Level = 0.55f };
+                    // 実車の録音と帯域ごとの強さを比べて合わせた (2026-10-05)。400〜1000 Hz が中心で、2.5 kHz より上は少ない
+                    return new Voice { Pulses = 4, Cycle = 4, Idle = 1900, Red = 9000, Gears = new[] { 0.36f, 0.52f, 0.67f, 0.83f, 1f },
+                                       Sharp = 5f, Rasp = 0.45f, FormHz = new[] { 230f, 640f, 1500f }, FormGain = new[] { 1.3f, 1f, 0.75f },
+                                       FormQ = 1.6f, PipeHz = 230f, PipeFb = 0.42f, Drive = 2.6f, Pop = 1f, Whine = 0.008f,
+                                       Turbo = 0f, Wind = 0.5f, Level = 0.55f, Direct = 0.6f, CutHi = 5000f, Tilt = 3200f, Wobble = 0.02f };
                 case CarStyle.Rx7:
                     return new Voice { Pulses = 2, Cycle = 2, Idle = 900, Red = 8000, Gears = new[] { 0.27f, 0.42f, 0.58f, 0.75f, 1f },
                                        Sharp = 9f, Rasp = 0.40f, FormHz = new[] { 620f, 1500f, 3100f }, FormGain = new[] { 1f, 0.7f, 0.35f },
@@ -78,6 +83,7 @@ namespace Minicar
         int m_SampleRate;
         double m_Phase;
         long m_Event;
+        float m_Wob, m_Lp2;
         float m_Since, m_Amp, m_Hp, m_HpX, m_Lp, m_Road, m_Wind1, m_Wind2, m_SqY1, m_SqY2, m_TurboPh, m_WhinePh, m_Smooth;
         float m_PopEnv, m_PrevThr;
         readonly float[] m_Fx1 = new float[3], m_Fx2 = new float[3], m_Fy1 = new float[3], m_Fy2 = new float[3];
@@ -160,7 +166,9 @@ namespace Minicar
             float tau = 1f / (f0 * vc.Sharp * (0.7f + 0.6f * thr));  // パルスの減衰 [s] (踏むほど鋭く)
             float jitter = vc.Rasp * Mathf.Lerp(1.0f, 0.35f, load);   // 低回転ほどばらつく (アイドルの「ブロロ」)
             float grit = vc.Rasp * 0.35f * Mathf.Lerp(1.0f, 0.15f, load);
-            float cut = Mathf.Lerp(1800f, 9000f, Mathf.Clamp01(0.4f * thr + 0.6f * load));
+            float cut = Mathf.Lerp(1800f, vc.CutHi > 0f ? vc.CutHi : 9000f, Mathf.Clamp01(0.4f * thr + 0.6f * load));
+            float direct = vc.Direct > 0f ? vc.Direct : 0.25f;
+            float aTilt = vc.Tilt > 0f ? 1f - Mathf.Exp(-2f * Mathf.PI * vc.Tilt / sr) : 1f;
             float aLp = 1f - Mathf.Exp(-2f * Mathf.PI * cut / sr);
             float aHp = Mathf.Exp(-2f * Mathf.PI * 30f / sr);
             float drive = 1f + vc.Drive * (0.3f + 0.7f * thr);
@@ -189,7 +197,7 @@ namespace Minicar
             for (int i = 0; i < data.Length; i += channels)
             {
                 // ---- 燃焼のパルス
-                m_Phase += f0 * dt;
+                m_Phase += f0 * (1f + vc.Wobble * m_Wob) * dt;
                 m_Since += dt;
                 if (m_Phase >= 1.0)
                 {
@@ -198,6 +206,7 @@ namespace Minicar
                     float a = 1f + vc.Rasp * kBias[k % kBias.Length] + jitter * 0.5f * Noise();
                     if (m_PopEnv > 0.05f && vc.Pop > 0f && Noise() > 0.55f) a += vc.Pop * 3.5f * m_PopEnv * (0.5f + 0.5f * Noise());
                     m_Amp = a;
+                    if (vc.Wobble > 0f) m_Wob += (Noise() - m_Wob) * 0.15f;
                     m_Since = (float)m_Phase / Mathf.Max(1f, f0);
                 }
                 float env = Mathf.Exp(-m_Since / tau);
@@ -206,7 +215,7 @@ namespace Minicar
                 // 直流を切る
                 float hp = aHp * (m_Hp + x - m_HpX); m_HpX = x; m_Hp = hp;
                 // 共鳴 3 つ + 少しの素通し
-                float f = 0.25f * hp;
+                float f = direct * hp;
                 f += vc.FormGain[0] * Biquad(0, hp, b0_0, a1_0, a2_0);
                 f += vc.FormGain[1] * Biquad(1, hp, b0_1, a1_1, a2_1);
                 f += vc.FormGain[2] * Biquad(2, hp, b0_2, a1_2, a2_2);
@@ -217,7 +226,8 @@ namespace Minicar
                 // 歪み → 高域を少し丸める
                 float sat = (float)(System.Math.Tanh(drive * pipe) / System.Math.Tanh(drive));
                 m_Lp += (sat - m_Lp) * aLp;
-                float eng = m_Lp * engAmp;
+                m_Lp2 += (m_Lp - m_Lp2) * aTilt;
+                float eng = m_Lp2 * engAmp;
 
                 float n = Noise();
                 m_Road += (n - m_Road) * aRoad;
