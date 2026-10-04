@@ -44,14 +44,25 @@ namespace Minicar
             {
                 switch (Style)
                 {
-                    case CarStyle.B787: return 4.826f * kB787Scale;
-                    case CarStyle.Roadster: return 3.939f * kNdScale;
+                    case CarStyle.B787: return 4.784f * kB787Scale;
+                    case CarStyle.Roadster: return 3.915f * kNdScale;
                     case CarStyle.Rx7: return 4.289f * kRx7Scale;      // 実車の全長 (丸めた端まで) × 縮尺
                     default: return 0.401f;
                 }
             }
         }
         public float Scale { get; private set; } = 1f;
+
+        /// 実車の 3 台: 模型の単位 → 実車の m の倍率 (これを SetScale すると実車の寸法になる)。従来のボディは 0
+        public float RealScale
+        {
+            get
+            {
+                if (Style == CarStyle.Default) return 0f;
+                RealDims(Style, out float k, out _, out _, out _);
+                return 1f / k;
+            }
+        }
 
         /// 車体全体の縮尺 (サーキットでは約 10 倍)。タイヤの回転と姿勢の量もこれに合わせる
         public void SetScale(float s)

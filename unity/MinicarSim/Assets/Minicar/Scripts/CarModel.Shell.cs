@@ -31,6 +31,7 @@ namespace Minicar
             public float Scale;                     // 実車 m → 模型
             public float[] Axles;                   // 車軸の z [m]
             public float ArchR, ArchY, WellX;       // アーチの半径・中心の高さ (= タイヤの半径)・ホイールハウスの内壁
+            public float WidthGain = 1f;            // 幅の合わせ (曲線は制御点の内側を通るので、実車の全幅になるよう少し広げる)
             readonly float[][] m_S;                 // 断面
             readonly float[][] m_T;                 // 補間の傾き
             // 輪 (断面を置く位置): 評価する z・実際の z・中心へのすぼめ (1 = そのまま)・絵の横位置 (0〜1)
@@ -101,6 +102,7 @@ namespace Minicar
             public void Section(float z, float f, Vector2[] c, Vector2[] p, out int lip)
             {
                 Controls(z, f, c);
+                for (int i = 0; i < 9; i++) c[i].x *= WidthGain;
                 Profile(c, p);
                 lip = 0;
                 float ya = f < 1f ? -1f : ArchTop(z);
@@ -321,6 +323,8 @@ namespace Minicar
             if (!s_ShellCache.TryGetValue(Style, out var c))
             {
                 c.mesh = shell.BuildMesh();
+                var bs = c.mesh.bounds.size / shell.Scale;
+                Debug.Log($"[CarModel] {Style}: 全長 {bs.z:F3} × 全幅 {bs.x:F3} × 全高 {c.mesh.bounds.max.y / shell.Scale:F3} m (車体の曲面。羽根・鏡を除く)");
                 shell.BuildTextures(paint, 2048, 2048, out c.albedo, out c.gloss);
                 s_ShellCache[Style] = c;
             }
@@ -479,7 +483,7 @@ namespace Minicar
                       Material lamp, Material tail, Material alu, Material lit)
         {
             float k = kRx7Scale;
-            var shell = new Shell(kRx7Sections, k, new[] { 0f, 2.425f }, 0.365f, TireRadius / k, 0.60f);
+            var shell = new Shell(kRx7Sections, k, new[] { 0f, 2.425f }, 0.365f, TireRadius / k, 0.60f) { WidthGain = 1.760f / 1.752f };   // 全幅 1,760 mm
             AddShell(hull, shell, PaintRx7, lit);
             var yellow = Paint(Mat(new Color(0.97f, 0.745f, 0.055f), 0.80f, 0.25f));
             // 尾端の羽根 (後期型の純正: 両端の脚から立つ 1 枚の板)
@@ -506,7 +510,7 @@ namespace Minicar
         static readonly float[][] kNdSections =
         {
             //   z      yb     wb     w2     y2     w3     y3     w4     y4     w5     y5     w6     y6     y7
-            St(-0.785f, 0.34f, 0.44f, 0.54f, 0.40f, 0.60f, 0.58f, 0.57f, 0.760f, 0.48f, 0.820f, 0.26f, 0.845f, 0.850f),   // 尾端
+            St(-0.773f, 0.34f, 0.44f, 0.54f, 0.40f, 0.60f, 0.58f, 0.57f, 0.760f, 0.48f, 0.820f, 0.26f, 0.845f, 0.850f),   // 尾端
             St(-0.720f, 0.28f, 0.62f, 0.76f, 0.36f, 0.80f, 0.58f, 0.76f, 0.800f, 0.64f, 0.870f, 0.34f, 0.890f, 0.895f),
             St(-0.500f, 0.20f, 0.70f, 0.83f, 0.30f, 0.855f, 0.56f, 0.82f, 0.850f, 0.68f, 0.905f, 0.40f, 0.915f, 0.915f),
             St(-0.250f, 0.16f, 0.72f, 0.85f, 0.26f, 0.865f, 0.54f, 0.83f, 0.870f, 0.68f, 0.920f, 0.44f, 0.930f, 0.930f),  // デッキ (幌の後端)
@@ -521,7 +525,7 @@ namespace Minicar
             St( 2.700f, 0.15f, 0.68f, 0.82f, 0.25f, 0.835f, 0.46f, 0.78f, 0.670f, 0.64f, 0.665f, 0.36f, 0.620f, 0.620f),
             St( 2.950f, 0.17f, 0.58f, 0.70f, 0.26f, 0.72f, 0.40f, 0.66f, 0.540f, 0.54f, 0.550f, 0.30f, 0.530f, 0.530f),
             St( 3.070f, 0.20f, 0.42f, 0.50f, 0.28f, 0.52f, 0.37f, 0.48f, 0.460f, 0.40f, 0.470f, 0.22f, 0.470f, 0.470f),
-            St( 3.110f, 0.23f, 0.30f, 0.36f, 0.30f, 0.37f, 0.35f, 0.34f, 0.420f, 0.29f, 0.430f, 0.16f, 0.435f, 0.435f),   // ノーズ
+            St( 3.098f, 0.23f, 0.30f, 0.36f, 0.30f, 0.37f, 0.35f, 0.34f, 0.420f, 0.29f, 0.430f, 0.16f, 0.435f, 0.435f),   // ノーズ
         };
 
         static void PaintNd(float z, float x, float y, float u, out Color32 col, out float metal, out float smooth)
@@ -565,7 +569,7 @@ namespace Minicar
                            Material lamp, Material tail, Material alu, Material lit)
         {
             float k = kNdScale;
-            var shell = new Shell(kNdSections, k, new[] { 0f, 2.310f }, 0.350f, TireRadius / k, 0.60f);
+            var shell = new Shell(kNdSections, k, new[] { 0f, 2.310f }, 0.350f, TireRadius / k, 0.60f) { WidthGain = 1.735f / 1.718f };     // 全幅 1,735 mm
             AddShell(hull, shell, PaintNd, lit);
             var red = Paint(Mat(new Color(0.66f, 0.015f, 0.04f), 0.62f, 0.80f));
             foreach (float sx in new[] { -1f, 1f })
@@ -729,7 +733,7 @@ namespace Minicar
                        Material lamp, Material tail, Material alu, Material lit)
         {
             float k = kB787Scale;
-            var shell = new Shell(kB787Sections, k, new[] { 0f, 2.662f }, 0.400f, TireRadius / k, 0.62f);
+            var shell = new Shell(kB787Sections, k, new[] { 0f, 2.662f }, 0.400f, TireRadius / k, 0.62f) { WidthGain = 1.994f / 1.984f };  // 全幅 1,994 mm
             AddShell(hull, shell, PaintB787, lit);
             var green = Paint(Mat(new Color(0.94f, 0.36f, 0.09f), 0.82f, 0.10f));      // 翼・翼端板・鏡はオレンジ
             // リアウイング: 後端の低い位置の大きな翼 (オレンジ)。左右の翼端板で車体につながる。鏡はフェンダーの上の高い柱

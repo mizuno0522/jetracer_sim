@@ -498,7 +498,7 @@ def render(data, s_car, view, W, H, ss=2):
     car_xy = p + nrm * tr.line[i] * 0.85
     veh = data.get('vehicle', {})
     L = veh.get('length_m', 4.3)
-    k = L / {'real_rx7': 4.289 * 0.257 / 2.425, 'real_nd': 3.939 * 0.257 / 2.310, 'real_b787': 4.826 * 0.257 / 2.662}.get(veh.get('name', ''), 0.45)
+    k = L / {'real_rx7': 4.289 * 0.257 / 2.425, 'real_nd': 3.915 * 0.257 / 2.310, 'real_b787': 4.784 * 0.257 / 2.662}.get(veh.get('name', ''), 0.45)
     if view == 'chase':
         eye = np.array([*(car_xy - t * 0.95 * k + nrm * -0.25 * k), 0.42 * k])
         look = np.array([*(car_xy + t * 0.35 * k), 0.06 * k])

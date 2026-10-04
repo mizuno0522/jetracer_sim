@@ -444,14 +444,22 @@ namespace Minicar
             var veh = m_Course.Data.vehicle;
             if (m_Course.Data.IsCircuit && veh != null && veh.length_m > 0f)
             {
+                // 実車の 3 台 (787B・ND・RX-7) は、それぞれ自分の実車の寸法にする (自車の全長に合わせると、車種の違う相手の大きさが狂う)。
+                // 従来のボディだけ、vehicle_profile の全長に合わせて拡大する
                 foreach (var car in new[] { m_OwnCar, m_Opponent, m_Rival, m_Rival2 })
-                    car.SetScale(veh.length_m / car.ModelLength);
+                    car.SetScale(car.RealScale > 0f ? car.RealScale : veh.length_m / car.ModelLength);
                 // センサマストは実車には無いので、拡大した見た目では隠す
                 foreach (var car in new[] { m_OwnCar, m_Rival, m_Rival2 })
                     foreach (var t in car.Root.GetComponentsInChildren<Transform>(true))
                         if (t.name.StartsWith("Mast")) t.gameObject.SetActive(false);
             }
-            m_ViewScale = m_OwnCar.Scale;
+            else
+            {
+                // ミニカーの会場: 実車の 3 台はどれも実車の 1/10 (車種ごとの大きさの違いを保つ)
+                foreach (var car in new[] { m_OwnCar, m_Rival, m_Rival2 })
+                    if (car.RealScale > 0f) car.SetScale(0.1f * car.RealScale);
+            }
+            m_ViewScale = m_Course.Data.IsCircuit ? m_OwnCar.Scale : 1f;
             m_Rival2.Root.gameObject.SetActive(false);
             m_Rival2Label = Arg("-rival2label", "GREEN");
         }
