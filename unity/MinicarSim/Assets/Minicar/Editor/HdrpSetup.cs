@@ -86,7 +86,7 @@ namespace Minicar.EditorTools
             var white = TexAsset(dir + "/White.asset", new Color32(255, 255, 255, 255), false);
             var flatN = TexAsset(dir + "/FlatNormal.asset", new Color32(255, 128, 128, 128), true);
             var det = TexAsset(dir + "/Detail.asset", new Color32(128, 128, 128, 128), true);
-            void V(string name, bool normal, bool detail, bool cutout, bool transparent)
+            void V(string name, bool normal, bool detail, bool cutout, bool transparent, bool coat = false)
             {
                 var m = new Material(lit) { name = name };
                 m.SetTexture("_BaseColorMap", white);
@@ -102,12 +102,13 @@ namespace Minicar.EditorTools
                 m.SetFloat("_DoubleSidedEnable", cutout ? 1f : 0f);
                 m.SetFloat("_SurfaceType", transparent ? 1f : 0f);
                 if (transparent) m.SetFloat("_BlendMode", 0f);
+                m.SetFloat("_CoatMask", coat ? 1f : 0f);
                 HDMaterial.ValidateMaterial(m);
                 string path = $"{dir}/{name}.mat";
                 if (AssetDatabase.LoadAssetAtPath<Material>(path) != null) AssetDatabase.DeleteAsset(path);
                 AssetDatabase.CreateAsset(m, path);
             }
-            // RenderCompat.CopyLit が作る組み合わせ: 車・壁 (Plain)・路面 (Normal)・地面 (Normal + Detail UV1)・木 (Cutout)・タイヤ痕 (Transparent)
+            // RenderCompat.CopyLit が作る組み合わせ: 車の塗装 (Coat)・壁 (Plain)・路面 (Normal)・地面 (Normal + Detail UV1)・木 (Cutout)・タイヤ痕 (Transparent)
             V("Plain", false, false, false, false);
             V("Normal", true, false, false, false);
             V("NormalDetail", true, true, false, false);
@@ -115,6 +116,7 @@ namespace Minicar.EditorTools
             V("CutoutNormal", true, false, true, false);
             V("Transparent", false, false, false, true);
             V("TransparentNormal", true, false, false, true);
+            V("Coat", false, false, false, false, true);           // 車体の塗装 (クリアコート)
             Debug.Log($"[HdrpSetup] shader variant materials → {dir}");
         }
 

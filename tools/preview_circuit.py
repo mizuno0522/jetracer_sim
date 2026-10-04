@@ -784,7 +784,8 @@ def render(data, s_car, view, W, H, ss=2):
 
 
 CARMODEL = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', 'unity', 'MinicarSim', 'Assets', 'Minicar', 'Scripts', 'CarModel.cs')
-PAINT = {'BuildRx7': (0.98, 0.78, 0.05), 'BuildRoadster': (0.62, 0.03, 0.06), 'BuildB787': (0.96, 0.42, 0.06)}
+PAINT = {'BuildRx7': (0.98, 0.78, 0.05), 'BuildRoadster': (0.66, 0.015, 0.04), 'BuildB787': (0.96, 0.42, 0.06)}
+METAL = {'BuildRx7': 0.25, 'BuildRoadster': 0.80, 'BuildB787': 0.15}     # CarModel の下地の金属感 (ソウルレッドは 0.8)
 MATS = {'yellow': None, 'red': None, 'orange': None, 'paint': None, 'green': (0.05, 0.55, 0.30), 'black': (0.03, 0.03, 0.03),
         'glass': (0.04, 0.05, 0.07), 'lamp': (0.95, 0.95, 0.90), 'tail': (0.75, 0.05, 0.05), 'alu': (0.55, 0.56, 0.58), 'seat': (0.12, 0.11, 0.11)}
 
@@ -916,6 +917,12 @@ def draw_car(im, proj, eye, xy, t, nrm, k, style):
         spec = max(0.0, float(nvec @ hv)) ** 60 * (0.9 if mat in ('glass',) or MATS.get(mat, 0) is None else 0.15)
         sky = max(0.0, nvec[2]) * (0.35 if mat == 'glass' else 0.12)
         col = base * (0.42 + 0.72 * dif) + spec + sky * np.array([0.55, 0.68, 0.85])
+        if MATS.get(mat, 0) is None:
+            # 塗装 = 金属的な下地 (色の付いた広いハイライト) + クリア層 (斜めほど空を映す)。CarModel.Paint / AddClearCoat
+            mt = METAL.get(style, 0.3)
+            glow = max(0.0, float(nvec @ hv)) ** 10 * 1.1 * mt
+            fres = 0.04 + 0.96 * (1 - max(0.0, float(nvec @ vdir))) ** 5
+            col = base * ((0.42 + 0.72 * dif) * (1 - 0.6 * mt) + glow) + spec + fres * np.array([0.80, 0.86, 0.92]) * 0.8 + sky * np.array([0.55, 0.68, 0.85]) * (1 - mt)
         polys.append((np.linalg.norm(c - eye), P, col))
     polys.sort(key=lambda q: -q[0])
     for _, P, col in polys:

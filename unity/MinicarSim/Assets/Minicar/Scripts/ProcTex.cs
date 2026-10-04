@@ -372,6 +372,20 @@ namespace Minicar
             return t2;
         }
 
+        /// 透明 (Transparent・乗算済みアルファ) にする。色は透けて、映り込みとハイライトだけが残る (車のクリア層用)
+        public static void MakeTransparent(Material m)
+        {
+            m.SetFloat("_Mode", 3f);
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
+            m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            m.SetInt("_ZWrite", 0);
+            m.DisableKeyword("_ALPHATEST_ON");
+            m.DisableKeyword("_ALPHABLEND_ON");
+            m.EnableKeyword("_ALPHAPREMULTIPLY_ON");
+            m.renderQueue = 3000;
+        }
+
         /// 切り抜き (Cutout) にする。木の絵のように透明の部分を抜き、影も絵の形で落とす
         public static void MakeCutout(Material m, float cutoff)
         {

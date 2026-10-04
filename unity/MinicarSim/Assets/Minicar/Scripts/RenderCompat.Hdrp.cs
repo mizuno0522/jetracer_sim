@@ -1,6 +1,7 @@
 // HDRP で動いているときの置き換え (スクリプト定義 MINICAR_HDRP のときだけコンパイルされる。docs/hdrp.md)。
 //
-//   材質: Standard → HDRP/Lit (色・テクスチャ・タイル・法線・滑らかさ・金属・切り抜き・半透明・detail を写す)。
+//   材質: Standard → HDRP/Lit (色・テクスチャ・タイル・法線・滑らかさ・金属・切り抜き・半透明・detail を写す)。車体の塗装 (CarPaint) は
+//         クリアコート付きにし、Built-in 用の 2 枚目のクリア層 (ClearCoat) は外す。
 //         Unlit/Texture・Sprites/Default (矢印板・文字・雲のドーム・軌跡) は HDRP でもそのまま描ける (光の影響を受けない) ので触らない
 //   光と露出: サーキット = 太陽 100,000 lux・物理的な空・露出 EV100 14.4 (今の Built-in の明るさに合わせた値)。
 //             ミニカーの会場 = 今の光の強さのまま、露出 EV100 −1.9 (= log2(1/(1.2π))) で Built-in と同じ明るさになるように換算
@@ -157,14 +158,18 @@ namespace Minicar
             int n = 0;
             foreach (var r in UnityEngine.Object.FindObjectsByType<Renderer>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                var mats = r.sharedMaterials;
+                var src = r.sharedMaterials;
+                var mats = new List<Material>(src.Length);
                 bool changed = false;
-                for (int i = 0; i < mats.Length; i++)
+                foreach (var sm in src)
                 {
-                    var m = Convert(mats[i]);
-                    if (m != mats[i]) { mats[i] = m; changed = true; }
+                    // 車のクリア層 (2 枚目) は外す。HDRP では下地の材質のクリアコートで描く
+                    if (sm != null && sm.name == "ClearCoat") { changed = true; continue; }
+                    var m = Convert(sm);
+                    if (m != sm) changed = true;
+                    mats.Add(m);
                 }
-                if (changed) { r.sharedMaterials = mats; n++; }
+                if (changed) { r.sharedMaterials = mats.ToArray(); n++; }
             }
             return n;
         }
@@ -259,6 +264,7 @@ namespace Minicar
                 m.SetFloat("_DetailSmoothnessScale", 0f);
                 m.SetFloat("_LinkDetailsWithBase", 0f);     // Built-in と同じく detail のタイルを独立に
             }
+            m.SetFloat("_CoatMask", s.name == "CarPaint" ? 1f : 0f);   // 車体の塗装はクリアコート付き
             HDMaterial.ValidateMaterial(m);             // 上の値からキーワードと描画パスを決め直す
         }
 

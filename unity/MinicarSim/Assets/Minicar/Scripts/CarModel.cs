@@ -89,6 +89,8 @@ namespace Minicar
                 m.SetFloat("_Metallic", metal);
                 return m;
             }
+            // 車体の塗装: 787B・ND・RX-7 は下地 (色と金属感) の上にクリア層を重ねる (Paint で印を付け、AddClearCoat が 2 枚目の材質を足す)。
+            // 従来のボディ (ミニカーの会場・センサ画像に写る相手) は今まで通り 1 層
             var paint = Mat(bodyColor, 0.82f, 0.45f);
             var glass = Mat(new Color(0.04f, 0.05f, 0.07f), 0.93f);
             var black = Mat(new Color(0.03f, 0.03f, 0.03f), 0.25f);
@@ -114,6 +116,8 @@ namespace Minicar
                 case CarStyle.Rx7: BuildRx7(hull, withMast, Mat, black, glass, lamp, tail, alu); break;
                 default: BuildDefault(hull, withMast, paint, black, glass, lamp, tail, alu); break;
             }
+
+            AddClearCoat(lit);
 
             // ---- タイヤ (車体に固定しない: ロールしてもタイヤは接地したまま) ----
             int k = 0;
@@ -150,6 +154,33 @@ namespace Minicar
         }
 
         // ------------------------------------------------------------------
+        // 塗装のクリア層。Built-in の Standard は 1 層しか持てないので、同じメッシュをもう 1 回、色が透けて映り込みと
+        // ハイライトだけが残る材質 (Transparent・α 0・滑らかさ 0.95) で重ねて描く。HDRP では RenderCompat が
+        // この 2 枚目を外し、下地の材質に HDRP/Lit のクリアコート (_CoatMask) を付ける
+        readonly System.Collections.Generic.List<Material> m_Paints = new System.Collections.Generic.List<Material>();
+
+        Material Paint(Material m)
+        {
+            m.name = "CarPaint";
+            m_Paints.Add(m);
+            return m;
+        }
+
+        void AddClearCoat(Material lit)
+        {
+            if (m_Paints.Count == 0) return;
+            var coat = new Material(lit) { name = "ClearCoat", color = new Color(1f, 1f, 1f, 0f) };
+            coat.SetFloat("_Glossiness", 0.95f);
+            coat.SetFloat("_Metallic", 0f);
+            ProcTex.MakeTransparent(coat);
+            foreach (var r in Root.GetComponentsInChildren<MeshRenderer>(true))
+                if (m_Paints.Contains(r.sharedMaterial)) r.sharedMaterials = new[] { r.sharedMaterial, coat };
+        }
+
+        /// ソウルレッド (ロードスター): 鮮やかな赤の金属的な下地 (ハイライトが赤く光って広がる) ＋ クリア層。
+        /// 下地の拡散は少なく (金属 0.8)、陰は深い赤。下地の滑らかさを 0.62 に下げてハイライトの赤い「にじみ」を広げる
+        Material SoulRed(MatFn Mat) => Paint(Mat(new Color(0.66f, 0.015f, 0.04f), 0.62f, 0.80f));
+
         // 従来のボディ (M-05 + FD 系クーペ・濃紺など)
         void BuildDefault(Transform hull, bool withMast, Material paint, Material black, Material glass,
                           Material lamp, Material tail, Material alu)
@@ -220,8 +251,8 @@ namespace Minicar
         void BuildB787(Transform hull, bool withMast, MatFn Mat, Material black, Material glass,
                        Material lamp, Material tail, Material alu)
         {
-            var orange = Mat(new Color(0.96f, 0.42f, 0.06f), 0.85f, 0.15f);
-            var green = Mat(new Color(0.05f, 0.55f, 0.30f), 0.85f, 0.15f);
+            var orange = Paint(Mat(new Color(0.96f, 0.42f, 0.06f), 0.80f, 0.15f));
+            var green = Paint(Mat(new Color(0.05f, 0.55f, 0.30f), 0.80f, 0.15f));
             var body = new[]
             {
                 new Vector4(-0.112f, 0.088f, 0.024f, 0.058f),   // テール
@@ -285,7 +316,7 @@ namespace Minicar
         void BuildRoadster(Transform hull, bool withMast, MatFn Mat, Material black, Material glass,
                            Material lamp, Material tail, Material alu)
         {
-            var red = Mat(new Color(0.62f, 0.03f, 0.06f), 0.92f, 0.55f);
+            var red = SoulRed(Mat);
             var seat = Mat(new Color(0.12f, 0.11f, 0.11f), 0.35f);
             var body = new[]
             {
@@ -334,7 +365,7 @@ namespace Minicar
         void BuildRx7(Transform hull, bool withMast, MatFn Mat, Material black, Material glass,
                           Material lamp, Material tail, Material alu)
         {
-            var yellow = Mat(new Color(0.98f, 0.78f, 0.05f), 0.88f, 0.30f);
+            var yellow = Paint(Mat(new Color(0.98f, 0.78f, 0.05f), 0.80f, 0.25f));
             var body = new[]
             {
                 new Vector4(-0.090f, 0.074f, 0.034f, 0.068f),   // リア
