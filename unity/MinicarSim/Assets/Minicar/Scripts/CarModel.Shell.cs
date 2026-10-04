@@ -643,6 +643,7 @@ namespace Minicar
             // キャノピー (前窓と横の窓)
             bool gSide = In(u, 5.75f, 6.35f) && In(z, 1.28f + (u - 5.75f) * 0.2f, 2.10f - (u - 5.75f) * 0.5f);
             bool gFront = u > 6.50f && In(z, 1.72f, 2.26f);
+            if (gFront && z < 1.86f) { col = orange; return; }                                       // 前窓の上のオレンジの帯
             if (gSide || gFront) { col = glass; metal = 0f; smooth = 0.96f; return; }
             if (y < 0.10f) { col = black; metal = 0f; smooth = 0.3f; return; }
             if (y < 0.16f && In(u, 2.0f, 5.0f)) { col = new Color32(245, 205, 20, 255); return; }                       // 床の縁の黄色
@@ -660,37 +661,68 @@ namespace Minicar
             if (z < -1.02f && In(ax, 0.55f, 0.92f) && In(y, 0.42f, 0.50f)) { col = new Color32(210, 14, 16, 255); metal = 0f; smooth = 0.9f; return; }
             if (z < -1.05f && ax < 0.50f && In(y, 0.24f, 0.52f)) { col = black; metal = 0f; smooth = 0.2f; return; }
             if (In(u, 2.6f, 5.0f) && In(z, 1.95f, 2.25f) && In(y, 0.20f, 0.50f)) { col = black; metal = 0f; smooth = 0.15f; return; }   // 前輪の後ろの排熱口
-            // アーガイル: 座標を 28° 回した市松 (1.25 × 1.0 m)。左前のフェンダーが緑、鼻先の中央がオレンジ
-            const float cs = 0.883f, sn = 0.469f;
-            float zr = (z - 0.35f) * cs + x * sn, xr = x * cs - (z - 0.35f) * sn;
-            float fz = zr / 1.25f, fx = xr / 1.00f + 0.5f;
-            bool odd = ((Mathf.FloorToInt(fz) + Mathf.FloorToInt(fx)) & 1) != 0;
-            col = odd ? green : orange;
-            // 縫い目 (白い破線) を境目に
-            float ez = Mathf.Abs(fz - Mathf.Round(fz)) * 1.25f, ex = Mathf.Abs(fx - Mathf.Round(fx)) * 1.00f;
-            if ((ez < 0.022f && Mathf.Repeat(xr, 0.14f) < 0.085f) || (ex < 0.022f && Mathf.Repeat(zr, 0.14f) < 0.085f)) col = white;
-            // 屋根の中央 (操縦席の上) は銀白
-            if (u > 6.40f && In(z, 0.75f, 1.72f)) { col = new Color32(214, 216, 218, 255); metal = 0.3f; }
-            bool side = In(u, 2.6f, 5.2f);
-            // ゼッケン: 前輪の後ろの白い四角に黒い 55。読む向きは、右側面は後ろへ (-z)、左側面は前へ…ではなく、見る人から左 → 右
-            if (side && In(z, 1.42f, 1.90f) && In(y, 0.20f, 0.50f))
+            // 上から見た模様 (実車を真上から撮った写真に合わせた): 操縦席を囲む大きな緑のひし形、四隅はオレンジ、
+            // 後端の中央に緑の三角、鼻先は緑の帯。境目は白い破線
+            const float zc = 1.45f;
+            float d1 = Mathf.Abs(z - zc) / (z > zc ? 1.35f : 1.60f) + ax / 1.70f;          // 中央のひし形 (1 未満が中)
+            float d2 = Mathf.Abs(z + 1.17f) / 1.05f + ax / 1.05f;                            // 後端の三角
+            bool grn = d1 < 1f || d2 < 1f || z > 3.30f;
+            col = grn ? green : orange;
+            float e1 = Mathf.Abs(d1 - 1f) * 1.05f, e2 = Mathf.Abs(d2 - 1f) * 0.74f, e3 = Mathf.Abs(z - 3.30f);
+            float dash = Mathf.Repeat(z * 0.8f + ax * 0.6f, 0.16f);
+            if ((e1 < 0.022f || e2 < 0.022f) && dash < 0.10f) col = white;
+            if (e3 < 0.018f && Mathf.Repeat(ax, 0.16f) < 0.10f) col = white;
+            bool side = In(u, 2.6f, 5.2f), topS = u > 5.3f;
+            // 操縦席の後ろ (エンジンカウルの中央) は白いパネル。前窓の上にオレンジの帯
+            if (topS && In(z, 0.25f, 1.26f) && ax < 0.16f + (z - 0.25f) * 0.26f) { col = white; metal = 0.05f; }
+            if (u > 6.40f && In(z, 1.26f, 1.72f)) col = new Color32(22, 24, 27, 255);       // 屋根 (黒)
+            // 鼻先: 白い帯に青い RENOWN (前から読む向き)
+            if (topS && In(z, 2.96f, 3.24f) && In(x, -0.20f, 0.84f))
             {
                 col = white;
-                float a = sgn > 0f ? z - 1.47f : 1.85f - z;
+                if (Text("RENOWN", 0.80f - x, 3.22f - z, 0.20f)) col = blue;
+            }
+            // ゼッケン: 左前の角 (上面) と、左右の後輪の前 (側面) に白い四角と黒い 55
+            if (topS && In(z, 2.50f, 2.86f) && In(x, -0.88f, -0.40f))
+            {
+                col = white;
+                if (Text("55", -0.42f - x, 2.83f - z, 0.26f)) col = black;
+            }
+            if (side && In(z, 0.52f, 1.00f) && In(y, 0.20f, 0.50f))
+            {
+                col = white;
+                float a = sgn > 0f ? z - 0.57f : 0.95f - z;
                 if (Text("55", a, y - 0.24f, 0.22f)) col = black;
             }
-            // 鼻先: 白い帯に青い RENOWN (前から読む向き)、その後ろに白い丸の 55
-            if (u > 5.4f && In(z, 2.98f, 3.26f) && ax < 0.62f)
-            {
-                col = white;
-                if (Text("RENOWN", 0.56f - x, 3.24f - z, 0.22f)) col = blue;
-            }
-            float nz = z - 2.72f;
-            if (u > 5.5f && nz * nz + (x - 0.02f) * (x - 0.02f) < 0.18f * 0.18f)
-            {
-                col = white;
-                if (Text("55", 0.18f - x, 2.83f - z, 0.22f)) col = black;
-            }
+            // 後フェンダーの上の空気取り入れ口 (黒い切り欠き)
+            if (topS && In(z, 0.10f, 0.42f) && In(ax, 0.58f, 0.70f)) { col = black; metal = 0f; smooth = 0.15f; }
+        }
+
+        static Material s_WingLabel;
+        static Material WingLabel(Material lit)
+        {
+            if (s_WingLabel != null) return s_WingLabel;
+            const int w = 512, h = 128;
+            var px = new Color32[w * h];
+            var orange = new Color32(240, 92, 22, 255); var navy = new Color32(20, 26, 70, 255); var white = new Color32(245, 245, 240, 255);
+            float th = 0.62f, tw = 6f * th * 6f / 7f;                 // 文字の高さと全体の幅 (絵の高さを 1 として)
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    float a = x / (float)h - (w / (float)h - tw) * 0.5f, b = y / (float)h - (1f - th) * 0.5f;
+                    bool ink = Text("CHARGE", a, b, th), near = false;
+                    for (int k = 0; k < 8 && !ink && !near; k++)
+                    {
+                        float ang = k * Mathf.PI / 4f;
+                        near = Text("CHARGE", a + 0.035f * Mathf.Cos(ang), b + 0.035f * Mathf.Sin(ang), th);
+                    }
+                    px[y * w + x] = ink ? navy : near ? white : orange;
+                }
+            var t = new Texture2D(w, h, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, anisoLevel = 8 };
+            t.SetPixels32(px); t.Apply(true);
+            s_WingLabel = new Material(lit) { name = "WingLabel", color = Color.white, mainTexture = t };
+            s_WingLabel.SetFloat("_Glossiness", 0.7f);
+            return s_WingLabel;
         }
 
         void BuildB787(Transform hull, bool withMast, MatFn Mat, Material black, Material glass,
@@ -701,11 +733,16 @@ namespace Minicar
             AddShell(hull, shell, PaintB787, lit);
             var green = Paint(Mat(new Color(0.94f, 0.36f, 0.09f), 0.82f, 0.10f));      // 翼・翼端板・鏡はオレンジ
             // リアウイング: 後端の低い位置の大きな翼 (オレンジ)。左右の翼端板で車体につながる。鏡はフェンダーの上の高い柱
-            Cube("WingPlate", hull, new Vector3(0f, 0.86f * k, -1.16f * k), new Vector3(1.96f * k, 0.035f * k, 0.46f * k), green, -5f);
+            Cube("WingPlate", hull, new Vector3(0f, 0.86f * k, -1.22f * k), new Vector3(1.98f * k, 0.035f * k, 0.50f * k), green, -5f);
+            // 翼の上面の文字 (オレンジ地に、白で縁取った紺の CHARGE)。前から読む向き・C が車の右
+            var label = Prim(PrimitiveType.Quad, "WingLabel", hull, WingLabel(lit));
+            label.localPosition = new Vector3(0f, 0.882f * k, -1.22f * k);
+            label.localRotation = Quaternion.Euler(90f - 5f, 180f, 0f);
+            label.localScale = new Vector3(1.90f * k, 0.44f * k, 1f);
             foreach (float sx in new[] { -1f, 1f })
             {
-                Cube("WingEnd", hull, new Vector3(sx * 0.985f * k, 0.74f * k, -1.12f * k), new Vector3(0.02f * k, 0.36f * k, 0.56f * k), green);
-                Cube("WingStay", hull, new Vector3(sx * 0.25f * k, 0.74f * k, -1.08f * k), new Vector3(0.03f * k, 0.22f * k, 0.20f * k), black);
+                Cube("WingEnd", hull, new Vector3(sx * 0.995f * k, 0.74f * k, -1.20f * k), new Vector3(0.02f * k, 0.36f * k, 0.58f * k), green);
+                Cube("WingStay", hull, new Vector3(sx * 0.25f * k, 0.74f * k, -1.12f * k), new Vector3(0.03f * k, 0.22f * k, 0.20f * k), black);
                 var mir = Prim(PrimitiveType.Sphere, "Mirror", hull, green);
                 mir.localPosition = new Vector3(sx * 0.80f * k, 0.86f * k, 2.42f * k);
                 mir.localScale = new Vector3(0.16f * k, 0.11f * k, 0.10f * k);

@@ -973,9 +973,10 @@ def b787_mat(z, x, y, u):
         return 'glass'
     if y < 0.10:
         return 'black'
-    zr = (z - 0.35) * 0.883 + x * 0.469          # アーガイル (座標を 28° 回した 1.25 × 1.0 m の市松)
-    xr = x * 0.883 - (z - 0.35) * 0.469
-    return 'green' if (math.floor(zr / 1.25) + math.floor(xr / 1.00 + 0.5)) % 2 else 'paint'
+    ax = abs(x)                                  # 操縦席を囲む緑のひし形・後端の緑の三角・鼻先の緑の帯 (PaintB787 と同じ式)
+    d1 = abs(z - 1.45) / (1.35 if z > 1.45 else 1.60) + ax / 1.70
+    d2 = abs(z + 1.17) / 1.05 + ax / 1.05
+    return 'green' if d1 < 1 or d2 < 1 or z > 3.30 else 'paint'
 
 
 SHELL_MAT = {'BuildRx7': rx7_mat, 'BuildRoadster': nd_mat, 'BuildB787': b787_mat}

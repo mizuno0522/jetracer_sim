@@ -143,6 +143,15 @@ namespace Minicar
             var car = new Vector2((float)cx, (float)cy);
             var t = new Vector2(Mathf.Cos((float)yaw), Mathf.Sin((float)yaw));
             var nrm = new Vector2(-t.y, t.x);
+            if (view == "cartop")
+            {
+                // 真上の少し後ろから見下ろす (塗り分けの確認用)
+                Vector2 e = car - t * 0.35f * len;
+                eye = RosFrame.ToUnity(e.x, e.y, 2.0f * len);
+                look = RosFrame.ToUnity(car.x + t.x * 0.30f * len, car.y + t.y * 0.30f * len, 0.1f * len);
+                fov = 34f;
+                return true;
+            }
             if (view == "carfront" || view == "carside" || view == "carrear")
             {
                 Vector2 off = view == "carfront" ? t * 1.25f + nrm * 0.95f : view == "carside" ? nrm * 1.7f : t * -1.25f + nrm * 0.95f;
