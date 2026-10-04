@@ -25,3 +25,4 @@ unity/MinicarSim/Assets/StreamingAssets/textures/stats.json
 # ML-Agents の人の運転 (.demo) と学習結果 (docs/mlagents.md)
 demos/
 results/
+shots/

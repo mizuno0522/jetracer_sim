@@ -20,7 +20,7 @@ using UnityEngine.Rendering;
 namespace Minicar
 {
     [RequireComponent(typeof(CourseBuilder))]
-    public class SimBridge : MonoBehaviour
+    public partial class SimBridge : MonoBehaviour
     {
         const string kStateTopic = "/sim/render_state";
         const string kImageTopic = "/camera/image_raw";
@@ -158,7 +158,10 @@ namespace Minicar
             // 使い、3 台レースで PC が詰まった (✎ 2026-09-28)。-fps で変えられる
             Application.targetFrameRate = int.Parse(Arg("-fps", "60"));
             m_Course = GetComponent<CourseBuilder>();
+            float t0 = Time.realtimeSinceStartup;
             m_Course.Build();
+            m_BuildSeconds = Time.realtimeSinceStartup - t0;
+            Debug.Log($"[SimBridge] course built in {m_BuildSeconds:F2} s (process up {Time.realtimeSinceStartup:F2} s)");
 
             m_Ros = ROSConnection.GetOrCreateInstance();
             m_Ros.listenForTFMessages = false;
@@ -213,6 +216,8 @@ namespace Minicar
             if (!m_RecordPending) StartRecording();
             m_ShotDir = Arg("-shotdir", "");
             m_ShotInterval = float.Parse(Arg("-shotinterval", "2"), System.Globalization.CultureInfo.InvariantCulture);
+            // -shots "0,1250,…": ROS 無しで決めた位置に車を置いて撮影・計測して終了 (SimBridge.Shots.cs)
+            if (Arg("-shots", "") != "") StartShots();
             m_Ros.RegisterPublisher<ImageMsg>(kImageTopic);
             m_Ros.Subscribe<Float64MultiArrayMsg>(kStateTopic, OnState);
             // エピソード seed (vehicle_sim が LATCHED で出す)。照明・床・観戦者を引き直す
@@ -391,8 +396,7 @@ namespace Minicar
             m_ViewCam.fieldOfView = 50f;
             m_ViewCam.nearClipPlane = Circuit ? 0.5f : 0.02f;
             m_ViewCam.farClipPlane = Circuit ? 30000f : 60f;
-            if (Circuit) m_ViewCam.clearFlags = CameraClearFlags.Skybox;
-            m_ViewCam.clearFlags = CameraClearFlags.SolidColor;
+            m_ViewCam.clearFlags = Circuit ? CameraClearFlags.Skybox : CameraClearFlags.SolidColor;   // サーキットは空を描く
             m_ViewCam.backgroundColor = new Color32(40, 42, 46, 255);
             // 接続前 (/sim/render_state 未着) はコース全体を斜め上から見せる。
             // 原点のままだと床下から写って何も見えない
@@ -551,7 +555,7 @@ namespace Minicar
             m_ViewCam.transform.position = m_ChasePos;
             m_ViewCam.transform.LookAt(center + (Vector3.up * 0.06f + car.forward * 0.25f) * k);
 
-            if (m_ShotDir != "" && Time.unscaledTime >= m_NextShot)
+            if (m_ShotDir != "" && !m_ShotMode && Time.unscaledTime >= m_NextShot)
             {
                 m_NextShot = Time.unscaledTime + m_ShotInterval;
                 ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(m_ShotDir, $"shot_{m_ShotN++:000}.png"));

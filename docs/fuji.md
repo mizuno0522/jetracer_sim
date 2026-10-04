@@ -91,6 +91,17 @@ python3 tools/preview_circuit.py --course unity/course_fuji_real_rx7.json --s 12
 python3 tools/preview_circuit.py --course unity/course_fuji_real_rx7.json --s 2600 --view scenic --out /tmp/view.png  # 景色
 ```
 
+Unity の実際の画面で確かめるには、プレイヤーを撮影・計測モードで起動する (ROS 不要・画面が要る)。決めた位置 (既定 s = 0・1250・2600・3300 m) に
+自車とライバル 2 台を置いて、追従視点・車載カメラ (配信している画像そのもの)・俯瞰を撮り、そのあと車を走らせて描画の重さを計って終了する:
+
+```bash
+./scripts/shots.sh fuji rx7      # → shots/fuji_rx7_<日時>/ に 12 枚・sheet.png (一覧)・bench.md (GPU・組み立て時間・fps)
+./scripts/shots.sh minicar       # ミニカーの会場 (s = 0・8・15・22 m)
+python3 tools/shot_sheet.py shots/<変更前> shots/<変更後> --out /tmp/ab.png   # 左右に並べて比べる
+```
+
+プレイヤーの引数で直接使うなら `-shots "0,1250" -shotdir <dir> -shotsize 1920x1080 -bench 600` (`SimBridge.Shots.cs`)。
+
 ## まだ無いもの
 
 - 高低差 (坂の加減速・ピッチ)。`vehicle_sim` の坂は②坂道の区間だけ
