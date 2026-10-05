@@ -50,9 +50,12 @@ namespace Minicar
             m_Small = new RenderTexture(m_W, m_H, 0, RenderTextureFormat.ARGB32);
             m_Frame = new byte[m_W * m_H * 4];
 
+            // 読み出した画像の行の並びは描画 API で違う: OpenGL (Built-in 版) は下の行が先なので上下を返す。
+            // Vulkan (HDRP 版) は上の行が先で、返すと逆さまになる
+            string flip = SystemInfo.graphicsUVStartsAtTop ? "" : "-vf vflip ";
             var psi = new ProcessStartInfo("ffmpeg",
                 $"-y -loglevel error -f rawvideo -pix_fmt rgba -s {m_W}x{m_H} -r {m_Fps} -i - " +
-                "-vf vflip -c:v libx264 -preset ultrafast -crf 23 -pix_fmt yuv420p " +
+                $"{flip}-c:v libx264 -preset ultrafast -crf 23 -pix_fmt yuv420p " +
                 // 断片化 mp4: Unity が強制終了されても、そこまでの動画は再生できる
                 $"-movflags +frag_keyframe+empty_moov+default_base_moof \"{path}\"")
             {
