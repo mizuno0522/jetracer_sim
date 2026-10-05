@@ -9,7 +9,8 @@
 
 ## 守るもの
 - 車載カメラ (配信するセンサ画像) の見え方を変えない: 後処理は実カメラ風の SensorPost だけ。
-  ミニカーの会場と従来の車体 (センサ画像に写る相手) の見た目は変えない
+  ミニカーの会場と従来の車体 (センサ画像に写る相手) の見た目は変えない (Built-in 版の `-venue plain`)。
+  HDRP 版のミニカーの会場は実際の部屋らしく作り込んでよい (`-venue room`、2026-10-05 水野。docs/hdrp.md)
 - 画質 low (学習・-mlagents) の速さ: lockstep の 1 判断あたりの時間を基準 (docs/render_baseline.md) の +10 % 以内
 - 周回タイム: ミニカー 11.80 s、ND 2:36.7、RX-7 2:25.8、787B 1:48.0 (描画だけの変更なら vehicle_sim に差分がないこと)
 - python3 tools/mlagents/test_gateway_core.py が全件合格

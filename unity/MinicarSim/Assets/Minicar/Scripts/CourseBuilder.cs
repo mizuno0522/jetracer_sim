@@ -72,13 +72,16 @@ namespace Minicar
                 kWallRed = new Color32((byte)Realism.wall_red_r, (byte)Realism.wall_red_g, (byte)Realism.wall_red_b, 255);
             }
 
+            Room = WantRoom();                  // -venue room: 実際の部屋らしい会場 (表示用。CourseBuilder.Room.cs)
             BuildFloor();
-            if (Realism.enable)
+            if (Room) BuildRoom();
+            else if (Realism.enable)
             {
                 BuildBackdrop();
                 BuildSpectators();
             }
             BuildWalls();
+            if (Room) BuildWallFeet();
             BuildAreas();
             BuildParking();
             BuildStartLines();
@@ -185,6 +188,13 @@ namespace Minicar
         void BuildFloor()
         {
             // 会場の床 (コースの外) とパンチカーペット (コース内)
+            if (Room)
+            {
+                m_CarpetMat = RoomCarpet(6.55f, 10.45f);
+                m_CarpetBase = m_CarpetMat.color;
+                FloorRect("Carpet", -0.05f, -0.1f, 10.4f, 6.45f, 0f, m_CarpetMat).GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                return;
+            }
             FloorRect("VenueFloor", -6f, -6f, 16f, 12f, -0.004f,
                       Lit(kVenue, Speckle(128, 0.10f, 1), 0.2f, new Vector2(40, 40)))
                 .layer = RvizLayout.SensorOnlyLayer;
@@ -297,8 +307,9 @@ namespace Minicar
         void BuildWalls()
         {
             var d = Data;
-            var white = Lit(kWallWhite, Speckle(128, 0.08f, 3, true), 0.15f, new Vector2(1, 8));
-            var red = Lit(kWallRed, Speckle(128, 0.08f, 4, true), 0.25f, new Vector2(1, 8));
+            // 木の板を塗ったもの (規約: コース壁材…木材)。room では塗装のつやを出す
+            var white = Lit(kWallWhite, Speckle(128, 0.08f, 3, true), Room ? 0.55f : 0.15f, new Vector2(1, 8));
+            var red = Lit(kWallRed, Speckle(128, 0.08f, 4, true), Room ? 0.62f : 0.25f, new Vector2(1, 8));
             var velvet = Lit(kVelvet, null, 0.0f);
             AreaData tunnel = System.Array.Find(d.areas, a => a.name == "TUNNEL");
             // 暗幕の中の壁は天井光も環境光も届かないので、材質ごと暗くする
@@ -388,6 +399,7 @@ namespace Minicar
                 foreach (var a in Data.areas)
                 {
                     if (a.name != name) continue;
+                    if (Room) { RoomAreaSlab(name, a, z); z += 0.001f; continue; }
                     Material mat = name switch
                     {
                         "MU_HIGH" => Lit(kArea[name], Speckle(256, 0.55f, 5), 0.0f, new Vector2(20, 30)),
@@ -433,6 +445,7 @@ namespace Minicar
         void FloorLabel(SlotData s, Color32 col)
         {
             const float w = 0.36f;                       // ラベル幅 [m]
+            if (Room) { RoomFloorLabel(s, col, w); return; }
             var tex = LabelTexture.Make(s.name, col, kCarpet);
             float h = w * tex.height / tex.width;
             float cx = (s.x0 + s.x1) * 0.5f, cy = (s.y0 + s.y1) * 0.5f, z = 0.0075f;
@@ -510,11 +523,11 @@ namespace Minicar
             float U(float r) => 1f + r * (2f * (float)rng.NextDouble() - 1f);
             if (m_Ceiling != null)
             {
-                m_Ceiling.intensity = 0.55f * U(Realism.episode_light_range);
+                m_Ceiling.intensity = 0.55f * RoomLight * U(Realism.episode_light_range);
                 float t = Realism.episode_tint_range;
                 m_Ceiling.color = new Color(U(t), 0.97f * U(t), 0.92f * U(t));
             }
-            float a = U(Realism.episode_ambient_range) * Realism.ambient_gain;
+            float a = U(Realism.episode_ambient_range) * Realism.ambient_gain * RoomAmbient;
             RenderSettings.ambientSkyColor = new Color(0.40f, 0.40f, 0.42f) * a;
             RenderSettings.ambientEquatorColor = new Color(0.30f, 0.30f, 0.31f) * a;
             RenderSettings.ambientGroundColor = new Color(0.15f, 0.15f, 0.15f) * a;
@@ -523,7 +536,7 @@ namespace Minicar
                 float t = Realism.episode_tint_range;
                 m_CarpetMat.color = new Color(m_CarpetBase.r * U(t), m_CarpetBase.g * U(t), m_CarpetBase.b * U(t), 1f);
             }
-            if (Realism.episode_spectators && Realism.spectators > 0)
+            if (Realism.episode_spectators && Realism.spectators > 0 && !Room)
                 BuildSpectators(Realism.spectator_seed + (int)(seed % 100000));
             BuildTapes(new System.Random(unchecked((int)(seed * 2654435761u))));
             Debug.Log($"[CourseBuilder] episode seed={seed}: light {m_Ceiling?.intensity:F2} ambient x{a:F2}");
@@ -582,7 +595,7 @@ namespace Minicar
             var sun = go.AddComponent<Light>();
             m_Ceiling = sun;
             sun.type = LightType.Directional;
-            sun.intensity = 0.55f;
+            sun.intensity = 0.55f * RoomLight;
             sun.color = new Color(1f, 0.97f, 0.92f);
             sun.shadows = LightShadows.Soft;
             sun.shadowStrength = 0.6f;
@@ -593,7 +606,7 @@ namespace Minicar
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
             // 明るさは OpenCV 描画 (カーペット平均 ≈ 95) に合わせて控えめにする。
             // /camera/brightness を使う zone_estimator のしきい値が両描画で通用するように。
-            float ag = (Realism != null && Realism.enable) ? Realism.ambient_gain : 1f;
+            float ag = ((Realism != null && Realism.enable) ? Realism.ambient_gain : 1f) * RoomAmbient;
             RenderSettings.ambientSkyColor = new Color(0.40f, 0.40f, 0.42f) * ag;
             RenderSettings.ambientEquatorColor = new Color(0.30f, 0.30f, 0.31f) * ag;
             RenderSettings.ambientGroundColor = new Color(0.15f, 0.15f, 0.15f) * ag;
