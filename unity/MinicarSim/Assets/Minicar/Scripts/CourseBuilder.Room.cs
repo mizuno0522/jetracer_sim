@@ -1,6 +1,6 @@
 // ミニカーの会場を、実際にコースを組んだ部屋らしく見せる (表示・動画用)。参考: 会場の動画 (2026-10-05 水野)。
 //
-//   -venue room | plain   既定: HDRP 版 (unity/MinicarSimHDRP) は room、Built-in 版は plain
+//   -venue room | plain   既定: URP 版・HDRP 版 (unity/MinicarSimURP・MinicarSimHDRP) は room、Built-in 版は plain
 //
 // plain = 今までの会場 (灰色の床・カプセルの観戦者)。学習・検出器の評価に使う Built-in 版のセンサ画像は変えない。
 // room  = 窓のある会議室: クリーム色の壁、アルミサッシの窓、蛍光灯の並ぶ低い天井、濃いグレーのパンチカーペット、
@@ -25,7 +25,7 @@ namespace Minicar
 
         static bool WantRoom()
         {
-#if MINICAR_HDRP
+#if MINICAR_HDRP || MINICAR_URP
             const string def = "room";
 #else
             const string def = "plain";

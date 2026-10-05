@@ -16,7 +16,8 @@
 #
 # 環境変数: D1/D2/D3 (ドメイン、既定 42/43/44)、TCP_PORT (既定 10001。M-05 の sim の 10000 と分ける)、
 #   ARROW (alternate|random|left|right|center)、BLUE_MODEL、LOOKAHEAD_M (教師の注視距離)、
-#   PLAYER (Unity プレイヤー、既定 ~/jetracer/unity/player/MinicarSim.x86_64)、UNITY_FPS (既定 60)、
+#   PLAYER (Unity プレイヤー。既定は scripts/pick_unity_player.sh が GPU を見て Built-in / URP / HDRP から選ぶ。
+#   BLUE_MODEL を使うときは画像で走るので Built-in に固定。JETRACER_PIPELINE=builtin|urp|hdrp で指定もできる)、UNITY_FPS (既定 60)、
 #   RECORD (mp4)・RECORD_FPS・RECORD_WIDTH・RECORD_FROM、UNITY_ARGS、MAX_S (走らせる秒数、既定 180)。
 # Ctrl-C で全部止まる。ログは log/race3_*.log、2 台以上の位置の CSV は log/race3_pose_<ドメイン>.csv。
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -100,7 +101,12 @@ relay $D1 $D3 arrow_g --msg int32 --src-topic /sim/arrow_dir --dst-topic /sim/ar
 
 REC_ARGS=()
 [ -n "${RECORD:-}" ] && REC_ARGS=(-record "$RECORD" -recordfps "${RECORD_FPS:-30}" -recordwidth "${RECORD_WIDTH:-1280}" -recordfrom "${RECORD_FROM:-countdown}")
-"${PLAYER:-$HOME/jetracer/unity/player/MinicarSim.x86_64}" -rosip 127.0.0.1 -rosport "$TCP_PORT" -layout aic -laps 0 \
+# プレイヤー: 指定が無ければ GPU を見て選ぶ。方策 (BLUE_MODEL) は画像で走るので、センサ画像が変わらない Built-in 版に固定する
+if [ -z "${PLAYER:-}" ]; then
+  if [ -n "${BLUE_MODEL:-}" ]; then PLAYER="${JETRACER_UNITY_PLAYER:-$HOME/jetracer/unity/player}/MinicarSim.x86_64"
+  else PLAYER="$("$REPO/scripts/pick_unity_player.sh")"; fi
+fi
+"$PLAYER" -rosip 127.0.0.1 -rosport "$TCP_PORT" -layout aic -laps 0 \
   -fps "${UNITY_FPS:-60}" -ownlabel "$BLUE_NAME" -rivallabel "YELLOW (teacher)" -rival2label "GREEN (teacher)" \
   "${REC_ARGS[@]}" ${UNITY_ARGS:-} -logFile "$LOG/race3_unity.log" &
 UNITY_PID=$!

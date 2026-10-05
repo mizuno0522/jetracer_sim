@@ -8,7 +8,8 @@
 # vehicle_profile)、tools/race/race_relay.py が互いの姿勢を /sim/rival_state・/sim/rival2_state として届ける。
 # Unity は P1 のドメインにだけ繋ぎ、3 台とも描く。運転は tools/demo/centerline_driver.py (中心線を横へずらした線を追う。
 # 相手は避けない。線を分けてあるので並んでも当たらない)。
-# 環境変数: D1/D2/D3 (既定 42/43/44)、TCP_PORT (10001)、PLAYER、QUALITY (medium)、RECORD、MAX_S (150)、WIDTH/HEIGHT。
+# 環境変数: D1/D2/D3 (既定 42/43/44)、TCP_PORT (10001)、PLAYER (既定は scripts/pick_unity_player.sh が GPU を見て
+# Built-in / URP / HDRP から選ぶ。JETRACER_PIPELINE=builtin|urp|hdrp で指定もできる)、QUALITY (medium)、RECORD、MAX_S (150)、WIDTH/HEIGHT。
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 D1="${D1:-42}"; D2="${D2:-43}"; D3="${D3:-44}"
@@ -45,7 +46,8 @@ relay $D1 $D2; relay $D3 $D2 --dst-topic /sim/rival2_state
 relay $D1 $D3; relay $D2 $D3 --dst-topic /sim/rival2_state
 REC=()
 [ -n "${RECORD:-}" ] && REC=(-record "$RECORD" -recordfps 30 -recordwidth 1280)
-DRI_PRIME="${DRI_PRIME:-1}" "${PLAYER:-$HOME/jetracer/unity/player/MinicarSim.x86_64}" -rosip 127.0.0.1 -rosport "$TCP_PORT" -layout aic -laps 0 \
+PLAYER="${PLAYER:-$("$REPO/scripts/pick_unity_player.sh")}"
+DRI_PRIME="${DRI_PRIME:-1}" "$PLAYER" -rosip 127.0.0.1 -rosport "$TCP_PORT" -layout aic -laps 0 \
   -fps 60 -course course_fuji_real_b787.json -owncar b787 -rivalcar nd -rival2car rx7 -quality "${QUALITY:-medium}" -sound "${SOUND:-on}" \
   -ownlabel "P1 787B" -rivallabel "P2 ROADSTER" -rival2label "P3 RX-7" -screen-width "${WIDTH:-1600}" -screen-height "${HEIGHT:-900}" \
   "${REC[@]}" -logFile "$LOG/fuji3_unity.log" &

@@ -372,7 +372,7 @@ namespace Minicar
         }
 
         // ------------------------------------------------------------------ RX-7 (FD3S)
-        // 全長 4,285 × 全幅 1,760 × 全高 1,230 mm・WB 2,425 mm。曲面だけの低いクーペ。低いボンネットの両脇に前フェンダーの峰、
+        // 全長 4,285 × 全幅 1,760 × 全高 1,230 mm・WB 2,425 mm (シェルは鼻先 +3.225 〜 尾端 −1.000 m。尾端の先に羽根が出る)。曲面だけの低いクーペ。低いボンネットの両脇に前フェンダーの峰、
         // ぐっと絞った客室、盛り上がった後フェンダー、なだらかに落ちるハッチ、丸 3 灯のテール、尾端の羽根。色はイエロー
         const float kRx7Scale = 0.257f / 2.425f;        // TT-02 のホイールベースに合わせた縮尺
         const float kNdScale = 0.257f / 2.310f;
@@ -389,32 +389,53 @@ namespace Minicar
             }
         }
 
+        // 断面は 4 面図 (側面・上面) の輪郭に合わせてある (2026-10-05 水野。tools の下見で図と重ねて確かめた):
+        //   前の張り出し 0.80 m・後ろ 1.00 m (前軸から鼻先まで / 後軸から尾端まで)、上から見ると後ろへ向かってすぼまり、
+        //   客室 (屋根の前端・前窓・カウル) は以前より 12 cm 前。幅は全幅 1,760 mm、高さは全高 1,230 mm に合わせた
         static readonly float[][] kRx7Sections =
         {
             //   z      yb     wb     w2     y2     w3     y3     w4     y4     w5     y5     w6     y6     y7
-            St(-0.907f, 0.360f, 0.360f, 0.440f, 0.420f, 0.480f, 0.580f, 0.460f, 0.730f, 0.400f, 0.785f, 0.220f, 0.800f, 0.805f),   // 尾端
-            St(-0.850f, 0.290f, 0.580f, 0.720f, 0.360f, 0.760f, 0.580f, 0.730f, 0.770f, 0.610f, 0.835f, 0.330f, 0.855f, 0.860f),
-            St(-0.700f, 0.230f, 0.700f, 0.825f, 0.310f, 0.850f, 0.560f, 0.815f, 0.830f, 0.690f, 0.890f, 0.400f, 0.900f, 0.900f),
-            St(-0.400f, 0.160f, 0.740f, 0.860f, 0.260f, 0.880f, 0.540f, 0.850f, 0.865f, 0.700f, 0.915f, 0.420f, 0.920f, 0.920f),   // ハッチのガラスの下端
-            St( 0.000f, 0.15f, 0.74f, 0.87f, 0.25f, 0.885f, 0.54f, 0.85f, 0.880f, 0.69f, 0.935f, 0.50f, 1.070f, 1.085f),  // 後軸 (後フェンダーの張り)
-            St( 0.350f, 0.14f, 0.74f, 0.86f, 0.24f, 0.87f, 0.52f, 0.825f, 0.875f, 0.70f, 0.915f, 0.54f, 1.175f, 1.195f),  // 屋根の後端
-            St( 0.750f, 0.140f, 0.740f, 0.815f, 0.240f, 0.820f, 0.500f, 0.775f, 0.860f, 0.700f, 0.895f, 0.550f, 1.205f, 1.230f),  // 屋根の頂点
-            St( 1.050f, 0.140f, 0.740f, 0.810f, 0.240f, 0.815f, 0.500f, 0.770f, 0.850f, 0.705f, 0.885f, 0.540f, 1.185f, 1.205f), // 屋根の前端
-            St( 1.400f, 0.140f, 0.740f, 0.810f, 0.240f, 0.815f, 0.500f, 0.775f, 0.845f, 0.710f, 0.875f, 0.600f, 1.030f, 1.050f),  // 前窓の中ほど
-            St( 1.750f, 0.140f, 0.740f, 0.820f, 0.240f, 0.825f, 0.500f, 0.790f, 0.840f, 0.720f, 0.860f, 0.450f, 0.850f, 0.850f),  // カウル
-            St( 2.100f, 0.140f, 0.740f, 0.855f, 0.240f, 0.865f, 0.500f, 0.830f, 0.820f, 0.660f, 0.800f, 0.420f, 0.765f, 0.760f),
-            St( 2.425f, 0.140f, 0.740f, 0.860f, 0.240f, 0.875f, 0.500f, 0.835f, 0.780f, 0.640f, 0.745f, 0.400f, 0.700f, 0.695f), // 前軸 (フェンダーの峰がボンネットより高い)
-            St( 2.850f, 0.160f, 0.720f, 0.840f, 0.260f, 0.855f, 0.460f, 0.810f, 0.680f, 0.640f, 0.660f, 0.380f, 0.635f, 0.635f),
-            St( 3.050f, 0.170f, 0.680f, 0.780f, 0.270f, 0.790f, 0.440f, 0.745f, 0.610f, 0.580f, 0.605f, 0.330f, 0.595f, 0.595f),
-            St( 3.200f, 0.190f, 0.560f, 0.650f, 0.280f, 0.665f, 0.420f, 0.620f, 0.550f, 0.480f, 0.550f, 0.270f, 0.545f, 0.545f),
-            St( 3.302f, 0.230f, 0.380f, 0.450f, 0.300f, 0.470f, 0.400f, 0.430f, 0.485f, 0.330f, 0.490f, 0.180f, 0.490f, 0.490f),   // ノーズ
+            St(-1.000f,  0.360f,  0.360f,  0.440f,  0.420f,  0.480f,  0.580f,  0.460f,  0.730f,  0.400f,  0.785f,  0.220f,  0.800f,  0.805f),   // 尾端
+            St(-0.940f,  0.292f,  0.467f,  0.581f,  0.361f,  0.614f,  0.580f,  0.590f,  0.769f,  0.493f,  0.834f,  0.266f,  0.854f,  0.859f),
+            St(-0.770f,  0.230f,  0.617f,  0.727f,  0.310f,  0.749f,  0.560f,  0.719f,  0.830f,  0.608f,  0.890f,  0.353f,  0.900f,  0.900f),
+            St(-0.440f,  0.160f,  0.697f,  0.810f,  0.260f,  0.829f,  0.540f,  0.801f,  0.865f,  0.659f,  0.915f,  0.408f,  0.923f,  0.923f),   // ハッチのガラスの下端
+            St( 0.000f,  0.150f,  0.736f,  0.865f,  0.250f,  0.880f,  0.540f,  0.845f,  0.880f,  0.686f,  0.935f,  0.499f,  1.089f,  1.107f),   // 後軸 (後フェンダーの張り)
+            St( 0.350f,  0.140f,  0.736f,  0.855f,  0.240f,  0.865f,  0.520f,  0.820f,  0.875f,  0.696f,  0.915f,  0.538f,  1.178f,  1.198f),   // 屋根の後端
+            St( 0.750f,  0.140f,  0.756f,  0.832f,  0.240f,  0.838f,  0.500f,  0.792f,  0.860f,  0.715f,  0.895f,  0.556f,  1.214f,  1.239f),   // 屋根の頂点
+            St( 1.150f,  0.140f,  0.760f,  0.832f,  0.240f,  0.838f,  0.500f,  0.791f,  0.850f,  0.724f,  0.886f,  0.548f,  1.202f,  1.224f),   // 屋根の前端
+            St( 1.350f,  0.140f,  0.769f,  0.842f,  0.240f,  0.847f,  0.500f,  0.802f,  0.847f,  0.735f,  0.880f,  0.582f,  1.124f,  1.145f),
+            St( 1.550f,  0.140f,  0.777f,  0.851f,  0.240f,  0.856f,  0.500f,  0.815f,  0.845f,  0.747f,  0.874f,  0.612f,  1.018f,  1.037f),   // 前窓の中ほど
+            St( 1.750f,  0.140f,  0.782f,  0.861f,  0.240f,  0.866f,  0.500f,  0.828f,  0.842f,  0.758f,  0.867f,  0.512f,  0.912f,  0.920f),
+            St( 1.900f,  0.140f,  0.778f,  0.864f,  0.240f,  0.869f,  0.500f,  0.833f,  0.839f,  0.756f,  0.857f,  0.457f,  0.847f,  0.847f),   // カウル
+            St( 2.150f,  0.140f,  0.752f,  0.869f,  0.240f,  0.878f,  0.499f,  0.843f,  0.818f,  0.673f,  0.800f,  0.428f,  0.766f,  0.761f),
+            St( 2.425f,  0.140f,  0.746f,  0.866f,  0.240f,  0.882f,  0.512f,  0.841f,  0.810f,  0.645f,  0.775f,  0.403f,  0.730f,  0.725f),   // 前軸 (フェンダーの峰がボンネットより高い)
+            St( 2.800f,  0.159f,  0.709f,  0.828f,  0.259f,  0.842f,  0.478f,  0.798f,  0.725f,  0.630f,  0.704f,  0.375f,  0.678f,  0.678f),
+            St( 2.980f,  0.169f,  0.675f,  0.776f,  0.269f,  0.786f,  0.455f,  0.742f,  0.648f,  0.579f,  0.642f,  0.330f,  0.631f,  0.631f),
+            St( 3.120f,  0.187f,  0.568f,  0.659f,  0.279f,  0.673f,  0.423f,  0.628f,  0.560f,  0.487f,  0.559f,  0.274f,  0.554f,  0.554f),
+            St( 3.225f,  0.230f,  0.380f,  0.450f,  0.300f,  0.470f,  0.400f,  0.430f,  0.485f,  0.330f,  0.490f,  0.180f,  0.490f,  0.490f),   // ノーズ
         };
 
         static bool In(float v, float a, float b) => v >= a && v <= b;
 
         /// RX-7 の塗り分け (実車の m。x は右が正、u は断面上の位置 0〜7: 5.5〜6.4 が側面の窓、6.6〜7 が上面)
+        // 断面を 4 面図に合わせて前後へ動かしたので、塗り分けの z は「動かす前の位置」に直してから判定する
+        // (窓・ライト・合わせ目の数値は動かす前のまま使える)。CarModel の部品の位置と tools/preview_circuit.py も同じ写し替え
+        static readonly float[] kRx7ZNew = { -1.000f, 0f, 0.75f, 1.15f, 1.90f, 2.25f, 2.425f, 3.225f };
+        static readonly float[] kRx7ZOld = { -0.907f, 0f, 0.75f, 1.03f, 1.78f, 2.20f, 2.425f, 3.302f };
+        static float Rx7PaintZ(float z)
+        {
+            int n = kRx7ZNew.Length;
+            if (z <= kRx7ZNew[0]) return kRx7ZOld[0] + (z - kRx7ZNew[0]);
+            for (int i = 1; i < n; i++)
+                if (z <= kRx7ZNew[i])
+                    return Mathf.Lerp(kRx7ZOld[i - 1], kRx7ZOld[i], (z - kRx7ZNew[i - 1]) / (kRx7ZNew[i] - kRx7ZNew[i - 1]));
+            return kRx7ZOld[n - 1] + (z - kRx7ZNew[n - 1]);
+        }
+
         static void PaintRx7(float z, float x, float y, float u, out Color32 col, out float metal, out float smooth)
         {
+            float zn = z;            // いまの位置 (横の窓とピラーは 4 面図の側面の形をそのまま使う)
+            z = Rx7PaintZ(z);
             x = Mathf.Abs(x);        // 左右対称
             var yellow = new Color32(250, 196, 10, 255);
             var black = new Color32(12, 12, 13, 255);
@@ -424,18 +445,35 @@ namespace Minicar
             bool top = u > 6.55f, side = In(u, 2.6f, 5.4f);
 
             // ---- 窓 (ガラスと黒い縁)
-            float sideF = 1.66f - (u - 5.5f) / 0.9f * 0.06f,      // 前の縁は前窓の付け根まで (A ピラーの傾きは曲面の形が作る)
-                  sideR = -0.12f + (u - 5.5f) / 0.9f * 0.42f;   // 傾いた A ピラーと C ピラー
-            // A ピラーは細く: 横の窓 (〜6.47) と前窓 (6.50〜) の間は 0.03 だけ
-            bool gSide = In(u, 5.46f, 6.47f) && In(z, sideR, sideF);
-            bool gFront = u > 6.50f && In(z, 1.06f, 1.75f);
-            bool gRear = u > 6.50f && In(z, -0.42f, 0.34f);
+            // 横の窓とピラー: 4 面図の側面を目盛りつきで読んだ形を、横から見た位置 (zn = 前後、y = 高さ) でそのまま塗る。
+            //   ドアの窓: 下の縁はベルトライン (後ろ 0.868 → 前 0.843)、上の縁は 1.14 (その上に車体色の屋根の縁が残る)。
+            //             前の縁は A ピラーと平行に後ろへ倒れ (下の角 zn 1.313 → 上の角 1.06)、前窓との間は車体色の A ピラー。
+            //             後ろの縁は下 0.42 → 上 0.585 へ前に流れる
+            //   B ピラー: 窓の後ろ下の角にはまる黒い三角の飾り板 (zn 0.52 より後ろ・高さ 1.05 まで)
+            //   その後ろは車体色の太い C ピラー。ハッチのガラスは屋根から横へ回り込み、前の縁は (0.30, 1.17) → (0.02, 0.935) の斜めの線
+            bool flank = In(u, 5.2f, 6.50f);
+            float belt = 0.868f - (zn - 0.42f) * 0.028f;
+            float rearEdge = y < 1.064f ? 0.42f + (y - 0.882f) * 0.516f : 0.514f + (y - 1.064f) * 0.934f;
+            float frontEdge = 1.313f - (y - 0.843f) * 0.891f;
+            bool gSide = flank && In(y, belt, 1.14f) && In(zn, rearEdge, frontEdge);
+            bool bPillar = gSide && zn < 0.52f && y < 1.05f;
+            float sideIn = gSide ? Mathf.Min(Mathf.Min(y - belt, 1.14f - y), Mathf.Min(zn - rearEdge, frontEdge - zn)) : 0f;     // 縁からの距離
+            bool gHatchSide = In(u, 5.6f, 6.50f) && In(zn, -0.47f, 0.02f + (y - 0.935f) * 1.19f) && y > 0.925f + (zn + 0.47f) * 0.02f;
+            // 前窓: 下の縁 (カウル) は中央が前へ張り出す弧。ハッチのガラス: 角の丸い大きな 1 枚が、後ろ寄りでは横 (屋根の縁の下) まで回り込む
+            float cowl = 1.75f - 0.09f * (x / 0.60f) * (x / 0.60f);
+            bool gFront = u > 6.50f && In(z, 1.06f, cowl);
+            float hz = (z + 0.04f) / 0.38f, hx = x / 0.62f;
+            bool gRear = (u > 6.50f && hz * hz * hz * hz + hx * hx * hx * hx < 1f) || gHatchSide;
             if (gSide || gFront || gRear)
             {
-                bool edge = gSide ? (u < 5.49f || u > 6.455f || z < sideR + 0.025f || z > sideF - 0.025f || Mathf.Abs(z - (0.50f + (u - 5.5f) * 0.08f)) < 0.018f)
-                          : gFront ? (u < 6.515f || z < 1.075f || z > 1.735f)
-                          : (u < 6.54f || z < -0.395f || z > 0.315f);
-                col = edge ? black : glass; metal = 0f; smooth = edge ? 0.45f : 0.96f;
+                float he = Mathf.Pow(hz * hz * hz * hz + hx * hx * hx * hx, 0.25f);
+                bool edge = gSide ? (bPillar || sideIn < 0.014f)
+                          : gFront ? (u < 6.515f || z < 1.075f || z > cowl - 0.015f)
+                          : (u > 6.50f ? he > 0.94f : false);
+                // ガラスは少し青みのある濃い色 (真っ黒にすると、黒い B ピラーや窓の縁と見分けがつかない)
+                col = edge ? black : new Color32(30, 40, 52, 255); metal = 0f; smooth = edge ? (bPillar ? 0.20f : 0.45f) : 0.96f;
+                // B ピラーの飾り板とドアの窓の間に、窓の縁の細い線 (ゴム) が 1 本見える
+                if (gSide && !bPillar && zn < 0.532f && y < 1.05f) { col = new Color32(70, 72, 76, 255); smooth = 0.5f; }
                 return;
             }
 
@@ -444,8 +482,8 @@ namespace Minicar
             { col = black; metal = 0f; smooth = 0.35f; return; }
 
             // ---- ボンネット: 黒いカーボン (排熱口つき)。前の角に固定式の細いライト (スモークのカバー)
-            float hz = (z - 2.435f) / 0.645f, hx = x / 0.665f;
-            if (u > 5.0f && hz * hz * hz * hz + hx * hx * hx * hx < 1f)
+            float bz = (z - 2.435f) / 0.645f, bx = x / 0.665f;
+            if (u > 5.0f && bz * bz * bz * bz + bx * bx * bx * bx < 1f)
             {
                 bool lamp = In(z, 2.86f, 3.07f) && In(x, 0.36f, 0.645f);
                 bool vent = (In(z, 2.20f, 2.42f) && In(x, 0.14f, 0.44f)) || (In(z, 2.52f, 2.66f) && In(x, 0.20f, 0.46f));
@@ -497,21 +535,23 @@ namespace Minicar
             AddShell(hull, shell, PaintRx7, lit);
             var yellow = Paint(Mat(new Color(0.97f, 0.745f, 0.055f), 0.80f, 0.25f));
             // 前のリップ (黒い板が前へ張り出す)
-            Cube("FrontLip", hull, new Vector3(0f, 0.185f * k, 3.12f * k), new Vector3(1.36f * k, 0.03f * k, 0.34f * k), black);
+            Cube("FrontLip", hull, new Vector3(0f, 0.185f * k, 3.06f * k), new Vector3(1.30f * k, 0.03f * k, 0.32f * k), black);
             // GT ウイング: 高い位置の黄色い翼と翼端板、黒い脚 2 本
-            Cube("WingPlate", hull, new Vector3(0f, 1.20f * k, -0.80f * k), new Vector3(1.62f * k, 0.03f * k, 0.25f * k), yellow, -6f);
+            Cube("WingPlate", hull, new Vector3(0f, 1.20f * k, -0.88f * k), new Vector3(1.50f * k, 0.03f * k, 0.25f * k), yellow, -6f);
             foreach (float sx in new[] { -1f, 1f })
             {
-                Cube("WingEnd", hull, new Vector3(sx * 0.81f * k, 1.17f * k, -0.80f * k), new Vector3(0.02f * k, 0.16f * k, 0.30f * k), yellow);
-                Cube("WingStay", hull, new Vector3(sx * 0.47f * k, 1.04f * k, -0.74f * k), new Vector3(0.025f * k, 0.32f * k, 0.09f * k), black, -18f);
+                Cube("WingEnd", hull, new Vector3(sx * 0.75f * k, 1.17f * k, -0.88f * k), new Vector3(0.02f * k, 0.16f * k, 0.30f * k), yellow);
+                Cube("WingStay", hull, new Vector3(sx * 0.44f * k, 1.04f * k, -0.82f * k), new Vector3(0.025f * k, 0.32f * k, 0.09f * k), black, -18f);
                 // ドアミラー
                 var mir = Prim(PrimitiveType.Sphere, "Mirror", hull, yellow);
-                mir.localPosition = new Vector3(sx * 0.895f * k, 0.965f * k, 1.56f * k);
-                mir.localScale = new Vector3(0.17f * k, 0.115f * k, 0.10f * k);
-                Cube("MirrorStay", hull, new Vector3(sx * 0.83f * k, 0.925f * k, 1.57f * k), new Vector3(0.10f * k, 0.03f * k, 0.05f * k), black);
+                // 4 面図: ドアの前の端から後ろへ流れる、車体と同じ色の平たいミラー
+                mir.localPosition = new Vector3(sx * 0.930f * k, 0.975f * k, 1.64f * k);
+                mir.localRotation = Quaternion.Euler(0f, sx * 18f, 0f);
+                mir.localScale = new Vector3(0.19f * k, 0.105f * k, 0.13f * k);
+                Cube("MirrorStay", hull, new Vector3(sx * 0.845f * k, 0.925f * k, 1.68f * k), new Vector3(0.10f * k, 0.03f * k, 0.06f * k), yellow);
             }
             var pipe = Prim(PrimitiveType.Cylinder, "Exhaust", hull, alu);
-            pipe.localPosition = new Vector3(0.42f * k, 0.265f * k, -0.90f * k);
+            pipe.localPosition = new Vector3(0.42f * k, 0.265f * k, -0.99f * k);
             pipe.localRotation = Quaternion.Euler(90f, 0f, 0f);
             pipe.localScale = new Vector3(0.10f * k, 0.05f * k, 0.10f * k);
             if (withMast) Mast(hull, black, alu, 0.060f, 0.131f);
@@ -520,52 +560,91 @@ namespace Minicar
         // ------------------------------------------------------------------ ロードスター (ND)
         // 全長 3,915 × 全幅 1,735 × 全高 1,235 mm・WB 2,310 mm。短く低いノーズ、張りのある前フェンダー、短いデッキ。
         // 幌を開けたオープン: 室内は車体の曲面をくぼませて黒く塗り、前窓・座席・ロールバーは別の部品。
-        // 色はソウルレッド (金属的な下地 + クリア層)。右ハンドル
+        // 色はソウルレッド (金属的な下地 + クリア層)。右ハンドル。ミラー・前窓の枠・ホイールは黒
+        // 形 (参考: 実車を斜め上と斜め後ろから撮った写真、2026-10-05 水野)。初代 (NA) のような丸い石けん形にしないこと:
+        //   上から見ると前後が強くすぼまり、前後のフェンダーが張り出してドアのところで絞られる。
+        //   前はフェンダーの峰が立ち、ボンネットはその間の低い谷 (中央がわずかに盛り上がる)。鼻先は低くとがる。
+        //   後ろは張り出したフェンダーの峰の間でトランクが一段低く、尾端で跳ね上がる縁 (小さな羽根) になる。
+        //   肩 (c5) と窓の付け根 (c6) を近づけて、峰と縁の角を立ててある
         static readonly float[][] kNdSections =
         {
             //   z      yb     wb     w2     y2     w3     y3     w4     y4     w5     y5     w6     y6     y7
-            St(-0.755f, 0.340f, 0.440f, 0.540f, 0.400f, 0.600f, 0.580f, 0.570f, 0.760f, 0.480f, 0.820f, 0.260f, 0.845f, 0.850f),   // 尾端
-            St(-0.720f, 0.28f, 0.62f, 0.76f, 0.36f, 0.80f, 0.58f, 0.76f, 0.800f, 0.64f, 0.870f, 0.34f, 0.890f, 0.895f),
-            St(-0.500f, 0.20f, 0.70f, 0.83f, 0.30f, 0.855f, 0.56f, 0.82f, 0.850f, 0.68f, 0.905f, 0.40f, 0.915f, 0.915f),
-            St(-0.250f, 0.16f, 0.72f, 0.85f, 0.26f, 0.865f, 0.54f, 0.83f, 0.870f, 0.68f, 0.920f, 0.44f, 0.930f, 0.930f),  // デッキ (幌の後端)
-            St( 0.000f, 0.150f, 0.720f, 0.855f, 0.250f, 0.867f, 0.540f, 0.830f, 0.875f, 0.660f, 0.930f, 0.500f, 0.925f, 0.925f), // 後軸
-            St( 0.350f, 0.140f, 0.720f, 0.845f, 0.240f, 0.855f, 0.520f, 0.810f, 0.870f, 0.670f, 0.910f, 0.560f, 0.860f, 0.600f),
-            St( 0.750f, 0.140f, 0.720f, 0.835f, 0.240f, 0.840f, 0.500f, 0.790f, 0.860f, 0.670f, 0.895f, 0.560f, 0.850f, 0.580f),  // 幌の頂点
-            St( 1.000f, 0.140f, 0.720f, 0.830f, 0.240f, 0.835f, 0.500f, 0.785f, 0.850f, 0.675f, 0.885f, 0.560f, 0.840f, 0.580f), // 前窓の上端
-            St( 1.300f, 0.140f, 0.720f, 0.830f, 0.240f, 0.835f, 0.500f, 0.790f, 0.845f, 0.680f, 0.875f, 0.540f, 0.855f, 0.800f),
-            St( 1.600f, 0.14f, 0.72f, 0.835f, 0.24f, 0.84f, 0.50f, 0.80f, 0.840f, 0.69f, 0.860f, 0.44f, 0.850f, 0.850f),  // カウル
-            St( 1.950f, 0.14f, 0.72f, 0.845f, 0.24f, 0.855f, 0.50f, 0.82f, 0.820f, 0.70f, 0.815f, 0.40f, 0.775f, 0.775f),
-            St( 2.310f, 0.14f, 0.72f, 0.85f, 0.24f, 0.865f, 0.50f, 0.825f, 0.770f, 0.68f, 0.760f, 0.38f, 0.700f, 0.700f), // 前軸
-            St( 2.700f, 0.15f, 0.68f, 0.82f, 0.25f, 0.835f, 0.46f, 0.78f, 0.670f, 0.64f, 0.665f, 0.36f, 0.620f, 0.620f),
-            St( 2.950f, 0.17f, 0.58f, 0.70f, 0.26f, 0.72f, 0.40f, 0.66f, 0.540f, 0.54f, 0.550f, 0.30f, 0.530f, 0.530f),
-            St( 3.070f, 0.20f, 0.42f, 0.50f, 0.28f, 0.52f, 0.37f, 0.48f, 0.460f, 0.40f, 0.470f, 0.22f, 0.470f, 0.470f),
-            St( 3.080f, 0.230f, 0.300f, 0.360f, 0.300f, 0.370f, 0.350f, 0.340f, 0.420f, 0.290f, 0.430f, 0.160f, 0.435f, 0.435f),   // ノーズ
+            St(-0.755f, 0.340f, 0.360f, 0.460f, 0.420f, 0.540f, 0.600f, 0.535f, 0.800f, 0.500f, 0.868f, 0.300f, 0.880f, 0.880f),   // 尾端 (跳ね上がった縁)
+            St(-0.700f, 0.28f, 0.56f, 0.66f, 0.36f, 0.700f, 0.60f, 0.685f, 0.830f, 0.62f, 0.888f, 0.34f, 0.886f, 0.884f),
+            St(-0.500f, 0.20f, 0.67f, 0.77f, 0.30f, 0.795f, 0.58f, 0.775f, 0.860f, 0.69f, 0.912f, 0.40f, 0.880f, 0.872f),  // トランク (フェンダーより低い)
+            St(-0.250f, 0.16f, 0.72f, 0.845f, 0.26f, 0.860f, 0.56f, 0.835f, 0.885f, 0.735f, 0.935f, 0.44f, 0.900f, 0.888f),
+            St( 0.000f, 0.150f, 0.720f, 0.855f, 0.250f, 0.8675f, 0.560f, 0.840f, 0.895f, 0.735f, 0.945f, 0.500f, 0.915f, 0.905f), // 後軸 (後フェンダーの峰)
+            St( 0.350f, 0.140f, 0.720f, 0.835f, 0.240f, 0.845f, 0.540f, 0.800f, 0.880f, 0.700f, 0.915f, 0.560f, 0.860f, 0.600f),
+            St( 0.750f, 0.140f, 0.720f, 0.820f, 0.240f, 0.825f, 0.520f, 0.775f, 0.860f, 0.685f, 0.890f, 0.560f, 0.850f, 0.580f),  // ドア (いちばん絞られる所)
+            St( 1.000f, 0.140f, 0.720f, 0.817f, 0.240f, 0.822f, 0.520f, 0.772f, 0.850f, 0.685f, 0.880f, 0.560f, 0.840f, 0.580f), // 前窓の上端
+            St( 1.300f, 0.140f, 0.720f, 0.821f, 0.240f, 0.826f, 0.520f, 0.780f, 0.842f, 0.690f, 0.872f, 0.540f, 0.855f, 0.800f),
+            St( 1.600f, 0.14f, 0.72f, 0.83f, 0.24f, 0.838f, 0.52f, 0.800f, 0.830f, 0.715f, 0.862f, 0.44f, 0.848f, 0.850f),  // カウル
+            St( 1.950f, 0.14f, 0.72f, 0.845f, 0.24f, 0.857f, 0.52f, 0.825f, 0.795f, 0.745f, 0.838f, 0.40f, 0.772f, 0.786f),
+            St( 2.310f, 0.14f, 0.72f, 0.85f, 0.24f, 0.8675f, 0.52f, 0.835f, 0.745f, 0.745f, 0.790f, 0.36f, 0.700f, 0.712f), // 前軸 (前フェンダーの峰)
+            St( 2.700f, 0.15f, 0.64f, 0.76f, 0.25f, 0.775f, 0.46f, 0.735f, 0.650f, 0.64f, 0.690f, 0.32f, 0.612f, 0.626f),
+            St( 2.950f, 0.17f, 0.47f, 0.56f, 0.26f, 0.575f, 0.40f, 0.535f, 0.530f, 0.45f, 0.558f, 0.24f, 0.518f, 0.528f),
+            St( 3.070f, 0.20f, 0.30f, 0.36f, 0.28f, 0.375f, 0.37f, 0.345f, 0.452f, 0.29f, 0.466f, 0.16f, 0.464f, 0.466f),
+            St( 3.080f, 0.230f, 0.200f, 0.240f, 0.300f, 0.250f, 0.350f, 0.230f, 0.412f, 0.190f, 0.425f, 0.110f, 0.430f, 0.430f),   // ノーズ
         };
 
         static void PaintNd(float z, float x, float y, float u, out Color32 col, out float metal, out float smooth)
         {
-            x = Mathf.Abs(x);        // 左右対称
+            bool left = x < 0f;      // 給油口は左だけ
+            x = Mathf.Abs(x);        // ほかは左右対称
             var black = new Color32(12, 12, 13, 255);
-            var glass = new Color32(10, 13, 18, 255);
-            col = new Color32(168, 4, 10, 255); metal = 0.80f; smooth = 0.62f;        // ソウルレッドの下地
+            // ソウルレッドの下地: 金属感の強い深い赤 (陰は暗く沈み、光の当たる所だけ鮮やかに光る)。明るい普通の赤にしないこと (2026-10-05 水野)
+            col = new Color32(168, 4, 10, 255); metal = 0.80f; smooth = 0.62f;
             bool side = In(u, 2.6f, 5.4f);
-            // 室内 (幌を開けた開口の内側) は黒
-            if (u > 6.02f && In(z, 0.12f, 1.58f)) { col = new Color32(16, 16, 17, 255); metal = 0f; smooth = 0.15f; return; }
-            if ((z > 2.60f && y < 0.185f) || (z < -0.45f && y < 0.27f && x < 0.60f)) { col = black; metal = 0f; smooth = 0.35f; return; }
-            if (z > 3.00f && x < 0.32f && In(y, 0.235f, 0.36f)) { col = black; metal = 0f; smooth = 0.25f; return; }           // グリルの口
-            if (z > 2.80f && In(x, 0.40f, 0.68f) && In(y, 0.50f, 0.54f) && u > 4.0f) { col = new Color32(235, 235, 225, 255); metal = 0.1f; smooth = 0.95f; return; }   // 細いヘッドライト
-            if (z < -0.70f)
+            // 室内 (幌を開けた開口の内側) とダッシュボードの上は黒
+            if (u > 6.02f && In(z, 0.12f, 1.64f)) { col = new Color32(16, 16, 17, 255); metal = 0f; smooth = 0.15f; return; }
+            // 座席の後ろ: たたんだ幌のカバー (黒い布)
+            if (u > 5.80f && In(z, -0.10f, 0.12f)) { col = new Color32(20, 20, 22, 255); metal = 0f; smooth = 0.10f; return; }
+            if (z > 2.60f && y < 0.185f) { col = black; metal = 0f; smooth = 0.35f; return; }
+            // 後ろの下回り: 黒いディフューザー (中央が高い台形)。両端に縦長の赤い反射板
+            if (z < -0.45f && x < 0.56f && y < 0.40f - x * 0.18f) { col = black; metal = 0f; smooth = 0.30f; return; }
+            if (z < -0.66f && In(x, 0.585f, 0.625f) && In(y, 0.37f, 0.50f)) { col = new Color32(170, 10, 12, 255); metal = 0f; smooth = 0.9f; return; }
+            // ナンバープレート (白地) と、その上の銀のエンブレム
+            if (z < -0.74f && x < 0.165f && In(y, 0.475f, 0.640f)) { col = new Color32(236, 236, 230, 255); metal = 0f; smooth = 0.5f; return; }
+            if (z < -0.735f && (x * x + (y - 0.795f) * (y - 0.795f)) < 0.036f * 0.036f) { col = new Color32(200, 202, 206, 255); metal = 0.9f; smooth = 0.9f; return; }
+            if (z > 2.96f && x < 0.44f - (0.42f - y) * 0.9f && In(y, 0.235f, 0.42f)) { col = black; metal = 0f; smooth = 0.25f; return; }      // グリルの大きな口 (上が広い台形)
+            // ヘッドライト: フェンダーの先の上面に、後ろへ流れる細い目。黒いレンズの中に白い帯
+            if (In(z, 2.64f, 2.93f) && In(u, 4.55f, 5.55f) && x > 0.40f)
             {
-                float dx = x - 0.52f, dy = y - 0.70f, r = Mathf.Sqrt(dx * dx + dy * dy);
-                if (r < 0.075f) { col = r < 0.035f ? new Color32(120, 6, 8, 255) : new Color32(215, 14, 16, 255); metal = 0f; smooth = 0.92f; return; }
+                float t = (z - 2.64f) / 0.29f;                    // 0 = 後ろの端、1 = 前の端
+                float mid = Mathf.Lerp(5.25f, 4.95f, t), half = Mathf.Lerp(0.10f, 0.32f, t);   // 前ほど太い
+                if (Mathf.Abs(u - mid) < half)
+                {
+                    bool led = Mathf.Abs(u - mid) < half * 0.38f && t > 0.25f;
+                    col = led ? new Color32(238, 238, 230, 255) : new Color32(18, 20, 24, 255); metal = 0.1f; smooth = 0.95f; return;
+                }
             }
+            // 尾灯: 角に寄った丸い灯 (車体の横まで回り込む) と、そこから内側へ伸びる細いくさび形
+            if (z < -0.56f && y > 0.62f && u < 5.9f)
+            {
+                // 尾端の面では x、横へ回り込んだ所では z で測る (角をまたいで 1 つの丸に見えるように)
+                float along = z < -0.735f ? x - 0.515f : 0.02f + (-0.735f - z) * 0.9f;
+                float dy = y - 0.745f, r = Mathf.Sqrt(along * along + dy * dy);
+                if (r < 0.080f) { col = r < 0.040f ? new Color32(130, 8, 10, 255) : r < 0.068f ? new Color32(220, 16, 18, 255) : new Color32(40, 6, 8, 255); metal = 0f; smooth = 0.92f; return; }
+                if (z < -0.735f && In(x, 0.24f, 0.44f) && Mathf.Abs(dy) < 0.006f + (x - 0.24f) * 0.11f) { col = new Color32(228, 222, 216, 255); metal = 0.1f; smooth = 0.95f; return; }
+            }
+            // 前フェンダーの横の小さな方向指示灯 (橙)
+            if (side && In(z, 1.74f, 1.82f) && In(y, 0.565f, 0.590f)) { col = new Color32(236, 150, 30, 255); metal = 0f; smooth = 0.9f; return; }
             const float lw = 0.004f;
             bool s = false;
             if (side && In(y, 0.17f, 0.88f) && (Mathf.Abs(z - 1.50f) < lw || Mathf.Abs(z - 0.42f) < lw)) s = true;
             if (side && In(z, 0.42f, 1.50f) && Mathf.Abs(y - 0.185f) < lw) s = true;
-            if (u > 5.0f && z > 1.64f && ((In(z, 1.64f, 2.86f) && Mathf.Abs(x - 0.62f) < lw) || (x < 0.62f && (Mathf.Abs(z - 2.86f) < lw || Mathf.Abs(z - 1.64f) < lw)))) s = true;
-            if (side && In(z, 0.52f, 0.66f) && In(y, 0.80f, 0.83f)) { col = black; metal = 0f; smooth = 0.5f; return; }
-            if (s) { col = new Color32(60, 4, 6, 255); metal = 0f; smooth = 0.4f; }
+            if (u > 5.0f && z > 1.66f && ((In(z, 1.66f, 2.86f) && Mathf.Abs(x - 0.60f) < lw) || (x < 0.60f && (Mathf.Abs(z - 2.86f) < lw || Mathf.Abs(z - 1.66f) < lw)))) s = true;
+            // トランクの合わせ目 (デッキの上)
+            if (u > 5.6f && z < -0.12f && ((In(z, -0.66f, -0.12f) && Mathf.Abs(x - 0.56f) < lw) || (x < 0.56f && (Mathf.Abs(z + 0.66f) < lw || Mathf.Abs(z + 0.12f) < lw)))) s = true;
+            // 給油口の丸いふた (左の後フェンダー)
+            if (left && side)
+            {
+                float fz = z + 0.34f, fy = y - 0.74f, fr = Mathf.Sqrt(fz * fz + fy * fy);
+                if (Mathf.Abs(fr - 0.068f) < lw) s = true;
+            }
+            // ドアの取っ手 (車体と同じ色の出っ張りなので、下に影の線だけ)
+            if (side && In(z, 0.50f, 0.66f) && Mathf.Abs(y - 0.795f) < lw * 1.5f) s = true;
+            if (s) { col = new Color32(66, 4, 8, 255); metal = 0f; smooth = 0.4f; }
         }
 
         void BuildRoadster(Transform hull, bool withMast, MatFn Mat, Material black, Material glass,
@@ -574,13 +653,15 @@ namespace Minicar
             float k = kNdScale;
             var shell = new Shell(kNdSections, k, new[] { 0f, 2.310f }, 0.350f, TireRadius / k, 0.60f) { WidthGain = 1.735f / 1.718f };     // 全幅 1,735 mm
             AddShell(hull, shell, PaintNd, lit);
-            var red = Paint(Mat(new Color(0.66f, 0.015f, 0.04f), 0.62f, 0.80f));
+            // ドアミラー: つやのある黒。ドアの前の端 (A ピラーの付け根) から短い足で出る
+            var gloss = Mat(new Color(0.03f, 0.03f, 0.035f), 0.85f);
             foreach (float sx in new[] { -1f, 1f })
             {
-                var mir = Prim(PrimitiveType.Sphere, "Mirror", hull, red);
-                mir.localPosition = new Vector3(sx * 0.885f * k, 0.955f * k, 1.44f * k);
-                mir.localScale = new Vector3(0.17f * k, 0.115f * k, 0.10f * k);
-                Cube("MirrorStay", hull, new Vector3(sx * 0.82f * k, 0.915f * k, 1.45f * k), new Vector3(0.10f * k, 0.03f * k, 0.05f * k), black);
+                var mir = Prim(PrimitiveType.Sphere, "Mirror", hull, gloss);
+                mir.localPosition = new Vector3(sx * 0.900f * k, 0.965f * k, 1.36f * k);
+                mir.localRotation = Quaternion.Euler(0f, sx * 12f, 0f);
+                mir.localScale = new Vector3(0.20f * k, 0.12f * k, 0.085f * k);
+                Cube("MirrorStay", hull, new Vector3(sx * 0.805f * k, 0.905f * k, 1.37f * k), new Vector3(0.09f * k, 0.035f * k, 0.06f * k), gloss);
             }
             foreach (float sx in new[] { -1f, 1f })
             {
@@ -593,16 +674,29 @@ namespace Minicar
             var clear = Mat(new Color(0.55f, 0.66f, 0.70f, 0.28f), 0.96f);       // 透けて見える前窓
             ProcTex.MakeFade(clear);
             Cube("Windshield", hull, new Vector3(0f, 1.03f * k, 1.30f * k), new Vector3(1.16f * k, 0.655f * k, 0.008f * k), clear, -58.7f);
-            Cube("ShieldTop", hull, new Vector3(0f, 1.205f * k, 1.015f * k), new Vector3(1.22f * k, 0.035f * k, 0.035f * k), black);
-            var seat = Mat(new Color(0.10f, 0.09f, 0.09f), 0.30f);
+            // 前窓の枠は太い黒 (上の横桟と左右の A ピラー)。付け根に黒いカウル
+            Cube("ShieldTop", hull, new Vector3(0f, 1.208f * k, 1.012f * k), new Vector3(1.26f * k, 0.045f * k, 0.050f * k), black);
+            Cube("Cowl", hull, new Vector3(0f, 0.858f * k, 1.60f * k), new Vector3(1.20f * k, 0.03f * k, 0.10f * k), black);
+            var seat = Mat(new Color(0.07f, 0.065f, 0.065f), 0.38f);
             foreach (float sx in new[] { -1f, 1f })
             {
-                Cube("ShieldSide", hull, new Vector3(sx * 0.60f * k, 1.03f * k, 1.30f * k), new Vector3(0.04f * k, 0.67f * k, 0.04f * k), black, -58.7f);
-                Cube("SeatBase", hull, new Vector3(sx * 0.36f * k, 0.52f * k, 0.58f * k), new Vector3(0.48f * k, 0.12f * k, 0.50f * k), seat);
-                Cube("SeatBack", hull, new Vector3(sx * 0.36f * k, 0.80f * k, 0.30f * k), new Vector3(0.48f * k, 0.60f * k, 0.11f * k), seat, -12f);
-                Cube("HeadRest", hull, new Vector3(sx * 0.36f * k, 1.09f * k, 0.22f * k), new Vector3(0.25f * k, 0.18f * k, 0.09f * k), seat, -12f);
-                Cube("RollHoop", hull, new Vector3(sx * 0.36f * k, 1.02f * k, 0.06f * k), new Vector3(0.36f * k, 0.20f * k, 0.05f * k), black, -8f);
+                Cube("ShieldSide", hull, new Vector3(sx * 0.605f * k, 1.03f * k, 1.30f * k), new Vector3(0.060f * k, 0.69f * k, 0.055f * k), black, -58.7f);
+                Cube("SeatBase", hull, new Vector3(sx * 0.36f * k, 0.52f * k, 0.58f * k), new Vector3(0.46f * k, 0.12f * k, 0.50f * k), seat);
+                // 背もたれは肩から上が細くなり、頭当てと一体 (ハイバックのシート)
+                Cube("SeatBack", hull, new Vector3(sx * 0.36f * k, 0.76f * k, 0.31f * k), new Vector3(0.46f * k, 0.46f * k, 0.12f * k), seat, -14f);
+                Cube("SeatShoulder", hull, new Vector3(sx * 0.36f * k, 1.00f * k, 0.245f * k), new Vector3(0.36f * k, 0.12f * k, 0.11f * k), seat, -14f);
+                Cube("HeadRest", hull, new Vector3(sx * 0.36f * k, 1.11f * k, 0.215f * k), new Vector3(0.24f * k, 0.14f * k, 0.10f * k), seat, -14f);
+                // 座席の後ろの輪 (黒い覆い)
+                Cube("RollHoop", hull, new Vector3(sx * 0.36f * k, 1.03f * k, 0.085f * k), new Vector3(0.34f * k, 0.22f * k, 0.06f * k), black, -10f);
             }
+            // 座席の間の物入れと、後ろの風よけの板 (黒)
+            Cube("Console", hull, new Vector3(0f, 0.66f * k, 0.62f * k), new Vector3(0.20f * k, 0.16f * k, 0.80f * k), seat);
+            Cube("WindBlocker", hull, new Vector3(0f, 0.99f * k, 0.085f * k), new Vector3(0.36f * k, 0.14f * k, 0.02f * k), black, -10f);
+            // アンテナ (右の後フェンダーの上、後ろへ傾く)
+            var ant = Prim(PrimitiveType.Cylinder, "Antenna", hull, black);
+            ant.localPosition = new Vector3(0.60f * k, 1.06f * k, -0.36f * k);
+            ant.localRotation = Quaternion.Euler(-28f, 0f, 0f);
+            ant.localScale = new Vector3(0.012f * k, 0.15f * k, 0.012f * k);
             var wheel = Prim(PrimitiveType.Cylinder, "SteeringWheel", hull, black);      // 右ハンドル (+x)
             wheel.localPosition = new Vector3(0.36f * k, 0.86f * k, 1.10f * k);
             wheel.localRotation = Quaternion.Euler(-65f, 0f, 0f);

@@ -938,9 +938,18 @@ class Shell:
 
 def rx7_mat(z, x, y, u):
     """CarModel.Shell.PaintRx7 の大きな塗り分けだけ (窓・黒い樹脂・尾端の帯)。細い合わせ目は省く"""
+    # 断面を 4 面図に合わせて前後へ動かしたので、動かす前の z に直して判定する (CarModel.Shell.Rx7PaintZ と同じ)
+    zn = z
+    z = float(np.interp(z, [-1.000, 0, 0.75, 1.15, 1.90, 2.25, 2.425, 3.225], [-0.907, 0, 0.75, 1.03, 1.78, 2.20, 2.425, 3.302]))
     x = abs(x)
-    fr = (u - 5.5) / 0.9
-    if (5.46 <= u <= 6.47 and -0.12 + fr * 0.42 <= z <= 1.66 - fr * 0.06) or (u > 6.50 and (1.06 <= z <= 1.75 or -0.42 <= z <= 0.34)):
+    fr = min(1.0, max(0.0, (u - 5.5) / 0.9))
+    # ドアの窓と B ピラー・ハッチの横は、4 面図の側面の形を横から見た位置 (zn, y) で塗る (PaintRx7 と同じ式)
+    belt = 0.868 - (zn - 0.42) * 0.028
+    rear = 0.42 + (y - 0.882) * 0.516 if y < 1.064 else 0.514 + (y - 1.064) * 0.934
+    if 5.2 <= u <= 6.50 and belt <= y <= 1.14 and rear <= zn <= 1.313 - (y - 0.843) * 0.891:
+        return 'black' if zn < 0.52 and y < 1.05 else 'glass'
+    if (u > 6.50 and (1.06 <= z <= 1.75 - 0.09 * (x / 0.60) ** 2 or ((z + 0.04) / 0.38) ** 4 + (x / 0.62) ** 4 < 1)) or \
+       (5.6 <= u <= 6.50 and -0.47 <= zn <= 0.02 + (y - 0.935) * 1.19 and y > 0.925 + (zn + 0.47) * 0.02):
         return 'glass'
     if (z > 2.75 and y < 0.185) or (z < -0.55 and y < 0.27 and x < 0.62):
         return 'black'
@@ -954,12 +963,22 @@ def rx7_mat(z, x, y, u):
 def nd_mat(z, x, y, u):
     """CarModel.Shell.PaintNd の大きな塗り分けだけ (窓・黒い幌)"""
     x = abs(x)
-    if u > 6.02 and 0.12 <= z <= 1.58:           # 幌を開けた室内
+    if u > 6.02 and 0.12 <= z <= 1.64:           # 幌を開けた室内とダッシュボードの上
         return 'black'
-    if (z > 2.60 and y < 0.185) or (z < -0.45 and y < 0.27 and x < 0.60) or (z > 3.0 and x < 0.32 and 0.235 <= y <= 0.36):
+    if u > 5.80 and -0.10 <= z <= 0.12:          # たたんだ幌のカバー
         return 'black'
-    if z < -0.70 and math.hypot(x - 0.52, y - 0.70) < 0.075:
-        return 'tail'
+    if (z > 2.60 and y < 0.185) or (z < -0.45 and x < 0.56 and y < 0.40 - x * 0.18) or (z > 2.96 and x < 0.44 - (0.42 - y) * 0.9 and 0.235 <= y <= 0.42):
+        return 'black'
+    if z < -0.74 and x < 0.165 and 0.475 <= y <= 0.640:           # ナンバープレート
+        return 'lamp'
+    if 2.64 <= z <= 2.93 and 4.55 <= u <= 5.55 and x > 0.40:      # 細いヘッドライト (黒いレンズ)
+        t = (z - 2.64) / 0.29
+        if abs(u - (5.25 + (4.95 - 5.25) * t)) < 0.10 + (0.32 - 0.10) * t:
+            return 'black'
+    if z < -0.56 and y > 0.62 and u < 5.9:                        # 角に寄った丸い尾灯
+        along = x - 0.515 if z < -0.735 else 0.02 + (-0.735 - z) * 0.9
+        if math.hypot(along, y - 0.745) < 0.080:
+            return 'tail'
     return 'paint'
 
 
