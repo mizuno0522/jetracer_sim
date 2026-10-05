@@ -1,9 +1,15 @@
 # 他チーム向け: JetRacer のソフトをこの sim で走らせる
 
 NVIDIA JetRacer (https://github.com/NVIDIA-AI-IOT/jetracer) ベースの車両ソフトを、**コードをほぼ変えずに**
-自動運転ミニカーバトル 2026 のコースの sim で走らせるための手順です。版は **v0.2.0 (試用版)**。
+自動運転ミニカーバトル 2026 のコースの sim で走らせるための手順です。版は **v0.3.0 (試用版)**。
 
-## まず知っておいてほしいこと (v0.2.0 の信頼度)
+v0.3.0 で増えたもの (ミニカーのコースの車載カメラ画像は v0.2.0 と同じです。新旧のプレイヤーで比べて、差は画像の雑音の範囲内でした):
+
+- **富士スピードウェイ (実車スケール) と実車 3 台** (787B・ロードスター・RX-7): [docs/fuji.md](fuji.md)。3 台で走らせるのは `./tools/race/race3_fuji.sh`
+- **プロコンでの運転と ML-Agents** (自分の運転で模倣学習 → 強化学習): [docs/mlagents.md](mlagents.md)
+- **画質の段階と HDRP 版**: [docs/hdrp.md](hdrp.md)。ノート PC では単体 GPU を自動で選ぶ
+
+## まず知っておいてほしいこと (v0.3.0 の信頼度)
 
 | 項目 | 状態 | 影響 |
 |---|---|---|
@@ -21,17 +27,17 @@ NVIDIA JetRacer (https://github.com/NVIDIA-AI-IOT/jetracer) ベースの車両�
 
 - **sim を動かす PC**: Ubuntu 22.04 (x86_64)・ROS 2 Humble・GPU (内蔵 GPU で可。OpenGL/Vulkan)
 - **車両ソフトを動かすマシン**: 同じ PC でも、Jetson (JetPack 6・ROS 2 Humble) を LAN でつないでも可
-- Unity Editor は**不要** (ビルド済みプレイヤーを [Release v0.2.0](https://github.com/mizuno0522/jetracer_sim/releases/tag/v0.2.0) から取る。`scripts/get_unity_player.sh` が自動で取る)
+- Unity Editor は**不要** (ビルド済みプレイヤーを [Release v0.3.0](https://github.com/mizuno0522/jetracer_sim/releases/tag/v0.3.0) から取る。`scripts/get_unity_player.sh` が自動で取る)
 
 ## 手順 (sim PC)
 
 ```bash
 git clone https://github.com/mizuno0522/jetracer_sim.git && cd jetracer_sim
-git checkout v0.2.0
+git checkout v0.3.0
 sudo ./scripts/setup_host.sh pc --no-net     # apt (ROS 2 Humble・cyclonedds 等) と受信バッファ。固定 IP を触らない
 ./scripts/setup_ws.sh                        # Unity との中継 (ros_tcp_endpoint) を取り込む
 ./scripts/build.sh
-./scripts/get_unity_player.sh v0.2.0         # ビルド済み Unity プレイヤー (約 28 MB)
+./scripts/get_unity_player.sh v0.3.0         # ビルド済み Unity プレイヤー (約 48 MB)
 source scripts/sim_env.sh                    # 端末ごとに毎回
 ros2 launch minicar_sim sim_host.launch.py unity_player:=$HOME/jetracer/unity/player/MinicarSim.x86_64
 ```
@@ -67,13 +73,13 @@ car.throttle = -0.12       # ★この車はマイナスで前進
 ## 見た目を自分の会場の実画像に寄せたいとき
 
 sim の画像を、自分の車で撮った実画像の見た目に変換する道具があります (学習データの一部に混ぜる用)。手順は [sim2real.md](sim2real.md)。
-Release v0.2.0 に、9/12 の会場の実画像で学習した変換器 `sim2real_cut_003.onnx` を添付しています (その会場の見た目に寄るので、自分の会場の画像で作り直すのがおすすめ)。
+Release v0.3.0 に、9/12 の会場の実画像で学習した変換器 `sim2real_cut_003.onnx` を添付しています (その会場の見た目に寄るので、自分の会場の画像で作り直すのがおすすめ)。
 
 ## sim で方策 (画像 → 操舵) を学習したいとき
 
 教師に揺らぎを足して走らせて記録し、画像 ＋ IMU から注視点と速度係数を出す ResNet18 を模倣学習する道具があります
 ([tools/policy/README.md](../tools/policy/README.md))。CPU だけで学習できます (1 エポック約 13 分)。
-Release v0.2.0 には、この PC で学習した見本のモデル `policy_003.onnx` (1 ファイル・opset 18) を添付しています。
+Release v0.3.0 には、この PC で学習した見本のモデル `policy_003.onnx` (1 ファイル・opset 18) を添付しています。
 sim では学習に使っていない 7 通りの照明・床で完走・衝突 0 でしたが、**実機では未確認**です。
 入出力の約束 (入力 `image` [1,3,224,224] RGB・ImageNet 正規化、`imu` [1,50,6]、出力 [1,3]) は `jetracer_stack/policy_net.py` のもので、
 JetRacer 標準のコードからそのまま使う形ではありません。
