@@ -28,3 +28,4 @@ results/
 shots/
 # HDRP 版 (scripts/migrate_hdrp.sh が unity/MinicarSim から作る。管理しない)
 unity/MinicarSimHDRP/
+unity/MinicarSimURP/

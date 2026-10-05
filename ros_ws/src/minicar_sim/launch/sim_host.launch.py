@@ -21,9 +21,41 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess
 from launch.conditions import IfCondition
+from launch.substitution import Substitution
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
+
+
+class UnityPlayerPath(Substitution):
+    """unity_player:=auto のとき、scripts/pick_unity_player.sh で GPU に合う版 (Built-in / URP / HDRP) を選ぶ。
+
+    ★URP 版・HDRP 版はセンサ画像の見え方が Built-in と違う。画像で走る方策・検出器の評価・学習 (mlagents) では auto を使わない。
+    """
+
+    def __init__(self, value, mlagents):
+        super().__init__()
+        self._value, self._mlagents = value, mlagents
+
+    def describe(self):
+        return 'UnityPlayerPath()'
+
+    def perform(self, context):
+        import subprocess
+        v = context.perform_substitution(self._value)
+        if v != 'auto':
+            return v
+        builtin = os.path.join(os.environ.get('JETRACER_UNITY_PLAYER', os.path.expanduser('~/jetracer/unity/player')), 'MinicarSim.x86_64')
+        if context.perform_substitution(self._mlagents) == 'true':
+            return builtin                       # 学習は常に Built-in
+        # install 先からはリポジトリの場所が分からないので、JETRACER_SIM_ROOT か既定の置き場所で探す
+        root = os.environ.get('JETRACER_SIM_ROOT', os.path.expanduser('~/jetracer/jetracer_sim'))
+        script = os.path.join(root, 'scripts', 'pick_unity_player.sh')
+        try:
+            return subprocess.run([script], check=True, capture_output=True, text=True).stdout.strip() or builtin
+        except Exception as e:                   # 選べなければ Built-in
+            print(f'[sim_host] unity_player:=auto: {script} を実行できない ({e})。Built-in 版を使う')
+            return builtin
 
 
 def generate_launch_description():
@@ -65,7 +97,8 @@ def generate_launch_description():
                               description='unity=Unity プレイヤーが描く / opencv=vehicle_sim が射影描画'),
         DeclareLaunchArgument('unity_player',
                               default_value=os.path.expanduser('~/minicarbattle2026/unity/MinicarSim/Build/MinicarSim.x86_64'),
-                              description='Unity プレイヤー。none で起動しない (手動起動やエディタ Play のとき)'),
+                              description='Unity プレイヤー。none で起動しない (手動起動やエディタ Play のとき)。'
+                                          'auto で GPU に合う版 (Built-in / URP / HDRP) を選ぶ (見せる用。画像で走る方策・評価には使わない)'),
         DeclareLaunchArgument('record', default_value='',
                               description='Unity の画面を録画する mp4 のパス (例 ~/Videos/run.mp4)。空なら録画しない。'
                                           'ffmpeg が要る。camera_backend:=unity のときだけ効く'),
@@ -156,7 +189,7 @@ def generate_launch_description():
             #        endpoint 経由では接続前の latched が届かないので引数でも渡す
             # -record: 空なら録画しない。Unity が描いた画面をそのまま ffmpeg (libx264 ultrafast) へ流すので
             #          デスクトップ録画 (x11grab) と違い Wayland でも黒画面にならず、描画も止まらない
-            cmd=[unity_player, '-rosip', '127.0.0.1', '-rosport', tcp_port, '-layout', 'aic', '-laps', '0', '-seed', seed,
+            cmd=[UnityPlayerPath(unity_player, LaunchConfiguration('mlagents')), '-rosip', '127.0.0.1', '-rosport', tcp_port, '-layout', 'aic', '-laps', '0', '-seed', seed,
                  '-fps', LaunchConfiguration('unity_fps'),
                  '-owncar', LaunchConfiguration('car'),
                  '-rivalcar', LaunchConfiguration('rival_car'),

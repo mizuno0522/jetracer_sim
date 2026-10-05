@@ -1,4 +1,4 @@
-# 画質の段階 (-quality) と HDRP 版
+# 画質の段階 (-quality) と URP 版・HDRP 版
 
 ## 画質の段階 `-quality low | medium | high | auto`
 
@@ -20,6 +20,44 @@ medium 以上で実車スケールのコースには、次も足す (Built-in �
 
 ノート PC (内蔵 + 単体 GPU) では、launch と `scripts/shots.sh` が `DRI_PRIME=1` を既定にして単体 GPU を使う。
 基準の数値は [render_baseline.md](render_baseline.md)。
+
+## 3 つの版と自動の切り替え (Built-in / URP / HDRP)
+
+描画の仕組みが違う 3 つのプレイヤーがある。**見せる用の起動は、GPU を見て自動で選ぶ** (`scripts/pick_unity_player.sh`)。
+
+| 版 | プレイヤー | 向き | 選ばれる GPU (ビデオメモリ) |
+|---|---|---|---|
+| Built-in | `~/jetracer/unity/player` | 軽い。**学習・検出器の評価・画像で走る方策はこの版** | 2 GB 未満・Intel の内蔵だけ・不明 |
+| URP | `~/jetracer/unity/player_urp` | 中間。部屋の会場・後処理つきで軽い | 2 GB 以上 6 GB 未満 (例: Radeon RX 5300M 3 GB) |
+| HDRP | `~/jetracer/unity/player_hdrp` | 重い・きれい (映り込み・際の陰り・物理的な空) | 6 GB 以上 |
+
+- 境目は `-quality auto` (low / medium / high) と同じ。選んだ版のプレイヤーが無ければ 1 つ軽い版へ下げる。選んだ理由は標準エラーに出る
+- 指定するとき: `JETRACER_PIPELINE=builtin|urp|hdrp` (または `PLAYER=<実行ファイル>`)
+- 自動が既定なのは `tools/race/race3.sh`・`tools/race/race3_fuji.sh` だけ。`race3.sh` で方策を画像で走らせるとき (`BLUE_MODEL`) は Built-in に固定
+- launch は `unity_player:=auto` と書いたときだけ自動 (`mlagents:=true` のときは Built-in)。リポジトリが `~/jetracer/jetracer_sim` 以外にあるときは `JETRACER_SIM_ROOT` を渡す
+- ★URP 版・HDRP 版は配信するセンサ画像の見え方が Built-in と違う。記録 (`record.sh`)・学習・検出器の評価には使わない
+
+評価用 PC (RX 5300M) での速さ (富士・`-quality medium`・3 分割の画面・1920×1080・計測 400 フレーム、2026-10-05):
+Built-in 142 fps、URP 201 fps、HDRP 40 fps。ミニカーの部屋の会場の 3 台戦は URP (medium)・HDRP (high) とも 60 fps (上限)。
+
+## URP 版のプロジェクト
+
+HDRP 版と同じ方式で、**別のプロジェクト `unity/MinicarSimURP` をスクリプトで作る** (リポジトリには入れない)。スクリプト定義 `MINICAR_URP` を付けて `RenderCompat.Urp.cs` を有効にする。
+
+```bash
+./scripts/migrate_urp.sh              # 同期 → ① URP パッケージ → ② 設定 → ③ ビルド → ~/jetracer/unity/player_urp に配置
+STEPS="3 install" ./scripts/migrate_urp.sh   # ソースを直したあと (sync をやり直したら 1・2 も要る)
+```
+
+`migrate_urp.sh` と `migrate_hdrp.sh` の中身は共通の `scripts/migrate_pipeline.sh <urp|hdrp>`。
+
+- 設定 (`Editor/UrpSetup.cs`): 設定アセット `Assets/MinicarURP/MinicarURP.asset` と描画器、色空間 Linear、HDR・深度テクスチャ・影 4096、`Mat_URPLit` と材質の変形 (`Resources/URPVariants`)。描画 API は Built-in 版と同じ (この PC では OpenGLCore)
+- 材質: Standard → Universal Render Pipeline/Lit。車のクリア層 (2 枚目の材質) は外し、塗装のつやを上げる
+- 光: Linear でも Built-in (Gamma) と同じ明るさに見えるよう、光の強さを 2.2 乗して入れる
+- 影・アンチエイリアス: コードが QualitySettings に入れた値を設定アセットへ写す
+- 後処理 (medium 以上・表示用のカメラだけ): トーンマップ (Neutral)・ブルーム。部屋の会場は遠くのぼけ・周辺減光・コントラスト。映り込みと際の陰り (SSR・AO) は入れていない
+- ミニカーの会場は URP 版でも部屋 (`-venue room`) が既定
+- 分かっている違い: 地面の detail は 1 番目の UV に乗る (Built-in は 2 番目)。Built-in 用の画面の後処理 `ViewPost` は URP では働かない (上の後処理が代わり)
 
 ## HDRP 版のプロジェクト
 
