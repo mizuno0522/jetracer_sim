@@ -2,7 +2,8 @@
 // URP 版・HDRP 版と同じ仕様の絵を出す (数値は RenderCompat.GetLook・CircuitSun など 3 版で共通):
 //   材質: Standard のまま
 //   光  : 色空間は Linear (MinicarBuild)。富士の太陽・環境光は HDRP の絵に合わせた強さに置き直す
-//   映り込み: ミニカーの会場は環境光と同じ 3 色の空を映す (HDRP の空と同じ)。既定のスカイボックス (屋外の青空) は映さない
+//   映り込み: ミニカーの会場は環境光と同じ 3 色の空を映す (HDRP の空と同じ)
+//   ミニカーの会場: この版だけ部屋を描かず、地面と空だけ (RenderCompat.SimpleVenue。軽くするため。2026-10-06 水野)
 //   後処理 (medium 以上・表示用のカメラだけ): ViewPost (際の陰り・ぼけ・にじみ・周辺減光・コントラスト・ACES)
 //   センサカメラ: 後処理を掛けない
 #if !MINICAR_HDRP && !MINICAR_URP
@@ -25,6 +26,12 @@ namespace Minicar
             int n = 0;
             foreach (var cam in UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
+                // ミニカーの会場 (地面と空だけ): 単色の背景をやめて空を描き、地面が地平線まで続いて見えるよう遠くまで描く
+                if (!circuit && SimpleVenue && !cam.orthographic)
+                {
+                    cam.clearFlags = CameraClearFlags.Skybox;
+                    cam.farClipPlane = 400f;
+                }
                 if (Array.IndexOf(sensors, cam) >= 0) continue;
                 var k = look;
                 if (cam.orthographic) k.dof = false;       // 真上からの全景 (RViz 風) は図として読むものなので、ぼかさない

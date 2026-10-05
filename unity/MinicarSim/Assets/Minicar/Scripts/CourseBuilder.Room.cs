@@ -1,4 +1,5 @@
-// ミニカーの会場: 実際にコースを組んだ部屋。参考: 会場の動画 (2026-10-05 水野)。どの版 (Built-in・URP・HDRP)・どの用途でも同じ。
+// ミニカーの会場: 実際にコースを組んだ部屋。参考: 会場の動画 (2026-10-05 水野)。URP 版・HDRP 版が描く。
+// Built-in 版は部屋を描かず、コースの周りは地面と空だけ (RenderCompat.SimpleVenue。2026-10-06 水野)。コースそのものは 3 版で同じ。
 //
 // 窓のある会議室: クリーム色の壁、アルミサッシの窓、蛍光灯の並ぶ低い天井、濃いグレーのパンチカーペット、
 // 窓際の長椅子、巻いたカーペット、重ねた椅子。コースの床の区域 (人工芝・滑り板・風呂マット・坂の板) と壁板も実物の質感。
@@ -285,6 +286,16 @@ namespace Minicar
         {
             m_RoomRoot = new GameObject("Room").transform;
             m_RoomRoot.SetParent(m_Root, false);
+            if (RenderCompat.SimpleVenue)
+            {
+                // Built-in 版: 部屋は描かない。コースの周りは平らな地面 (600 m 四方) と空だけ
+                const float g = 300f;
+                var ground = Lit(new Color32(150, 146, 136, 255), Speckle(256, 0.10f, 1), 0.1f, new Vector2(400, 400));
+                RQuad("Ground", new Vector3(5f - g, 3f + g, -0.012f), new Vector3(5f + g, 3f + g, -0.012f), new Vector3(5f + g, 3f - g, -0.012f), new Vector3(5f - g, 3f - g, -0.012f),
+                      new Vector3(0, 0, 1), ground, RvizLayout.SensorOnlyLayer);
+                RenderCompat.ApplyCircuitSky();
+                return;
+            }
             int S = RvizLayout.SensorOnlyLayer, O = RvizLayout.OverheadLayer;
             float lx = kRx1 - kRx0, ly = kRy1 - kRy0;
             Vector3 up = new Vector3(0, 0, 1);

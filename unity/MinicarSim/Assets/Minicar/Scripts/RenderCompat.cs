@@ -40,6 +40,14 @@ namespace Minicar
             }
         }
 
+        /// ミニカーの会場を「地面と空だけ」にするか。Built-in 版だけ true (2026-10-06 水野): いちばん軽い版は部屋 (壁・窓・天井・備品) を
+        /// 描かず、コースの周りは平らな地面と空にする。コースそのもの (走路・壁板・区域・矢印板・暗幕・ミラーボール) は 3 版で同じ
+#if MINICAR_HDRP || MINICAR_URP
+        public static readonly bool SimpleVenue = false;
+#else
+        public static readonly bool SimpleVenue = true;
+#endif
+
         // ---------------------------------------------------------------- 見た目の数値 (3 版で共通)
         /// 富士の太陽: HDRP の 100,000 lux・露出 kCircuitEV の絵と同じ明るさになる、Built-in / URP の光の強さ
         public static float CircuitSun => Tune("sun", 1.8f);
