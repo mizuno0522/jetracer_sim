@@ -78,3 +78,18 @@ ros2 launch minicar_sim sim_host.launch.py course:=fuji vehicle_profile:=real_rx
      tcp_port:=10001 unity_player:=$HOME/jetracer/unity/player/MinicarSim.x86_64
 python3 tools/teleop/joy_teleop.py --ros-args -p publish_actuator:=true -p vehicle_profile_file:=real_rx7
 ```
+
+## 3 版を同じ仕様にしたあと (2026-10-06、ブランチ feat/unify-render-tiers)
+
+3 版とも Linear・同じ後処理・ミニカーの会場は部屋。`QUALITY=… SHOTS=0 SHOTVIEWS= ./scripts/shots.sh <fuji|minicar> rx7`、600 フレーム、aic (3 分割)。
+裏で minicarbattle2026 の検証が動いている状態 (負荷平均 2〜4) で計ったので、上の表より数 % 低く出ている可能性がある。
+
+| コース | 画質 | Built-in | URP | HDRP |
+|---|---|---|---|---|
+| 富士 | medium | 134.2 fps | 123.8 fps | 39.2 fps |
+| 富士 | low | 147.3 fps | — | — |
+| ミニカーの会場 (部屋) | medium | 123.1 fps | 227.4 fps | 114.3 fps |
+| ミニカーの会場 (部屋) | low | 125.3 fps | — | — |
+
+- ミニカーの会場の Built-in low は 224 → 125 fps。会場が部屋になり描く物が増えたため (後処理は low では掛からない)
+- 学習モード (lockstep) の 1 判断あたりの時間は、部屋の会場ではまだ計り直していない (描画は 1 コマ 4.5 → 8.0 ms)

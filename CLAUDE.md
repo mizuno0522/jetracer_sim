@@ -8,14 +8,15 @@
   EngineAudio.cs ↔ tools/engine_sound.py
 
 ## 守るもの
-- 車載カメラ (配信するセンサ画像) の見え方を変えない: 後処理は実カメラ風の SensorPost だけ。
-  ミニカーの会場と従来の車体 (センサ画像に写る相手) の見た目は変えない (Built-in 版の `-venue plain`)。
-  URP 版・HDRP 版のミニカーの会場は実際の部屋らしく作り込んでよい (`-venue room`、2026-10-05 水野。docs/hdrp.md)
+- 3 つの版 (Built-in・URP・HDRP) は同じ仕様の絵を出す。違うのは PC への負荷だけ (2026-10-05 水野)。HDRP 版の絵が正で、
+  URP 版・Built-in 版をそれに合わせる。絵作りを変えたら 3 版を同じ位置で撮って並べる。1 つの版だけに効果を足さない。
+  見た目の数値 (光・露出・後処理) は RenderCompat.cs の 1 か所に置く (docs/hdrp.md)
+- 車載カメラ (配信するセンサ画像) に掛ける後処理は実カメラ風の SensorPost だけ (表示用の後処理は掛けない)。
+  ミニカーの会場は学習も含めてすべて部屋 (以前の `-venue plain` は無くした)
 - 画質 low (学習・-mlagents) の速さ: lockstep の 1 判断あたりの時間を基準 (docs/render_baseline.md) の +10 % 以内
 - 周回タイム: ミニカー 11.80 s、ND 2:36.7、RX-7 2:25.8、787B 1:48.0 (描画だけの変更なら vehicle_sim に差分がないこと)
 - python3 tools/mlagents/test_gateway_core.py が全件合格
-- 学習・検出器の評価は Built-in 版 (unity/MinicarSim)。URP 版 (unity/MinicarSimURP)・HDRP 版 (unity/MinicarSimHDRP) は表示・動画用。
-  見せる用の起動は GPU を見て 3 つから選ぶ (scripts/pick_unity_player.sh。docs/hdrp.md)
+- 見せる用の起動は GPU を見て 3 つの版から選ぶ (scripts/pick_unity_player.sh。docs/hdrp.md)。学習 (-mlagents) は軽い Built-in 版で行う
 
 ## しないこと
 - 車体のロゴ・車名・配色は、非営利なので厳しく避けなくてよい (2026-10-04 水野)。本物らしさを優先してよいが、

@@ -5,7 +5,7 @@
 #   QUALITY=high SHOTS="0,1250" BENCH=0 ./scripts/shots.sh fuji nd
 # 環境: JETRACER_UNITY_PLAYER (既定 ~/jetracer/unity/player)、SHOTS (既定 0,1250,2600,3300 / ミニカーは 0,8,15,22)、
 #       SHOTVIEWS (富士の既定 grandstand,panasonic,scenic,carfront,carside,carrear。空で撮らない)、
-#       SHOTSIZE (1920x1080)、BENCH (600 フレーム。0 で計らない)、LAYOUT (aic|chase|rviz。計測時の画面)、QUALITY (low|high)
+#       SHOTSIZE (1920x1080)、BENCH (600 フレーム。0 で計らない)、LAYOUT (aic|chase|rviz。計測時の画面)、QUALITY (low|medium|high。既定 low)
 #       JETRACER_TCP_PORT (既定 10001。ROS には繋がない前提なので、誰も待っていないポートを渡す。プレイヤーの既定 10000 は
 #       minicarbattle2026 の sim が使っていて、繋がると車がそちらの座標へ飛び、相手の検証にも割り込む)
 # 画面が要る (-batchmode / -nographics では描けない)。リモートなら VNC か DISPLAY を用意する。

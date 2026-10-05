@@ -1,44 +1,86 @@
-# 画質の段階 (-quality) と URP 版・HDRP 版
+# 3 つの版 (Built-in・URP・HDRP) と画質の段階 (-quality)
+
+## 3 つの版は同じ仕様の絵を出す
+
+描画の仕組みが違う 3 つのプレイヤーがある。**出す絵の仕様は同じで、違うのは PC への負荷だけ** (2026-10-05 水野)。
+HDRP 版の絵が正で、URP 版・Built-in 版はそれに合わせてある。見せる用の起動は GPU を見て自動で選ぶ (`scripts/pick_unity_player.sh`)。
+
+| 版 | プレイヤー | 負荷 | 選ばれる GPU (ビデオメモリ) |
+|---|---|---|---|
+| Built-in | `~/jetracer/unity/player` | 軽い。学習 (`-mlagents`) はこの版 | 2 GB 未満・Intel の内蔵だけ・不明 |
+| URP | `~/jetracer/unity/player_urp` | 中間 | 2 GB 以上 6 GB 未満 (例: Radeon RX 5300M 3 GB) |
+| HDRP | `~/jetracer/unity/player_hdrp` | 重い | 6 GB 以上 |
+
+そろえてあるもの (どの版も同じ):
+
+- 場面: ミニカーの会場は部屋 (`CourseBuilder.Room.cs`)、富士、車体、ミラーボール。以前の灰色の床の会場 (`-venue plain`) は無くした
+- 色空間は Linear。光の強さ・色・環境光・露出
+- 富士の空の色と明るさ、霞の色、雲 (雲の絵のドーム)、建物の屋根の影
+- 画面表示の後処理の種類と強さ (下の表)。センサカメラ (配信する画像) にはどの版も後処理を掛けない
+- 画質の段階 (`-quality`) の中身
+
+見た目の数値は `RenderCompat.cs` の 1 か所 (`GetLook`・`CircuitSun` など) に置き、3 つの版が同じ値を読む。版ごとのファイルは、その値を
+それぞれの仕組みに渡すだけ: `RenderCompat.Builtin.cs` + `ViewPost` (自前のシェーダ)、`RenderCompat.Urp.cs`、`RenderCompat.Hdrp.cs`。
+
+残っている違い (仕組みの違いで、同じにできていないもの):
+
+- 床や板への映り込み (SSR) は HDRP 版だけ。URP 版・Built-in 版は周りの色の映り込みだけ
+- アンチエイリアスの方式 (HDRP は時間方向、URP・Built-in は MSAA)。輪郭のなめらかさが少し違う
+- 影の縁のやわらかさ、遠くのぼけ・にじみの広がり方 (同じ強さだが計算の仕方が違う)
+- センサ画像は 3 版で近いが、画素までは一致しない。画像で走る方策・検出器は、学習・評価したのと同じ版で動かす
+
+絵作りを変えたら、3 版を同じ位置で撮って並べる:
+
+```bash
+./scripts/shots3.sh minicar          # → shots/cmp3_minicar_<日時>/sheet.png (左から HDRP・URP・Built-in)
+./scripts/shots3.sh fuji rx7
+```
+
+合わせ込みのときは、ビルドし直さずに数値を試せる: プレイヤーに `-tune "sun=1.8,amb=1.4"` (名前は `RenderCompat.Tune` を引いている所)。
+決まった値はコードの既定値に入れる。
+
+- 選び方の境目は `-quality auto` (low / medium / high) と同じ。選んだ版のプレイヤーが無ければ 1 つ軽い版へ下げる。選んだ理由は標準エラーに出る
+- 指定するとき: `JETRACER_PIPELINE=builtin|urp|hdrp` (または `PLAYER=<実行ファイル>`)
+- 自動が既定なのは `tools/race/race3.sh`・`tools/race/race3_fuji.sh` だけ。`race3.sh` で方策を画像で走らせるとき (`BLUE_MODEL`) は Built-in に固定
+- launch は `unity_player:=auto` と書いたときだけ自動 (`mlagents:=true` のときは Built-in)。リポジトリが `~/jetracer/jetracer_sim` 以外にあるときは `JETRACER_SIM_ROOT` を渡す
 
 ## 画質の段階 `-quality low | medium | high | auto`
 
 起動引数 (launch・`scripts/shots.sh` は `QUALITY=`)。既定 `auto` は GPU を見て選ぶ (`RenderQuality.cs`)。選んだ段階と理由は
-起動ログ `[RenderQuality]` と `bench.md` に出る。
+起動ログ `[RenderQuality]` と `bench.md` に出る。中身は 3 版で同じ。
 
-| 段階 | 中身 (Built-in) | 中身 (HDRP 版) | auto で選ばれる GPU |
-|---|---|---|---|
-| low | 今までと同じ描画。森の影だけ切る | 後処理なし・影 150 m | ソフトウェア描画・内蔵 GPU (Intel・AMD APU)・ビデオメモリ 2 GB 未満。**`-mlagents` のときは常に low** |
-| medium | 影 300 m・画面の AA 2x | AO・ブルーム・ACES・影 300 m | ビデオメモリ 2〜6 GB (例: Radeon RX 5300M 3 GB = 評価用の MSI Bravo 15) |
-| high | 影 600 m・AA 4x・LOD 2 倍 | 影 600 m・立体の霧・立体の雲 | ビデオメモリ 6 GB 以上 |
+| 段階 | 中身 | auto で選ばれる GPU |
+|---|---|---|
+| low | 後処理なし。富士の影 150 m・森の影なし | ソフトウェア描画・内蔵 GPU (Intel・AMD APU)・ビデオメモリ 2 GB 未満。**`-mlagents` のときは常に low** |
+| medium | 後処理あり (下)。富士の影 300 m | ビデオメモリ 2〜6 GB (例: Radeon RX 5300M 3 GB = 評価用の MSI Bravo 15) |
+| high | medium + 富士の影 600 m | ビデオメモリ 6 GB 以上 |
+
+後処理 (medium 以上・表示用のカメラだけ):
+
+| 効果 | 富士 | ミニカーの会場 |
+|---|---|---|
+| トーンカーブ | ACES | ACES |
+| にじみ (ブルーム) | 0.12 | 0.22 |
+| 物の際の陰り (AO) | 0.6 | 1.0 |
+| 遠くのぼけ | なし | 4.5 m から始まり 22 m で最大 (真上からの全景には掛けない) |
+| 周辺減光 | なし | 0.22 |
+| コントラスト・彩度 | なし | +10・+6 |
 
 配信するセンサ画像 (車載カメラ) は段階によらず同じ (AA なし・後処理は実カメラ風の SensorPost だけ)。
-
-medium 以上で実車スケールのコースには、次も足す (Built-in 版):
-
-- 画面表示の後処理 `ViewPost` (明るい所のにじみ・コントラスト・周辺減光)。表示用のカメラだけで、車載カメラには掛けない
-- 周りの景色の映り込み (路面の上に置いたプローブを起動時に 1 回だけ写す)。車の塗装とガラスに空と地平線が映る
+以前 HDRP 版の high にだけあった立体の雲・立体の霧は、3 版で同じ絵にするため外した。
 
 ノート PC (内蔵 + 単体 GPU) では、launch と `scripts/shots.sh` が `DRI_PRIME=1` を既定にして単体 GPU を使う。
 基準の数値は [render_baseline.md](render_baseline.md)。
 
-## 3 つの版と自動の切り替え (Built-in / URP / HDRP)
+評価用 PC (RX 5300M) での速さ (`-quality medium`・3 分割の画面・1920×1080・計測 600 フレーム、2026-10-06。裏で別の検証が動いている状態):
 
-描画の仕組みが違う 3 つのプレイヤーがある。**見せる用の起動は、GPU を見て自動で選ぶ** (`scripts/pick_unity_player.sh`)。
-
-| 版 | プレイヤー | 向き | 選ばれる GPU (ビデオメモリ) |
+| コース | Built-in | URP | HDRP |
 |---|---|---|---|
-| Built-in | `~/jetracer/unity/player` | 軽い。**学習・検出器の評価・画像で走る方策はこの版** | 2 GB 未満・Intel の内蔵だけ・不明 |
-| URP | `~/jetracer/unity/player_urp` | 中間。部屋の会場・後処理つきで軽い | 2 GB 以上 6 GB 未満 (例: Radeon RX 5300M 3 GB) |
-| HDRP | `~/jetracer/unity/player_hdrp` | 重い・きれい (映り込み・際の陰り・物理的な空) | 6 GB 以上 |
+| 富士 | 134 fps | 124 fps | 39 fps |
+| ミニカーの会場 (部屋) | 123 fps | 227 fps | 114 fps |
 
-- 境目は `-quality auto` (low / medium / high) と同じ。選んだ版のプレイヤーが無ければ 1 つ軽い版へ下げる。選んだ理由は標準エラーに出る
-- 指定するとき: `JETRACER_PIPELINE=builtin|urp|hdrp` (または `PLAYER=<実行ファイル>`)
-- 自動が既定なのは `tools/race/race3.sh`・`tools/race/race3_fuji.sh` だけ。`race3.sh` で方策を画像で走らせるとき (`BLUE_MODEL`) は Built-in に固定
-- launch は `unity_player:=auto` と書いたときだけ自動 (`mlagents:=true` のときは Built-in)。リポジトリが `~/jetracer/jetracer_sim` 以外にあるときは `JETRACER_SIM_ROOT` を渡す
-- ★URP 版・HDRP 版は配信するセンサ画像の見え方が Built-in と違う。記録 (`record.sh`)・学習・検出器の評価には使わない
-
-評価用 PC (RX 5300M) での速さ (富士・`-quality medium`・3 分割の画面・1920×1080・計測 400 フレーム、2026-10-05):
-Built-in 142 fps、URP 201 fps、HDRP 40 fps。ミニカーの部屋の会場の 3 台戦は URP (medium)・HDRP (high) とも 60 fps (上限)。
+★部屋の会場は物の数が多く (描く物 約 790 個)、まとめて描く仕組みのある URP のほうが Built-in より速い。Built-in の low は 125 fps
+(以前の灰色の床の会場は 224 fps)。学習の 1 判断あたりの時間 (lockstep) は部屋ではまだ計り直していない。
 
 ## URP 版のプロジェクト
 
@@ -54,11 +96,12 @@ STEPS="3 install" ./scripts/migrate_urp.sh   # ソースを直したあと (sync
 - 設定 (`Editor/UrpSetup.cs`): 設定アセット `Assets/MinicarURP/MinicarURP.asset` と描画器、色空間 Linear、HDR・深度テクスチャ・影 4096、`Mat_URPLit` と材質の変形 (`Resources/URPVariants`)。描画 API は Built-in 版と同じ (この PC では OpenGLCore)
 - 材質: Standard → Universal Render Pipeline/Lit。車体の塗装はクリアコートつきの Complex Lit (Built-in の 2 枚目のクリア層は外す)。
   ★材質の変形はキーワードだけでなく設定値・テクスチャも入れて保存する (キーワードだけだと取り込み時に消えて、木が黒い板になった)
-- 光: Linear でも Built-in (Gamma) と同じ明るさに見えるよう、光の強さを 2.2 乗して入れる
+- 光: 3 版とも Linear。Built-in は光の強さを sRGB の値として読む (強さ 1.8 は 3.6 倍に効く) ので、URP では 2.2 乗して同じ明るさにする
 - 影・アンチエイリアス: コードが QualitySettings に入れた値を設定アセットへ写す
-- 後処理 (medium 以上・表示用のカメラだけ): トーンマップ (Neutral)・ブルーム。部屋の会場は遠くのぼけ・周辺減光・コントラスト。映り込みと際の陰り (SSR・AO) は入れていない
-- ミニカーの会場は URP 版でも部屋 (`-venue room`) が既定
-- 分かっている違い: 地面の detail は 1 番目の UV に乗る (Built-in は 2 番目)。Built-in 用の画面の後処理 `ViewPost` は URP では働かない (上の後処理が代わり)
+- 後処理 (medium 以上・表示用のカメラだけ): 上の表の値を URP の Volume に入れる。際の陰りは描画器の SSAO (phase 2 が足す)。
+  センサカメラは SSAO の無い 2 番目の描画器で描く
+- ★detail (地面の細かい模様) の絵は Linear の絵として持ち直す。sRGB のままだと URP/Lit は 0.5 を 0.21 と読み、芝が半分以下の暗さになった
+- 地面の detail は URP/Lit では 1 番目の UV にしか乗らない (Built-in は 2 番目 = m 単位)。同じ大きさになるようタイルを換算して入れる
 
 ## HDRP 版のプロジェクト
 
@@ -85,15 +128,16 @@ HDRP 版を launch で使うときは `unity_player:=~/jetracer/unity/player_hdr
 ### 置き換えの中身 (`RenderCompat.Hdrp.cs`)
 
 - 材質: Standard → HDRP/Lit (色・テクスチャ・タイル・法線・滑らかさ・金属・切り抜き・半透明・detail)。Unlit・Sprites (矢印板・文字・雲のドーム) はそのまま
-- 富士: 太陽 100,000 lux・物理的な空・露出 EV100 14.4 (Built-in の明るさに合わせた値)・霞は今の指数の霞と同じ減衰で、高さ 2.5 km で薄れる
-- ミニカーの会場: 光の強さは今の値のまま、露出 EV100 −1.9 で Built-in と同じ明るさに換算。環境光は上・横・下の 3 色の空
+- 富士: 太陽 100,000 lux・物理的な空・露出 EV100 12.9・霞は指数の霞と同じ減衰で、高さ 2.5 km で薄れる。
+  空からの環境光は 3 倍にしてある (物理的な空のままだと日陰が黒くつぶれた。2026-10-05)
+- ミニカーの会場: 光の強さは共通の値のまま、露出 EV100 −1.9 で換算。環境光は上・横・下の 3 色の空
 - センサカメラには後処理 (トーンマップ・ブルーム) と AO を掛けない。HDRP 既定の Volume が入れる AO・ブルーム・モーションブラーは low で 0、モーションブラーは常に 0
 - エピソードごとに作られる床テープ・観戦者も `RenderCompat.Refresh` で置き換える
 
-### ミニカーの会場を実際の部屋らしく (`-venue room`)
+### ミニカーの会場 (部屋)
 
-HDRP 版では、ミニカーの会場を実際にコースを組んだ部屋に寄せて描く (`CourseBuilder.Room.cs`。既定: HDRP 版 = `room`、Built-in 版 = `plain`)。
-参考にしたのは会場の動画と「△3 コース・レギュレーション」の使用部材。コースの形・寸法・色の区別は `plain` と同じ。
+ミニカーの会場は、どの版でも実際にコースを組んだ部屋に寄せて描く (`CourseBuilder.Room.cs`)。学習 (`-mlagents`) も同じ部屋。
+参考にしたのは会場の動画と「△3 コース・レギュレーション」の使用部材。
 
 | もの | 中身 |
 |---|---|
@@ -107,15 +151,12 @@ HDRP 版では、ミニカーの会場を実際にコースを組んだ部屋に
 | 駐車枠の番号 | 枠と同じ色のテープを文字の形に貼ったもの |
 | ライトかく乱 | ミラーボール型のステージライト。色の点が床に散ってゆっくり回る (床に置いた薄い円の集まり)。色と明滅は従来どおり 7 色を 2 秒ごと |
 | 車 | 屋根のセンサマスト (カメラの柱) を付けない |
-| 光と後処理 | plain より明るい光 (天井 ×1.9・環境 ×2.1)。medium 以上で映り込み・際の陰り・遠くのぼけ・周辺減光 |
+| 光と後処理 | 窓と蛍光灯のある明るい部屋の光。medium 以上で際の陰り・遠くのぼけ・周辺減光 (上の表) |
 
-`-venue plain` で今までの会場に戻る。Built-in 版でも `-venue room` で部屋は出るが、後処理は付かない。
-★配信するセンサ画像にも部屋が写るので、room は表示・動画用。学習・検出器の評価は Built-in 版の plain で行う。
+配信するセンサ画像にも部屋が写る。
 
 ### 注意
 
-- **学習 (ML-Agents)・ミニカーの会場の検出器の評価は Built-in 版で行う。** HDRP 版は色空間 (Linear)・光の計算が違うので、センサ画像の見え方が変わる。HDRP 版は表示・動画用
-- Built-in 版は Gamma 色空間、HDRP 版は Linear なので、同じ光の強さでも中間の明るさが少し明るく出る (例: 0.55 → 約 0.76)。露出 (`kCircuitEV`・`kLegacyEV`) で合わせる
 - HDRP は Linux では Vulkan が要る。AMD は Mesa (RADV)、NVIDIA は独自ドライバで動く。内蔵 GPU やビデオメモリ 4 GB 未満では重い (Built-in 版の medium を使う)
 - 評価用 PC (Unity 6000.0.83f1・HDRP 17・RX 5300M) で全段が通ることを確かめた (2026-10-05)。直したのは Global Settings の型の参照 1 か所と露出 (`kCircuitEV` 14.4 → 12.9)。速さは [render_baseline.md](render_baseline.md)。③ でエラーが出たら `RenderCompat.Hdrp.cs` か `Editor/HdrpSetup.cs` を直す。
   Global Settings の警告が出たら、エディタで `unity/MinicarSimHDRP` を開き Window > Rendering > HDRP Wizard の Fix All を 1 回押して、`STEPS="3 install"` で続ける
