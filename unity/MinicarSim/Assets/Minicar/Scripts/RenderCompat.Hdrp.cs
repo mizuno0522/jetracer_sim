@@ -98,6 +98,13 @@ namespace Minicar
                 {
                     hd.antialiasing = RenderQuality.Current == QualityTier.Low ? HDAdditionalCameraData.AntialiasingMode.FastApproximateAntialiasing
                                                                              : HDAdditionalCameraData.AntialiasingMode.TemporalAntialiasing;
+                    if (cam.orthographic)
+                    {
+                        // 真上からの全景 (RViz 風) は図として読むものなので、ぼかさない (部屋の会場のぼけは追従視点用)
+                        hd.customRenderingSettings = true;
+                        hd.renderingPathCustomFrameSettingsOverrideMask.mask[(uint)FrameSettingsField.DepthOfField] = true;
+                        hd.renderingPathCustomFrameSettings.SetEnabled(FrameSettingsField.DepthOfField, false);
+                    }
                 }
             }
 
@@ -136,6 +143,28 @@ namespace Minicar
             profile.Add<ScreenSpaceAmbientOcclusion>(true).intensity.value = low ? 0f : 0.6f;
             profile.Add<Bloom>(true).intensity.value = low ? 0f : 0.12f;
             profile.Add<MotionBlur>(true).intensity.value = 0f;
+            if (!circuit && course.Room && !low)
+            {
+                // 部屋の会場 (-venue room): 小さな車を近くから撮った写真らしく。床や板への映り込み、物の際の陰り、遠くのぼけ、周辺の落ち込み
+                profile.components.Find(c => c is ScreenSpaceAmbientOcclusion).active = true;
+                ((ScreenSpaceAmbientOcclusion)profile.components.Find(c => c is ScreenSpaceAmbientOcclusion)).intensity.value = 1.0f;
+                ((Bloom)profile.components.Find(c => c is Bloom)).intensity.value = 0.22f;
+                var ssr = profile.Add<ScreenSpaceReflection>(true);
+                foreach (string f in new[] { "enabledOpaque", "enabled" })       // HDRP の版で名前が違う
+                {
+                    var fi = typeof(ScreenSpaceReflection).GetField(f);
+                    if (fi != null && fi.GetValue(ssr) is BoolParameter bp) { bp.overrideState = true; bp.value = true; break; }
+                }
+                var dof = profile.Add<DepthOfField>(true);
+                dof.focusMode.value = DepthOfFieldMode.Manual;
+                dof.nearFocusStart.value = 0f; dof.nearFocusEnd.value = 0f;
+                dof.farFocusStart.value = 4.5f; dof.farFocusEnd.value = 22f;
+                dof.farMaxBlur = 3.5f;
+                var vg = profile.Add<Vignette>(true);
+                vg.intensity.value = 0.22f; vg.smoothness.value = 0.45f;
+                var ca = profile.Add<ColorAdjustments>(true);
+                ca.contrast.value = 10f; ca.saturation.value = 6f;
+            }
             if (circuit && RenderQuality.Current == QualityTier.High)
             {
                 var vc = profile.Add<VolumetricClouds>(true);
