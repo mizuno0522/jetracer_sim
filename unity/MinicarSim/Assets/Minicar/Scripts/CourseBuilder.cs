@@ -512,6 +512,7 @@ namespace Minicar
             DisturbLight.range = 2.2f;
             DisturbLight.intensity = 2.5f;
             DisturbLight.shadows = LightShadows.None;
+            if (Room) MakeMirrorBall(ball);     // room: 色の点を床に散らすミラーボール (規約 解説③)
         }
 
         // /sim/episode の seed で照明・床の色味・観戦者を引き直す (乱択化。幅は realism.episode_*)。

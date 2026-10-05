@@ -179,6 +179,80 @@ namespace Minicar
             Destroy(tex);
         }
 
+        // ③ライトかく乱 (room): ミラーボール型のステージライト (規約 解説③)。色の点が床に散ってゆっくり回る。
+        // 点は床に置いた薄い円の集まりで描く (光の模様を投影する方法は HDRP で点が出なかった)。色と明滅は今まで通り
+        // SimBridge が DisturbLight に入れる値 (7 色を 2 秒ごと) に合わせる。DisturbLight 自体は従来の点光源のままで、
+        // 車や壁を同じ色でうっすら照らす。plain では点は出さない
+        Transform m_MirrorDots;
+        Mesh m_MirrorMesh;
+        Color32[] m_MirrorCol;
+        float[] m_MirrorGain;
+        Color m_MirrorShown = Color.clear;
+        const int kDotSeg = 10;
+
+        void MakeMirrorBall(GameObject ball)
+        {
+            // 本体: 黒い台に、色とりどりの面が並んだ半球
+            ball.GetComponent<Renderer>().sharedMaterial = Flat(VenueTex.MirrorFacets(62));
+            ball.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            var body = RCyl("StageLightBody", Data.light.x, Data.light.y, Data.light.z - 0.012f, 'z', 0.07f, 0.125f, Lit(new Color32(22, 22, 24, 255), null, 0.45f), false);
+            body.layer = RvizLayout.OverheadLayer;
+
+            // 床の点: ライトの真下を中心に半径 1.35 m まで。外側ほど少し大きく、放射方向に伸びる
+            var rng = new System.Random(61);
+            const int n = 170;
+            var v = new List<Vector3>(); var tri = new List<int>(); var gain = new List<float>();
+            for (int k = 0; k < n; k++)
+            {
+                float r = 0.10f + 1.25f * Mathf.Sqrt((float)rng.NextDouble()), a = (float)(rng.NextDouble() * 2.0 * System.Math.PI);
+                float rad = (0.011f + 0.009f * (float)rng.NextDouble()) * (1f + 0.5f * r), stretch = 1f + 0.55f * r;
+                float g = 0.45f + 0.55f * (float)rng.NextDouble();
+                Vector3 c = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * r, er = c.normalized, et = new Vector3(-er.z, 0f, er.x);
+                int b0 = v.Count;
+                v.Add(c); gain.Add(g);
+                for (int s = 0; s < kDotSeg; s++)
+                {
+                    float t = 2f * Mathf.PI * s / kDotSeg;
+                    v.Add(c + er * (Mathf.Cos(t) * rad * stretch) + et * (Mathf.Sin(t) * rad));
+                    gain.Add(0f);                                       // 縁は透明 (にじんだ点)
+                    tri.Add(b0); tri.Add(b0 + 1 + (s + 1) % kDotSeg); tri.Add(b0 + 1 + s);
+                }
+            }
+            m_MirrorMesh = new Mesh { name = "MirrorDots" };
+            m_MirrorMesh.SetVertices(v);
+            m_MirrorMesh.SetTriangles(tri, 0);
+            m_MirrorGain = gain.ToArray();
+            m_MirrorCol = new Color32[v.Count];
+            m_MirrorMesh.RecalculateBounds();
+            var go = MeshObject("MirrorDots", m_MirrorMesh, Resources.Load<Material>("Mat_VertexColor"));
+            go.transform.position = RosFrame.ToUnity(Data.light.x, Data.light.y, 0.0072f);
+            go.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            go.GetComponent<Renderer>().receiveShadows = false;
+            go.layer = RvizLayout.SensorOnlyLayer;
+            m_MirrorDots = go.transform;
+        }
+
+        void Update()
+        {
+            if (m_MirrorDots == null || DisturbLight == null) return;
+            m_MirrorDots.Rotate(Vector3.up, 12f * Time.deltaTime, Space.World);
+            // 色と明るさは DisturbLight に合わせる (HDRP では強さが換算されるので、色 × 明滅の比だけを使う)
+            Color c = DisturbLight.color;
+            float flick = 0.75f + 0.25f * Mathf.Sin(Time.time * 6f);
+            c.a = flick;
+            if (Mathf.Abs(c.r - m_MirrorShown.r) + Mathf.Abs(c.g - m_MirrorShown.g) + Mathf.Abs(c.b - m_MirrorShown.b) + Mathf.Abs(c.a - m_MirrorShown.a) < 0.02f) return;
+            m_MirrorShown = c;
+            // 白っぽい色 (0.55 の成分) は点にすると薄いので、彩度を上げて光の点らしくする
+            float lo = Mathf.Min(c.r, Mathf.Min(c.g, c.b));
+            Color s = lo > 0.9f ? Color.white : new Color(Mathf.Clamp01((c.r - lo * 0.75f) * 1.7f), Mathf.Clamp01((c.g - lo * 0.75f) * 1.7f), Mathf.Clamp01((c.b - lo * 0.75f) * 1.7f));
+            for (int i = 0; i < m_MirrorCol.Length; i++)
+            {
+                Color k = s; k.a = m_MirrorGain[i] * flick;
+                m_MirrorCol[i] = k;
+            }
+            m_MirrorMesh.colors32 = m_MirrorCol;
+        }
+
         // 壁板の足 (規約「その他使用部材詳細」): 鉄板 150×150×4 mm に M20 のボルトを立て、塩ビ管 (VP25) で板を床から 30 mm 浮かせる
         void BuildWallFeet()
         {
@@ -542,6 +616,27 @@ namespace Minicar
                     px[y * w + x] = Color.Lerp(c, Color.white, 0.45f);
                 }
             var t = new Texture2D(w, h, TextureFormat.RGB24, true) { name = "Outside", wrapMode = TextureWrapMode.Clamp };
+            t.SetPixels32(px);
+            t.Apply(true);
+            return t;
+        }
+
+        /// ミラーボールの半球に並ぶ色の面 (赤・緑・青・白の小さな区画)
+        public static Texture2D MirrorFacets(int seed)
+        {
+            const int w = 64, h = 32;
+            Color[] pal = { new Color(1f, 0.25f, 0.3f), new Color(0.3f, 1f, 0.4f), new Color(0.3f, 0.5f, 1f), new Color(1f, 1f, 1f), new Color(1f, 0.6f, 1f), new Color(0.4f, 1f, 1f) };
+            var px = new Color32[w * h];
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    int cx = x / 4, cy = y / 4;
+                    Color c = pal[(int)(ProcTex.Hash(cx, cy, seed) * pal.Length) % pal.Length];
+                    if (x % 4 == 0 || y % 4 == 0) c *= 0.25f;
+                    c.a = 1f;
+                    px[y * w + x] = c;
+                }
+            var t = new Texture2D(w, h, TextureFormat.RGB24, true) { name = "MirrorFacets", wrapMode = TextureWrapMode.Repeat };
             t.SetPixels32(px);
             t.Apply(true);
             return t;

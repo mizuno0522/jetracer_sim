@@ -427,18 +427,20 @@ namespace Minicar
         {
             // 自車: 動画の濃紺メタリック。センサカメラには写さない
             // -owncar / -rivalcar / -rival2car: b787 | nd | rx7 (省略で従来の見た目)。見た目だけで物理は変わらない
-            m_OwnCar = new CarModel("OwnCar", new Color(0.06f, 0.10f, 0.42f), kOwnCarLayer, true,
+            // 屋根のセンサマスト (カメラの柱) は部屋の会場 (-venue room) では付けない (表示用。2026-10-05 水野)
+            bool mast = !m_Course.Room;
+            m_OwnCar = new CarModel("OwnCar", new Color(0.06f, 0.10f, 0.42f), kOwnCarLayer, mast,
                                     CarModel.ParseStyle(Arg("-owncar", "")));
             m_Opponent = new CarModel("Opponent", new Color(0.85f, 0.85f, 0.83f), 0, false);
             m_Opponent.Root.gameObject.SetActive(false);
             // レース相手 (黄)。/sim/rival_state が来たときだけ出す
-            m_Rival = new CarModel("Rival", new Color(0.95f, 0.72f, 0.05f), kRivalLayer, true,
+            m_Rival = new CarModel("Rival", new Color(0.95f, 0.72f, 0.05f), kRivalLayer, mast,
                                    CarModel.ParseStyle(Arg("-rivalcar", "")));
             m_Rival.Root.gameObject.SetActive(false);
             m_OwnLabel = Arg("-ownlabel", "BLUE");
             m_RivalLabel = Arg("-rivallabel", "YELLOW");
             // 3 台レースの 2 台目の相手 (緑)。/sim/rival2_state が来たときだけ出す
-            m_Rival2 = new CarModel("Rival2", new Color(0.20f, 0.75f, 0.30f), kRival2Layer, true,
+            m_Rival2 = new CarModel("Rival2", new Color(0.20f, 0.75f, 0.30f), kRival2Layer, mast,
                                     CarModel.ParseStyle(Arg("-rival2car", "")));
             // 実車スケールのコース: 車体を vehicle_profile の全長に合わせて拡大する (見た目だけ)
             var veh = m_Course.Data.vehicle;
