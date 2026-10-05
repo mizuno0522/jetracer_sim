@@ -16,7 +16,6 @@ namespace Minicar
         Light m_Ceiling;
         Material m_CarpetMat;
         Color m_CarpetBase = Color.white;
-        Transform m_Spectators;
         Transform m_Tapes;
 
         Material m_Lit, m_Unlit;
@@ -24,18 +23,10 @@ namespace Minicar
 
         // vehicle_sim の合成カメラと同じ色 (BGR → RGB に並べ替え済み)
         static Color32 kCarpet = new Color32(92, 95, 95, 255);
-        static readonly Color32 kVenue = new Color32(122, 120, 116, 255);
         static Color32 kWallWhite = new Color32(226, 222, 212, 255);
         static Color32 kWallRed = new Color32(196, 38, 36, 255);
         static readonly Color32 kVelvet = new Color32(6, 6, 7, 255);
         static readonly Color32 kSus = new Color32(170, 172, 175, 255);
-        static readonly Dictionary<string, Color32> kArea = new Dictionary<string, Color32>
-        {
-            { "MU_HIGH", new Color32(60, 120, 60, 255) },    // 人工芝
-            { "MU_LOW", new Color32(228, 224, 222, 255) },   // 滑り板 (PTFE)
-            { "ROUGH", new Color32(76, 192, 237, 255) },     // 水色の風呂マット
-            { "SLOPE", new Color32(200, 198, 196, 255) },    // 坂道の白ボード
-        };
         static readonly Dictionary<string, Color32> kSlot = new Dictionary<string, Color32>
         {
             { "green", new Color32(70, 160, 70, 255) },
@@ -72,16 +63,11 @@ namespace Minicar
                 kWallRed = new Color32((byte)Realism.wall_red_r, (byte)Realism.wall_red_g, (byte)Realism.wall_red_b, 255);
             }
 
-            Room = WantRoom();                  // -venue room: 実際の部屋らしい会場 (表示用。CourseBuilder.Room.cs)
+            // 会場は実際にコースを組んだ部屋 (CourseBuilder.Room.cs)。どの版・どの用途 (表示・学習) でも同じ
             BuildFloor();
-            if (Room) BuildRoom();
-            else if (Realism.enable)
-            {
-                BuildBackdrop();
-                BuildSpectators();
-            }
+            BuildRoom();
             BuildWalls();
-            if (Room) BuildWallFeet();
+            BuildWallFeet();
             BuildAreas();
             BuildParking();
             BuildStartLines();
@@ -187,129 +173,18 @@ namespace Minicar
         // ------------------------------------------------------------------
         void BuildFloor()
         {
-            // 会場の床 (コースの外) とパンチカーペット (コース内)
-            if (Room)
-            {
-                m_CarpetMat = RoomCarpet(6.55f, 10.45f);
-                m_CarpetBase = m_CarpetMat.color;
-                FloorRect("Carpet", -0.05f, -0.1f, 10.4f, 6.45f, 0f, m_CarpetMat).GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                return;
-            }
-            FloorRect("VenueFloor", -6f, -6f, 16f, 12f, -0.004f,
-                      Lit(kVenue, Speckle(128, 0.10f, 1), 0.2f, new Vector2(40, 40)))
-                .layer = RvizLayout.SensorOnlyLayer;
-            // 実画像から作ったカーペットのタイル (StreamingAssets/textures/carpet.png) があればそれを貼る
-            var real = Realism.enable ? LoadTexture(Realism.carpet_tex) : null;
-            m_CarpetMat = real != null
-                ? Lit(new Color32(255, 255, 255, 255), real, 0.0f, new Vector2(30, 19))    // 1 タイル ≈ 0.35 m
-                : Lit(kCarpet, Speckle(256, 0.28f, 2), 0.0f, new Vector2(60, 40));
+            // パンチカーペット (コース内)。部屋の床 (コースの外) は BuildRoom
+            m_CarpetMat = RoomCarpet(6.55f, 10.45f);
             m_CarpetBase = m_CarpetMat.color;
-            FloorRect("Carpet", -0.05f, -0.1f, 10.4f, 6.45f, 0f, m_CarpetMat);
-        }
-
-        Texture2D LoadTexture(string rel)
-        {
-            string path = Path.Combine(Application.streamingAssetsPath, rel);
-            if (!File.Exists(path)) { Debug.LogWarning($"[CourseBuilder] texture not found: {path}"); return null; }
-            var t = new Texture2D(2, 2, TextureFormat.RGB24, true) { wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Trilinear };
-            t.LoadImage(File.ReadAllBytes(path));
-            return t;
-        }
-
-        // 壁の向こうの会場: 実画像の上部を横に並べた帯を、コースを囲む円筒の内側に貼る。
-        // 幾何的には正しくないが、CNN が見る「壁の上の雑然とした明るさ」の分布を実画像から持ってくる。
-        void BuildBackdrop()
-        {
-            if (string.IsNullOrEmpty(Realism.backdrop_tex)) return;
-            var tex = LoadTexture(Realism.backdrop_tex);
-            if (tex == null) return;
-            tex.wrapMode = TextureWrapMode.Repeat;
-            const int N = 96;
-            float cx = 5.2f, cy = 3.2f, R = Realism.backdrop_radius_m, H = Realism.backdrop_height_m, z0 = Realism.backdrop_z0_m;
-            var v = new Vector3[(N + 1) * 2];
-            var uv = new Vector2[(N + 1) * 2];
-            var tri = new int[N * 12];               // 両面 (内側から見るので裏面も張る)
-            for (int i = 0; i <= N; i++)
-            {
-                float a = 2f * Mathf.PI * i / N;
-                float x = cx + R * Mathf.Cos(a), y = cy + R * Mathf.Sin(a);
-                v[i * 2] = RosFrame.ToUnity(x, y, z0);
-                v[i * 2 + 1] = RosFrame.ToUnity(x, y, z0 + H);
-                uv[i * 2] = new Vector2((float)i / N, 0f);
-                uv[i * 2 + 1] = new Vector2((float)i / N, 1f);
-            }
-            for (int i = 0; i < N; i++)
-            {
-                int b = i * 2, t = i * 12;
-                tri[t] = b; tri[t + 1] = b + 1; tri[t + 2] = b + 2;
-                tri[t + 3] = b + 1; tri[t + 4] = b + 3; tri[t + 5] = b + 2;
-                tri[t + 6] = b; tri[t + 7] = b + 2; tri[t + 8] = b + 1;
-                tri[t + 9] = b + 1; tri[t + 10] = b + 2; tri[t + 11] = b + 3;
-            }
-            var m = new Mesh { vertices = v, uv = uv, triangles = tri };
-            m.RecalculateNormals();
-            m.RecalculateBounds();
-            var mat = new Material(m_Unlit) { mainTexture = tex };
-            var go = MeshObject("Backdrop", m, mat);
-            go.layer = RvizLayout.SensorOnlyLayer;
-        }
-
-        // 観戦者: 壁の外側に立つ人。カプセル (胴) + 球 (頭)、服の色はランダム。
-        // 実会場では壁の上に人が並んで見えるので、その「雑音」を入れる (seed で固定)。
-        void BuildSpectators() => BuildSpectators(Realism.spectator_seed);
-
-        void BuildSpectators(int seed)
-        {
-            int n = Realism.spectators;
-            if (n <= 0) return;
-            var rng = new System.Random(seed);
-            float x0 = -0.05f, y0 = -0.1f, x1 = 10.4f, y1 = 6.45f;      // カーペットの外周
-            if (m_Spectators != null) Destroy(m_Spectators.gameObject);
-            var parent = new GameObject("Spectators").transform;
-            parent.SetParent(m_Root, false);
-            m_Spectators = parent;
-            for (int i = 0; i < n; i++)
-            {
-                // 外周のどこかに、壁から 0.3〜2.5 m 離して立つ
-                float d = 0.3f + 2.2f * (float)rng.NextDouble();
-                float t = (float)rng.NextDouble();
-                float x, y;
-                switch (i % 4)
-                {
-                    case 0: x = x0 + t * (x1 - x0); y = y0 - d; break;
-                    case 1: x = x0 + t * (x1 - x0); y = y1 + d; break;
-                    case 2: x = x0 - d; y = y0 + t * (y1 - y0); break;
-                    default: x = x1 + d; y = y0 + t * (y1 - y0); break;
-                }
-                float h = 1.5f + 0.3f * (float)rng.NextDouble();
-                var shirt = new Color32((byte)rng.Next(20, 230), (byte)rng.Next(20, 230), (byte)rng.Next(20, 230), 255);
-                var pants = new Color32((byte)rng.Next(20, 90), (byte)rng.Next(20, 90), (byte)rng.Next(30, 110), 255);
-                var skin = new Color32((byte)rng.Next(150, 230), (byte)rng.Next(110, 180), (byte)rng.Next(90, 150), 255);
-                float legs = h * 0.45f, torso = h * 0.4f, head = h * 0.15f;
-                Spect(parent, PrimitiveType.Capsule, RosFrame.ToUnity(x, y, legs * 0.5f), new Vector3(0.28f, legs * 0.5f, 0.2f), Lit(pants));
-                Spect(parent, PrimitiveType.Capsule, RosFrame.ToUnity(x, y, legs + torso * 0.5f), new Vector3(0.42f, torso * 0.5f, 0.24f), Lit(shirt));
-                Spect(parent, PrimitiveType.Sphere, RosFrame.ToUnity(x, y, legs + torso + head * 0.55f), Vector3.one * head, Lit(skin));
-            }
-        }
-
-        void Spect(Transform parent, PrimitiveType type, Vector3 pos, Vector3 scale, Material mat)
-        {
-            var go = GameObject.CreatePrimitive(type);
-            Destroy(go.GetComponent<Collider>());
-            go.name = "Spectator";
-            go.transform.SetParent(parent, false);
-            go.transform.position = pos;
-            go.transform.localScale = scale;
-            go.GetComponent<Renderer>().sharedMaterial = mat;
-            go.layer = RvizLayout.SensorOnlyLayer;
+            FloorRect("Carpet", -0.05f, -0.1f, 10.4f, 6.45f, 0f, m_CarpetMat).GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         }
 
         void BuildWalls()
         {
             var d = Data;
-            // 木の板を塗ったもの (規約: コース壁材…木材)。room では塗装のつやを出す
-            var white = Lit(kWallWhite, Speckle(128, 0.08f, 3, true), Room ? 0.55f : 0.15f, new Vector2(1, 8));
-            var red = Lit(kWallRed, Speckle(128, 0.08f, 4, true), Room ? 0.62f : 0.25f, new Vector2(1, 8));
+            // 木の板を塗ったもの (規約: コース壁材…木材)。塗装のつやを出す
+            var white = Lit(kWallWhite, Speckle(128, 0.08f, 3, true), 0.55f, new Vector2(1, 8));
+            var red = Lit(kWallRed, Speckle(128, 0.08f, 4, true), 0.62f, new Vector2(1, 8));
             var velvet = Lit(kVelvet, null, 0.0f);
             AreaData tunnel = System.Array.Find(d.areas, a => a.name == "TUNNEL");
             // 暗幕の中の壁は天井光も環境光も届かないので、材質ごと暗くする
@@ -399,15 +274,7 @@ namespace Minicar
                 foreach (var a in Data.areas)
                 {
                     if (a.name != name) continue;
-                    if (Room) { RoomAreaSlab(name, a, z); z += 0.001f; continue; }
-                    Material mat = name switch
-                    {
-                        "MU_HIGH" => Lit(kArea[name], Speckle(256, 0.55f, 5), 0.0f, new Vector2(20, 30)),
-                        "ROUGH" => Lit(kArea[name], Speckle(64, 0.25f, 6), 0.35f, new Vector2(6, 12)),
-                        "MU_LOW" => Lit(kArea[name], Speckle(64, 0.04f, 7), 0.75f),
-                        _ => Lit(kArea[name], Speckle(64, 0.06f, 8), 0.3f),
-                    };
-                    FloorRect(name, a.x0, a.y0, a.x1, a.y1, z, mat);
+                    RoomAreaSlab(name, a, z);
                     z += 0.001f;
                 }
             }
@@ -445,15 +312,7 @@ namespace Minicar
         void FloorLabel(SlotData s, Color32 col)
         {
             const float w = 0.36f;                       // ラベル幅 [m]
-            if (Room) { RoomFloorLabel(s, col, w); return; }
-            var tex = LabelTexture.Make(s.name, col, kCarpet);
-            float h = w * tex.height / tex.width;
-            float cx = (s.x0 + s.x1) * 0.5f, cy = (s.y0 + s.y1) * 0.5f, z = 0.0075f;
-            float hw = w * 0.5f, hh = h * 0.5f;
-            Vector3 tl = RosFrame.ToUnity(cx + hw, cy - hh, z), tr = RosFrame.ToUnity(cx - hw, cy - hh, z);
-            Vector3 br = RosFrame.ToUnity(cx - hw, cy + hh, z), bl = RosFrame.ToUnity(cx + hw, cy + hh, z);
-            var mat = new Material(m_Unlit) { mainTexture = tex };
-            MeshObject($"{s.name}_label", QuadMesh(tl, tr, br, bl, RosFrame.ToUnity(0f, 0f, 1f)), mat);
+            RoomFloorLabel(s, col, w);
         }
 
         void BuildArrowSign()
@@ -512,10 +371,10 @@ namespace Minicar
             DisturbLight.range = 2.2f;
             DisturbLight.intensity = 2.5f;
             DisturbLight.shadows = LightShadows.None;
-            if (Room) MakeMirrorBall(ball);     // room: 色の点を床に散らすミラーボール (規約 解説③)
+            MakeMirrorBall(ball);               // 色の点を床に散らすミラーボール (規約 解説③)
         }
 
-        // /sim/episode の seed で照明・床の色味・観戦者を引き直す (乱択化。幅は realism.episode_*)。
+        // /sim/episode の seed で照明・床の色味・床テープを引き直す (乱択化。幅は realism.episode_*)。
         // 物理 (vehicle_sim) と IMU (imu_sim) も同じ seed で引き直すので、1 本の bag = 1 エピソード。
         public void ApplyEpisode(uint seed)
         {
@@ -524,11 +383,11 @@ namespace Minicar
             float U(float r) => 1f + r * (2f * (float)rng.NextDouble() - 1f);
             if (m_Ceiling != null)
             {
-                m_Ceiling.intensity = 0.55f * RoomLight * U(Realism.episode_light_range);
+                m_Ceiling.intensity = 0.55f * kRoomLight * U(Realism.episode_light_range);
                 float t = Realism.episode_tint_range;
                 m_Ceiling.color = new Color(U(t), 0.97f * U(t), 0.92f * U(t));
             }
-            float a = U(Realism.episode_ambient_range) * Realism.ambient_gain * RoomAmbient;
+            float a = U(Realism.episode_ambient_range) * Realism.ambient_gain * kRoomAmbient;
             RenderSettings.ambientSkyColor = new Color(0.40f, 0.40f, 0.42f) * a;
             RenderSettings.ambientEquatorColor = new Color(0.30f, 0.30f, 0.31f) * a;
             RenderSettings.ambientGroundColor = new Color(0.15f, 0.15f, 0.15f) * a;
@@ -537,8 +396,6 @@ namespace Minicar
                 float t = Realism.episode_tint_range;
                 m_CarpetMat.color = new Color(m_CarpetBase.r * U(t), m_CarpetBase.g * U(t), m_CarpetBase.b * U(t), 1f);
             }
-            if (Realism.episode_spectators && Realism.spectators > 0 && !Room)
-                BuildSpectators(Realism.spectator_seed + (int)(seed % 100000));
             BuildTapes(new System.Random(unchecked((int)(seed * 2654435761u))));
             Debug.Log($"[CourseBuilder] episode seed={seed}: light {m_Ceiling?.intensity:F2} ambient x{a:F2}");
         }
@@ -596,10 +453,10 @@ namespace Minicar
             var sun = go.AddComponent<Light>();
             m_Ceiling = sun;
             sun.type = LightType.Directional;
-            sun.intensity = 0.55f * RoomLight;
+            sun.intensity = 0.55f * kRoomLight;
             sun.color = new Color(1f, 0.97f, 0.92f);
             sun.shadows = LightShadows.Soft;
-            sun.shadowStrength = 0.6f;
+            sun.shadowStrength = RenderCompat.Tune("shadowstr", 0.6f);
             sun.shadowBias = 0.005f;          // 既定値だと影が車から離れて「浮いて」見える
             sun.shadowNormalBias = 0.05f;
             sun.shadowResolution = UnityEngine.Rendering.LightShadowResolution.VeryHigh;
@@ -607,7 +464,7 @@ namespace Minicar
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
             // 明るさは OpenCV 描画 (カーペット平均 ≈ 95) に合わせて控えめにする。
             // /camera/brightness を使う zone_estimator のしきい値が両描画で通用するように。
-            float ag = ((Realism != null && Realism.enable) ? Realism.ambient_gain : 1f) * RoomAmbient;
+            float ag = ((Realism != null && Realism.enable) ? Realism.ambient_gain : 1f) * kRoomAmbient;
             RenderSettings.ambientSkyColor = new Color(0.40f, 0.40f, 0.42f) * ag;
             RenderSettings.ambientEquatorColor = new Color(0.30f, 0.30f, 0.31f) * ag;
             RenderSettings.ambientGroundColor = new Color(0.15f, 0.15f, 0.15f) * ag;

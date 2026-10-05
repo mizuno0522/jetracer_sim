@@ -77,19 +77,13 @@ namespace Minicar
         public float noise = 0.012f;
         public float post_dark = 0.15f;
         public float[] posts = { 0.24f, 0.26f, 0.93f, 0.54f, 0.56f, 0.93f };   // 柱 (x0, x1, y0) × n、正規化
-        public string carpet_tex = "textures/carpet.png";
-        public string backdrop_tex = "textures/backdrop.png";
-        public float backdrop_radius_m = 9f, backdrop_height_m = 4f, backdrop_z0_m = -0.3f;
         public float background_gray = 110f;
         // 環境光の倍率。影側を向いた壁の板 (白・赤) も明るく見えるように (実画像の白壁 ≈ 195、床 ≈ 110)
         public float ambient_gain = 1f;     // 背景 (背景円筒より上・外) の明るさ [0-255]
-        public int spectators = 24;
-        public int spectator_seed = 1;
         // エピソード乱択化 (/sim/episode の seed で引き直す)。0 で固定
         public float episode_light_range = 0.15f;   // 天井光の強さ ×(1 ± r)
         public float episode_tint_range = 0.04f;    // 床・照明の色味 ± r (RGB 各)
         public float episode_ambient_range = 0.15f; // 環境光 ×(1 ± r)
-        public bool episode_spectators = true;      // 観戦者の配置も引き直す
         // 床を横切る白テープ (会場ごとに有無・位置が違うので固定では描かない。エピソードごとに乱択)
         public int episode_tapes_max = 6;           // 走路上のランダムな位置に 0〜N 本 (走路にほぼ直交 ±tape_angle_deg)
         public float tape_width_m = 0.05f;

@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace Minicar
 {
@@ -41,13 +42,38 @@ namespace Minicar
 
         // ---------------------------------------------------------------- 見た目の数値 (3 版で共通)
         /// 富士の太陽: HDRP の 100,000 lux・露出 kCircuitEV の絵と同じ明るさになる、Built-in / URP の光の強さ
-        public static float CircuitSun => Tune("sun", 1.35f);
+        public static float CircuitSun => Tune("sun", 1.8f);
+        // 太陽の色。HDRP は物理的な空が大気で日の光を赤く寄せるので、もとの色を渡す。Built-in・URP にはその結果の色を渡す
+#if MINICAR_HDRP
+        public static Color CircuitSunColor => new Color(1f, 0.95f, 0.86f);
+#else
+        public static Color CircuitSunColor => new Color(Tune("sunr", 1f), Tune("sung", 0.92f), Tune("sunb", 0.72f));
+#endif
+        public static Color CircuitAmbientTint => new Color(Tune("ambr", 0.95f), Tune("ambg", 1f), Tune("ambb", 1.05f));
+
+        /// 富士の空 (Built-in・URP): HDRP の物理的な空に色と明るさを合わせた、大気の散乱の空。HDRP 版は自分の空を使うので何もしない
+        public static void ApplyCircuitSky()
+        {
+#if !MINICAR_HDRP
+            var src = Resources.Load<Material>("Mat_Sky");
+            if (src == null) { Debug.LogWarning("[RenderCompat] Mat_Sky が無い (MinicarBuild.MakeMaterials)"); return; }
+            var m = new Material(src);
+            m.SetFloat("_Exposure", Tune("skyexp", 0.8f));
+            m.SetFloat("_AtmosphereThickness", Tune("skythick", 1f));
+            m.SetColor("_SkyTint", new Color(Tune("skyr", 0.5f), Tune("skyg", 0.56f), Tune("skyb", 0.5f)));
+            m.SetColor("_GroundColor", new Color(0.369f, 0.349f, 0.341f));
+            m.SetFloat("_SunSize", 0.04f);
+            m.SetFloat("_SunSizeConvergence", 5f);
+            RenderSettings.skybox = m;
+#endif
+        }
+
         /// 富士の環境光 (空・横・地面の 3 色) に掛ける倍率
-        public static float CircuitAmbient => Tune("amb", 1f);
+        public static float CircuitAmbient => Tune("amb", 1.4f);
         /// ミニカーの会場のライトかく乱 (点光源) に掛ける倍率
         public static float PointLightGain => Tune("point", 1f);
 
-        public static Look GetLook(bool circuit, bool room)
+        public static Look GetLook(bool circuit)
         {
             var q = RenderQuality.Current;
             var k = new Look
@@ -59,9 +85,9 @@ namespace Minicar
                 vignette = 0f, vignetteSmooth = 0.45f,
                 shadowDistance = circuit ? (q == QualityTier.High ? 600f : q == QualityTier.Medium ? 300f : 150f) : 8f,
             };
-            if (!circuit && room)
+            if (!circuit)
             {
-                // 部屋の会場: 小さな車を近くから撮った写真らしく。床や板への映り込み、物の際の陰り、遠くのぼけ、周辺の落ち込み
+                // ミニカーの会場 (部屋): 小さな車を近くから撮った写真らしく。床や板への映り込み、物の際の陰り、遠くのぼけ、周辺の落ち込み
                 k.ao = 1.0f; k.bloom = 0.22f;
                 k.dof = true; k.dofStart = 4.5f; k.dofEnd = 22f; k.dofBlur = 3.5f;
                 k.vignette = 0.22f;
@@ -98,6 +124,61 @@ namespace Minicar
                 if (s_Tune.Count > 0) Debug.Log($"[RenderCompat] -tune: {string.Join(", ", s_Tune.Keys)}");
             }
             return s_Tune.TryGetValue(key, out float t) ? t : def;
+        }
+
+#if !MINICAR_HDRP
+        static Cubemap s_Env;
+
+        /// ミニカーの会場 (Built-in・URP): 映り込みに環境光と同じ 3 色 (上・横・下) の空を使う (HDRP の空と同じ)。
+        /// これが無いと既定のスカイボックスが映り、暗い色の床や板ほど版ごとに明るさが違って見える
+        public static void ApplyRoomReflection()
+        {
+            if (s_Env == null) s_Env = new Cubemap(16, TextureFormat.RGBAHalf, true) { name = "RoomEnv" };
+            Color top = RenderSettings.ambientSkyColor.linear, mid = RenderSettings.ambientEquatorColor.linear, bot = RenderSettings.ambientGroundColor.linear;
+            var px = new Color[16 * 16];
+            for (int f = 0; f < 6; f++)
+            {
+                for (int y = 0; y < 16; y++)
+                    for (int x = 0; x < 16; x++)
+                    {
+                        float u = (x + 0.5f) / 8f - 1f, v = (y + 0.5f) / 8f - 1f;
+                        Vector3 d;
+                        switch ((CubemapFace)f)
+                        {
+                            case CubemapFace.PositiveX: d = new Vector3(1, -v, -u); break;
+                            case CubemapFace.NegativeX: d = new Vector3(-1, -v, u); break;
+                            case CubemapFace.PositiveY: d = new Vector3(u, 1, v); break;
+                            case CubemapFace.NegativeY: d = new Vector3(u, -1, -v); break;
+                            case CubemapFace.PositiveZ: d = new Vector3(u, -v, 1); break;
+                            default: d = new Vector3(-u, -v, -1); break;
+                        }
+                        float s = d.normalized.y;
+                        px[y * 16 + x] = s >= 0f ? Color.Lerp(mid, top, s) : Color.Lerp(mid, bot, -s);
+                    }
+                s_Env.SetPixels(px, (CubemapFace)f);
+            }
+            s_Env.Apply(true);
+            RenderSettings.defaultReflectionMode = DefaultReflectionMode.Custom;
+            RenderSettings.customReflectionTexture = s_Env;
+        }
+#endif
+
+        // 地面の細かい模様 (detail) を 2 番目の UV (m 単位) に乗せている材質。URP/Lit は 1 番目の UV にしか乗せられないので、
+        // 1 番目の UV で同じ大きさになる倍率を覚えておく (URP 版だけが使う)
+        public static readonly Dictionary<Material, Vector2> DetailUv0Scale = new Dictionary<Material, Vector2>();
+
+        public static void RegisterDetailUv1(Material m, Mesh mesh)
+        {
+            var a = mesh.uv; var b = mesh.uv2;
+            if (a == null || b == null || a.Length == 0 || a.Length != b.Length) return;
+            Vector2 a0 = a[0], a1 = a[0], b0 = b[0], b1 = b[0];
+            for (int i = 1; i < a.Length; i++)
+            {
+                a0 = Vector2.Min(a0, a[i]); a1 = Vector2.Max(a1, a[i]);
+                b0 = Vector2.Min(b0, b[i]); b1 = Vector2.Max(b1, b[i]);
+            }
+            Vector2 da = a1 - a0, db = b1 - b0;
+            if (da.x > 1e-6f && da.y > 1e-6f) DetailUv0Scale[m] = new Vector2(db.x / da.x, db.y / da.y);
         }
 
         /// コース・車・カメラを作り終えたあとに 1 回。sensors = 配信用のセンサカメラ (後処理を掛けない)

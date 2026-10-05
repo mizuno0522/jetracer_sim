@@ -62,6 +62,8 @@ namespace Minicar.EditorTools
             var vpost = Shader.Find("Minicar/ViewPost");
             if (vpost == null) Debug.LogError("[MinicarBuild] Minicar/ViewPost shader not found");
             else Save(new Material(vpost), "Mat_ViewPost");
+            // 富士の空 (Built-in・URP)。実行時に複製して色と明るさを入れる (RenderCompat.ApplyCircuitSky)
+            Save(new Material(Shader.Find("Skybox/Procedural")), "Mat_Sky");
             MakeStandardVariants();
         }
 

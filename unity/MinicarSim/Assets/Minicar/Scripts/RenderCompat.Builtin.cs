@@ -14,61 +14,28 @@ namespace Minicar
 {
     public static partial class RenderCompat
     {
-        static Cubemap s_Env;
         static bool s_Circuit;
 
         static partial void AfterBuildImpl(CourseBuilder course, Camera[] sensors, bool circuit)
         {
             s_Circuit = circuit;
-            var look = GetLook(circuit, course.Room);
+            var look = GetLook(circuit);
             QualitySettings.shadowDistance = look.shadowDistance;
-            ApplyAmbient();
+            if (!circuit) ApplyRoomReflection();
             int n = 0;
             foreach (var cam in UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
                 if (Array.IndexOf(sensors, cam) >= 0) continue;
                 var k = look;
                 if (cam.orthographic) k.dof = false;       // 真上からの全景 (RViz 風) は図として読むものなので、ぼかさない
+                if (cam.orthographic) k.ao = 0f;           // 際の陰りは透視のカメラの深度から作る
                 ViewPost.Attach(cam, k);
                 if (k.post) n++;
             }
             Debug.Log($"[RenderCompat] Built-in: {QualitySettings.activeColorSpace}, post on {n} cameras, shadow {look.shadowDistance:F0} m, quality {RenderQuality.Current}");
         }
 
-        static partial void RefreshImpl() { ApplyAmbient(); }
-
-        /// ミニカーの会場: 映り込みに環境光と同じ 3 色 (上・横・下) の空を使う
-        static void ApplyAmbient()
-        {
-            if (s_Circuit) return;
-            if (s_Env == null) s_Env = new Cubemap(16, TextureFormat.RGBAHalf, true) { name = "RoomEnv" };
-            Color top = RenderSettings.ambientSkyColor.linear, mid = RenderSettings.ambientEquatorColor.linear, bot = RenderSettings.ambientGroundColor.linear;
-            var px = new Color[16 * 16];
-            for (int f = 0; f < 6; f++)
-            {
-                for (int y = 0; y < 16; y++)
-                    for (int x = 0; x < 16; x++)
-                    {
-                        float u = (x + 0.5f) / 8f - 1f, v = (y + 0.5f) / 8f - 1f;
-                        Vector3 d;
-                        switch ((CubemapFace)f)
-                        {
-                            case CubemapFace.PositiveX: d = new Vector3(1, -v, -u); break;
-                            case CubemapFace.NegativeX: d = new Vector3(-1, -v, u); break;
-                            case CubemapFace.PositiveY: d = new Vector3(u, 1, v); break;
-                            case CubemapFace.NegativeY: d = new Vector3(u, -1, -v); break;
-                            case CubemapFace.PositiveZ: d = new Vector3(u, -v, 1); break;
-                            default: d = new Vector3(-u, -v, -1); break;
-                        }
-                        float s = d.normalized.y;
-                        px[y * 16 + x] = s >= 0f ? Color.Lerp(mid, top, s) : Color.Lerp(mid, bot, -s);
-                    }
-                s_Env.SetPixels(px, (CubemapFace)f);
-            }
-            s_Env.Apply(true);
-            RenderSettings.defaultReflectionMode = DefaultReflectionMode.Custom;
-            RenderSettings.customReflectionTexture = s_Env;
-        }
+        static partial void RefreshImpl() { if (!s_Circuit) ApplyRoomReflection(); }
     }
 }
 #endif

@@ -59,7 +59,9 @@ Shader "Minicar/ViewPost"
                 float range = smoothstep(0.0, 1.0, r / max(1e-4, abs(P.z - ds)));
                 occ += step(ds, S.z - r * 0.04) * range;
             }
-            return 1.0 - occ / 8.0;
+            // 遠くでは半径が 1 画素より小さくなり、模様 (ノイズ) だけが残るので消す
+            float fade = saturate(r * _Proj.w / d * 120.0 - 0.5);
+            return 1.0 - occ / 8.0 * fade;
         }
 
         half4 fragDown(v2f_img i) : SV_Target

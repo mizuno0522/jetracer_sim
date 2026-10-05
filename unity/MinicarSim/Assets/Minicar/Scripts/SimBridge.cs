@@ -427,8 +427,8 @@ namespace Minicar
         {
             // 自車: 動画の濃紺メタリック。センサカメラには写さない
             // -owncar / -rivalcar / -rival2car: b787 | nd | rx7 (省略で従来の見た目)。見た目だけで物理は変わらない
-            // 屋根のセンサマスト (カメラの柱) は部屋の会場 (-venue room) では付けない (表示用。2026-10-05 水野)
-            bool mast = !m_Course.Room;
+            // 屋根のセンサマスト (カメラの柱) はミニカーの会場では付けない (2026-10-05 水野)
+            bool mast = Circuit;
             m_OwnCar = new CarModel("OwnCar", new Color(0.06f, 0.10f, 0.42f), kOwnCarLayer, mast,
                                     CarModel.ParseStyle(Arg("-owncar", "")));
             m_Opponent = new CarModel("Opponent", new Color(0.85f, 0.85f, 0.83f), 0, false);

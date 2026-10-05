@@ -43,7 +43,7 @@ namespace Minicar
             }
             s_Circuit = circuit;
             s_EV = circuit ? kCircuitEV : kLegacyEV;
-            var look = GetLook(circuit, course.Room);
+            var look = GetLook(circuit);
             // 材質の変形 (切り抜き・半透明・法線・detail) ごとのシェーダはビルドに残すため phase 2 が Resources/HDVariants に置いている
             s_LitTemplate = Resources.Load<Material>("Mat_HDLit");
             if (s_LitTemplate == null)
@@ -123,7 +123,7 @@ namespace Minicar
                 fog.baseHeight.value = 0f;
                 fog.maximumHeight.value = 2500f;
                 fog.maxFogDistance.value = 50000f;
-                fog.enableVolumetricFog.value = RenderQuality.Current == QualityTier.High;
+                fog.enableVolumetricFog.value = false;
             }
             else
             {
@@ -140,7 +140,7 @@ namespace Minicar
             var sh2 = profile.Add<HDShadowSettings>(true);
             sh2.maxShadowDistance.value = look.shadowDistance;
             // 空からの環境光の倍率。物理的な空のままだと日陰が黒くつぶれる (空の明るさは太陽の 1〜2 割) ので持ち上げる
-            if (circuit) profile.Add<IndirectLightingController>(true).indirectDiffuseLightingMultiplier.value = Tune("hdrpindirect", 1f);
+            if (circuit) profile.Add<IndirectLightingController>(true).indirectDiffuseLightingMultiplier.value = Tune("hdrpindirect", 3f);
             // HDRP の既定の Volume は ブルーム 0.2・AO 0.5・モーションブラー 0.5 を入れているので、全部ここで上書きする
             profile.Add<ScreenSpaceAmbientOcclusion>(true).intensity.value = look.ao;
             profile.Add<Bloom>(true).intensity.value = look.bloom;
@@ -172,13 +172,7 @@ namespace Minicar
                 var ca = profile.Add<ColorAdjustments>(true);
                 ca.contrast.value = look.contrast; ca.saturation.value = look.saturation;
             }
-            if (circuit && RenderQuality.Current == QualityTier.High)
-            {
-                var vc = profile.Add<VolumetricClouds>(true);
-                vc.enable.value = true;
-                var dome = GameObject.Find("SkyDome");                     // 立体の雲を使うときは雲の絵のドームを消す
-                if (dome != null) dome.SetActive(false);
-            }
+            // 立体の雲・立体の霧 (HDRP にしか無い) は使わない: 3 版で同じ絵にするため、雲はどの版も同じ雲の絵のドーム (2026-10-05)
             var go = new GameObject("HDRPVolume");
             var vol = go.AddComponent<Volume>();
             vol.isGlobal = true;

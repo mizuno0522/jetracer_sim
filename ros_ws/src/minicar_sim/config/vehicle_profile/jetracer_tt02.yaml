@@ -67,20 +67,12 @@ vehicle_profile:
       noise: 0.02
       post_dark: 0.25
       posts: [0.241, 0.259, 0.933, 0.540, 0.558, 0.933]   # 柱 (x0, x1, y0) ×2、画像の正規化座標
-      carpet_tex: textures/carpet.png
-      backdrop_tex: ""                # 実画像を並べた背景円筒は平面的で不自然だったので使わない (空文字で無効)
-      backdrop_radius_m: 9.0
-      backdrop_height_m: 7.0
       ambient_gain: 1.8           # 環境光の倍率。影側の白・赤の板を実画像の明るさへ (1.0 だと白壁が灰色に沈んだ)
       background_gray: -1         # 負 = Unity 既定のスカイボックス (水色) のまま
-      backdrop_z0_m: -0.3
-      spectators: 24              # 壁の外に立つ観戦者 (雑音として)。0 で無し
-      spectator_seed: 1
       # エピソード乱択化 (/sim/episode の seed で引き直す。幅は暫定・0 で固定)
       episode_light_range: 0.15     # 天井光の強さ ×(1 ± r)
       episode_tint_range: 0.04      # 床・照明の色味 ± r
       episode_ambient_range: 0.15   # 環境光 ×(1 ± r)
-      episode_spectators: true      # 観戦者の配置も引き直す
       # 床を横切る白テープ。会場ごとに有無・位置が違う (9/12 MEC は完全なコースではない) ので固定では描かず乱択化
       episode_tapes_max: 6          # 走路上のランダムな位置に 0〜N 本 (走路にほぼ直交 ±tape_angle_deg)
       tape_width_m: 0.05

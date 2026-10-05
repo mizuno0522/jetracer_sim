@@ -43,7 +43,7 @@ namespace Minicar
             var k = m_Look;
             var p = m_Cam.projectionMatrix;
             m_Mat.SetVector("_Proj", new Vector4(1f / p.m00, 1f / p.m11, p.m00, p.m11));
-            m_Mat.SetVector("_Params", new Vector4(k.bloom, k.exposure, 1f + k.contrast * 0.01f, 1f + k.saturation * 0.01f));
+            m_Mat.SetVector("_Params", new Vector4(k.bloom * RenderCompat.Tune("bibloom", 0.25f), k.exposure, 1f + k.contrast * 0.01f, 1f + k.saturation * 0.01f));
             m_Mat.SetVector("_Params2", new Vector4(k.vignette, k.vignetteSmooth, k.ao, k.aoRadius));
             m_Mat.SetVector("_Dof", new Vector4(k.dofStart, k.dofEnd, k.dof ? 1f : 0f, 1f));
             int w = src.width, h = src.height;
@@ -61,7 +61,7 @@ namespace Minicar
                 {
                     far = RenderTexture.GetTemporary(half.width, half.height, 0, src.format);
                     Graphics.Blit(half, far);
-                    Blur(far, 2, k.dofBlur / 3.5f * h / 1080f);
+                    Blur(far, 2, k.dofBlur / 3.5f * h / 1080f * RenderCompat.Tune("bidof", 4f));
                     m_Mat.SetTexture("_Far", far);
                 }
                 Graphics.Blit(half, b1, m_Mat, 1);

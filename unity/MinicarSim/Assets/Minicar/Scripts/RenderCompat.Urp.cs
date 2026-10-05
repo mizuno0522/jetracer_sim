@@ -3,7 +3,7 @@
 //
 //   材質: Standard → Universal Render Pipeline/Lit (色・テクスチャ・タイル・法線・滑らかさ・金属・切り抜き・半透明・detail を写す)。
 //         Unlit/Texture・Sprites/Default (矢印板・文字・雲のドーム・軌跡) は URP でもそのまま描けるので触らない
-//   光  : 3 版とも Linear 色空間で、光の強さは Built-in 版と同じ値をそのまま使う
+//   光  : 3 版とも Linear 色空間。光の強さは Built-in 版と同じ明るさになるよう 2.2 乗して入れる (Built-in は強さを sRGB の値として読むため)
 //   影  : URP は QualitySettings ではなく設定アセットの値を使うので、コードが決めた影の距離・分割・アンチエイリアスを写す
 //   後処理 (medium 以上・表示用のカメラだけ): 数値は RenderCompat.GetLook (3 版で共通)。ACES・にじみ・際の陰り (SSAO)・遠くのぼけ・周辺減光・コントラスト
 //   センサカメラ: 後処理と際の陰りを掛けない (際の陰りの無い 2 番目の描画器で描く)
@@ -20,7 +20,9 @@ namespace Minicar
 {
     public static partial class RenderCompat
     {
-        const float kGamma = 1f;        // 以前は Gamma の Built-in に合わせて 2.2 乗していた。いまは 3 版とも Linear なのでそのまま
+        // Built-in は光の「色 × 強さ」を sRGB の値として読んでから Linear に直す (強さ 1.8 は 1.8^2.2 = 3.6 倍に効く)。
+        // URP は強さを Linear の倍率としてそのまま使うので、同じ明るさになるよう 2.2 乗して入れる
+        const float kGamma = 2.2f;
 
         static readonly Dictionary<Material, Material> s_Map = new Dictionary<Material, Material>();
         static readonly List<(Light light, float last)> s_Lights = new List<(Light, float)>();
@@ -45,8 +47,11 @@ namespace Minicar
             // 車体の塗装用のクリアコートつきの材質 (Complex Lit)。無ければ普通の Lit で描く
             s_CoatTemplate = Resources.Load<Material>("Mat_URPCoat");
             s_CoatMapTemplate = Resources.Load<Material>("Mat_URPCoatMap");
-            var look = GetLook(circuit, course.Room);
+            var look = GetLook(circuit);
             bool low = !look.post;
+
+            s_Circuit = circuit;
+            if (!circuit) ApplyRoomReflection();
 
             // ---- 材質
             int n = ConvertAll();
@@ -92,13 +97,12 @@ namespace Minicar
             var profile = ScriptableObject.CreateInstance<VolumeProfile>();
             var tm = profile.Add<Tonemapping>(true);
             tm.mode.value = look.post ? TonemappingMode.ACES : TonemappingMode.None;
-            // HDRP のにじみは「ぼかした絵と混ぜる」(明るさは変わらない)。URP は足し算なので、足した分だけ露出を下げて同じ明るさにする
             var bloom = profile.Add<Bloom>(true);
             bloom.intensity.value = look.bloom;
             bloom.threshold.value = 0f;
             bloom.scatter.value = 0.7f;
             var ca = profile.Add<ColorAdjustments>(true);
-            ca.postExposure.value = Mathf.Log(look.exposure / (1f + look.bloom), 2f);
+            ca.postExposure.value = Mathf.Log(look.exposure * Tune("urpexp", 1f) / (1f + look.bloom * Tune("urpbloomcomp", 0.75f)), 2f);
             ca.contrast.value = look.contrast; ca.saturation.value = look.saturation;
             if (look.dof)
             {
@@ -106,7 +110,7 @@ namespace Minicar
                 dof.mode.value = DepthOfFieldMode.Gaussian;
                 dof.gaussianStart.value = look.dofStart;
                 dof.gaussianEnd.value = look.dofEnd;
-                dof.gaussianMaxRadius.value = look.dofBlur / 3.5f;
+                dof.gaussianMaxRadius.value = look.dofBlur / 3.5f * Tune("urpdof", 1.5f);
             }
             if (look.vignette > 0f)
             {
@@ -135,7 +139,7 @@ namespace Minicar
                     var st = f.GetType().GetField("m_Settings", bf)?.GetValue(f);
                     if (st == null) continue;
                     void Set(string n, object v) { var fi = st.GetType().GetField(n, bf); if (fi != null) fi.SetValue(st, System.Convert.ChangeType(v, fi.FieldType.IsEnum ? typeof(int) : fi.FieldType)); }
-                    Set("Intensity", look.ao * Tune("urpao", 1f));
+                    Set("Intensity", look.ao * Tune("urpao", 0.5f));
                     Set("Radius", look.aoRadius);
                     Set("DirectLightingStrength", 0.25f);
                     list[0].SetDirty();
@@ -169,8 +173,11 @@ namespace Minicar
             return n;
         }
 
+        static bool s_Circuit;
+
         static partial void RefreshImpl()
         {
+            if (!s_Circuit) ApplyRoomReflection();
             ConvertAll();
             foreach (var kv in s_Map) CopyLit(kv.Key, kv.Value);
             TickImpl();
@@ -199,9 +206,25 @@ namespace Minicar
             var coat = s.name == "CarPaint" ? (map ? s_CoatMapTemplate : s_CoatTemplate) : null;
             var m = new Material(coat != null ? coat : s_LitTemplate) { name = s.name + "_URP" };
             CopyLit(s, m);
-            if (coat != null) { m.EnableKeyword("_CLEARCOAT"); m.SetFloat("_ClearCoat", 1f); m.SetFloat("_ClearCoatMask", 1f); m.SetFloat("_ClearCoatSmoothness", 0.95f); }
+            if (coat != null) { m.EnableKeyword("_CLEARCOAT"); m.SetFloat("_ClearCoat", 1f); m.SetFloat("_ClearCoatMask", Tune("urpcoat", 0.4f)); m.SetFloat("_ClearCoatSmoothness", 0.95f); }
             s_Map[s] = m;
             return m;
+        }
+
+        // URP/Lit の detail は「0.5 で変化なし」を Linear の値で読む (Standard は sRGB の 0.5 を色空間の係数で 1 倍に直す)。
+        // sRGB のままだと 0.5 が 0.21 と読まれて地面・カーペットが半分以下の暗さになるので、同じ画素を Linear の絵として持ち直す
+        static readonly Dictionary<Texture, Texture2D> s_Detail = new Dictionary<Texture, Texture2D>();
+        static Texture LinearCopy(Texture t)
+        {
+            if (t == null) return null;
+            if (s_Detail.TryGetValue(t, out var done)) return done;
+            var a = t as Texture2D;
+            if (a == null || !a.isReadable) return t;
+            var c = new Texture2D(a.width, a.height, TextureFormat.RGBA32, true, true) { name = a.name + "_Lin", wrapMode = a.wrapMode, anisoLevel = a.anisoLevel, filterMode = a.filterMode };
+            c.SetPixels32(a.GetPixels32());
+            c.Apply(true);
+            s_Detail[t] = c;
+            return c;
         }
 
         static void Keyword(Material m, string kw, bool on) { if (on) m.EnableKeyword(kw); else m.DisableKeyword(kw); }
@@ -252,9 +275,12 @@ namespace Minicar
             bool detail = s.IsKeywordEnabled("_DETAIL_MULX2") && s.GetTexture("_DetailAlbedoMap") != null;
             if (detail)
             {
-                // ★URP/Lit の detail は 1 番目の UV にだけ乗る (Built-in の地面は 2 番目の UV を使う)。タイルは元の値のまま写す
-                m.SetTexture("_DetailAlbedoMap", s.GetTexture("_DetailAlbedoMap"));
-                m.SetTextureScale("_DetailAlbedoMap", s.GetTextureScale("_DetailAlbedoMap"));
+                // ★URP/Lit の detail は 1 番目の UV にだけ乗る (Built-in の地面は 2 番目の UV = m 単位を使う)。
+                //   2 番目の UV を使う材質は、1 番目の UV で同じ大きさになるようタイルを換算する
+                m.SetTexture("_DetailAlbedoMap", LinearCopy(s.GetTexture("_DetailAlbedoMap")));
+                var tile = s.GetTextureScale("_DetailAlbedoMap");
+                if (s.HasProperty("_UVSec") && s.GetFloat("_UVSec") > 0.5f && DetailUv0Scale.TryGetValue(s, out var k)) tile = Vector2.Scale(tile, k);
+                m.SetTextureScale("_DetailAlbedoMap", tile);
                 m.SetTexture("_DetailNormalMap", s.GetTexture("_DetailNormalMap"));
                 m.SetFloat("_DetailAlbedoMapScale", 1f);
                 m.SetFloat("_DetailNormalMapScale", s.HasProperty("_DetailNormalMapScale") ? s.GetFloat("_DetailNormalMapScale") : 1f);

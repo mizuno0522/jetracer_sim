@@ -1,11 +1,8 @@
-// ミニカーの会場を、実際にコースを組んだ部屋らしく見せる (表示・動画用)。参考: 会場の動画 (2026-10-05 水野)。
+// ミニカーの会場: 実際にコースを組んだ部屋。参考: 会場の動画 (2026-10-05 水野)。どの版 (Built-in・URP・HDRP)・どの用途でも同じ。
 //
-//   -venue room | plain   既定はどの版 (Built-in・URP・HDRP) でも room。学習 (-mlagents) も room (2026-10-05 水野)
-//
-// plain = 以前の会場 (灰色の床・カプセルの観戦者)。引数で指定したときだけ。
-// room  = 窓のある会議室: クリーム色の壁、アルミサッシの窓、蛍光灯の並ぶ低い天井、濃いグレーのパンチカーペット、
-//         窓際の長椅子、巻いたカーペット、重ねた椅子。コースの床の区域 (人工芝・滑り板・風呂マット・坂の板) と
-//         壁板も実物の質感に寄せる。コースの形・寸法・色の区別 (白 / 赤の壁、駐車枠の色) は plain と同じ。
+// 窓のある会議室: クリーム色の壁、アルミサッシの窓、蛍光灯の並ぶ低い天井、濃いグレーのパンチカーペット、
+// 窓際の長椅子、巻いたカーペット、重ねた椅子。コースの床の区域 (人工芝・滑り板・風呂マット・坂の板) と壁板も実物の質感。
+// (以前の灰色の床とカプセルの観戦者の会場 -venue plain は無くした。2026-10-05 水野)
 // 寸法はすべて ROS 座標 [m] (x = コースの長手、y = 奥行き、z = 上)。コースは x 0〜10.3、y 0〜6.1。窓は +y の壁。
 using System.Collections.Generic;
 using UnityEngine;
@@ -14,19 +11,12 @@ namespace Minicar
 {
     public partial class CourseBuilder
     {
-        public bool Room { get; private set; }
-        // 窓と蛍光灯のある明るい部屋なので、plain (検出器の明るさに合わせた控えめな光) より明るくする
-        float RoomLight => Room ? 1.9f : 1f;
-        float RoomAmbient => Room ? 2.1f : 1f;
+        // 窓と蛍光灯のある明るい部屋の光 (天井の光・環境光の倍率)
+        const float kRoomLight = 1.9f, kRoomAmbient = 2.1f;
 
         // 部屋の内のり
         const float kRx0 = -3.2f, kRx1 = 13.0f, kRy0 = -4.6f, kRy1 = 8.4f, kRz = 2.7f;
         Transform m_RoomRoot;
-
-        static bool WantRoom()
-        {
-            return SimBridge.Arg("-venue", "room").ToLowerInvariant() == "room";
-        }
 
         // ------------------------------------------------------------------ 部品
         // ROS 座標の箱 (sx・sy・sz = x・y・z 方向の長さ、yawDeg = z 軸まわり)
