@@ -481,7 +481,7 @@ class Track:
 STYLE = {'real_rx7': 'BuildRx7', 'real_nd': 'BuildRoadster', 'real_b787': 'BuildB787'}
 SUN = np.array([0.42, 0.64, 0.643])      # CourseBuilder.SunDir (富士山の反対側の空・仰角 40°)
 SUN /= np.linalg.norm(SUN)
-FOG = np.array([0.72, 0.79, 0.86])
+FOG = np.array([0.80, 0.80, 0.78])            # Unity: RenderSettings.fogColor (HDRP の霞の色に合わせた値。2026-10-05)
 FOG_DENSITY = 0.000055                   # Unity: 指数のかすみ (CourseBuilder.BuildOutdoorLighting)
 
 
