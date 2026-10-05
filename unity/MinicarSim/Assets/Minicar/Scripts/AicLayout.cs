@@ -737,8 +737,8 @@ namespace Minicar
             return tex;
         }
 
-        // ミニマップの下絵 (行 0 = 下 = 南): ほぼ不透明の濃紺の円盤と縁の輪、走行レーン、
-        // コースの壁 (白 / 赤)、スタートライン。後ろの映像が透けるとコースが読めないので、地は濃く・線は明るく
+        // ミニマップの下絵 (行 0 = 下 = 南): 半透明の紺の円盤と縁の輪、走行レーン、
+        // コースの壁 (白 / 赤)、スタートライン。地は透けるので、線は不透明で明るく描く
         Texture2D MakeMap(int n)
         {
             var px = new Color[n * n];
@@ -750,9 +750,9 @@ namespace Minicar
                     float d = new Vector2(x + 0.5f - n * 0.5f, y + 0.5f - n * 0.5f).magnitude;
                     float t = Mathf.Clamp01(d / R);
                     // 中心がやや明るく、縁へ向けて濃くなる
-                    Color c = Color.Lerp(new Color(0.07f, 0.10f, 0.19f, 0.93f), new Color(0.02f, 0.03f, 0.08f, 0.96f), t * t);
+                    Color c = Color.Lerp(new Color(0.16f, 0.22f, 0.38f, 0.62f), new Color(0.07f, 0.10f, 0.20f, 0.74f), t * t);
                     float ring = Mathf.Clamp01(1f - Mathf.Abs(d - (R - 3f)) / 2.5f);
-                    c = Color.Lerp(c, new Color(0.90f, 0.95f, 1f, 1f), ring);
+                    c = Color.Lerp(c, new Color(0.75f, 0.85f, 1f, 0.85f), ring * 0.8f);
                     c.a *= Mathf.Clamp01(R - d + 0.5f);
                     px[y * n + x] = c;
                 }
