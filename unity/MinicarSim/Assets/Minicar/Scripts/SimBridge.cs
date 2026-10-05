@@ -179,9 +179,10 @@ namespace Minicar
             BuildCars();
             BuildSensorCamera(cam);
             BuildViewCamera();
-            // エンジン音: -sound on|off (既定: ボディを選んだときだけ on)。-volume 0〜1
+            // エンジン音: -sound on|off (既定: 実車スケールのコースでボディを選んだときだけ on)。-volume 0〜1
+            // ミニカーの会場は電動のラジコンでエンジンが無いので、既定では鳴らさない (2026-10-05 水野)
             string sound = Arg("-sound", "auto");
-            if (sound == "auto" || sound == "") sound = m_OwnCar.Style == CarStyle.Default ? "off" : "on";
+            if (sound == "auto" || sound == "") sound = Circuit && m_OwnCar.Style != CarStyle.Default ? "on" : "off";
             if (sound == "on")
             {
                 var v = m_Course.Data.vehicle;
