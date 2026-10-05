@@ -152,10 +152,12 @@ namespace Minicar
 
                     if (tt02)
                     {
-                        // 787B は白、RX-7 は金色の 6 本スポーク、ND は銀の 5 本
+                        // 787B は白、RX-7 は金色の 6 本スポーク、ND はつやのある黒の 8 本、ほかは銀の 5 本
                         var wrim = style == CarStyle.B787 ? Mat(new Color(0.93f, 0.93f, 0.91f), 0.6f, 0.1f)
-                                 : style == CarStyle.Rx7 ? Mat(new Color(0.78f, 0.60f, 0.24f), 0.72f, 0.9f) : rim;
-                        BuildWheel(spin, sx, tire, wrim, black, alu, style == CarStyle.Rx7 ? 6 : 5);
+                                 : style == CarStyle.Rx7 ? Mat(new Color(0.78f, 0.60f, 0.24f), 0.72f, 0.9f)
+                                 : style == CarStyle.Roadster ? Mat(new Color(0.045f, 0.045f, 0.05f), 0.72f, 0.6f) : rim;
+                        BuildWheel(spin, sx, tire, wrim, black, style == CarStyle.Roadster ? wrim : alu,
+                                   style == CarStyle.Rx7 ? 6 : style == CarStyle.Roadster ? 8 : 5);
                         continue;
                     }
                     var t = Prim(PrimitiveType.Cylinder, "Tire", spin, tire);
