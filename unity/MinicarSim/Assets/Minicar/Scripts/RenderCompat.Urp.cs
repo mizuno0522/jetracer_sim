@@ -3,11 +3,10 @@
 //
 //   材質: Standard → Universal Render Pipeline/Lit (色・テクスチャ・タイル・法線・滑らかさ・金属・切り抜き・半透明・detail を写す)。
 //         Unlit/Texture・Sprites/Default (矢印板・文字・雲のドーム・軌跡) は URP でもそのまま描けるので触らない
-//   光  : URP 版は Linear 色空間。Built-in (Gamma) と同じ明るさに見えるよう、光の強さを 2.2 乗して入れる
-//         (強さ 0.55 の光は Gamma では 0.55 倍に見えるが、Linear でそのまま使うと約 0.76 倍に見える)。環境光は色なので自動で換算される
+//   光  : 3 版とも Linear 色空間。光の強さは Built-in 版と同じ明るさになるよう 2.2 乗して入れる (Built-in は強さを sRGB の値として読むため)
 //   影  : URP は QualitySettings ではなく設定アセットの値を使うので、コードが決めた影の距離・分割・アンチエイリアスを写す
-//   後処理 (medium 以上・表示用のカメラだけ): トーンマップ・ブルーム。部屋の会場 (-venue room) は遠くのぼけ・周辺減光も
-//   センサカメラ: 後処理を掛けない。★それでも Built-in と画像は変わるので、学習は Built-in のプロジェクトで行う
+//   後処理 (medium 以上・表示用のカメラだけ): 数値は RenderCompat.GetLook (3 版で共通)。ACES・にじみ・際の陰り (SSAO)・遠くのぼけ・周辺減光・コントラスト
+//   センサカメラ: 後処理と際の陰りを掛けない (際の陰りの無い 2 番目の描画器で描く)
 //
 // URP の API は Unity 6 (URP 17) を前提に書いている。コンパイルエラーが出たらこのファイルだけ直せばよい。
 #if MINICAR_URP
@@ -21,6 +20,8 @@ namespace Minicar
 {
     public static partial class RenderCompat
     {
+        // Built-in は光の「色 × 強さ」を sRGB の値として読んでから Linear に直す (強さ 1.8 は 1.8^2.2 = 3.6 倍に効く)。
+        // URP は強さを Linear の倍率としてそのまま使うので、同じ明るさになるよう 2.2 乗して入れる
         const float kGamma = 2.2f;
 
         static readonly Dictionary<Material, Material> s_Map = new Dictionary<Material, Material>();
@@ -46,7 +47,11 @@ namespace Minicar
             // 車体の塗装用のクリアコートつきの材質 (Complex Lit)。無ければ普通の Lit で描く
             s_CoatTemplate = Resources.Load<Material>("Mat_URPCoat");
             s_CoatMapTemplate = Resources.Load<Material>("Mat_URPCoatMap");
-            bool low = RenderQuality.Current == QualityTier.Low;
+            var look = GetLook(circuit);
+            bool low = !look.post;
+
+            s_Circuit = circuit;
+            if (!circuit) ApplyRoomReflection();
 
             // ---- 材質
             int n = ConvertAll();
@@ -59,7 +64,7 @@ namespace Minicar
             }
 
             // ---- 影・アンチエイリアス: コース側と RenderQuality.ApplyBuiltin が QualitySettings に入れた値を設定アセットへ写す
-            urp.shadowDistance = QualitySettings.shadowDistance;
+            urp.shadowDistance = look.shadowDistance;
             urp.shadowCascadeCount = Mathf.Clamp(QualitySettings.shadowCascades, 1, 4);
             urp.msaaSampleCount = Mathf.Max(1, QualitySettings.antiAliasing);
 
@@ -69,38 +74,80 @@ namespace Minicar
                 var d = cam.GetUniversalAdditionalCameraData();
                 bool sensor = Array.IndexOf(sensors, cam) >= 0;
                 // 配信するセンサ画像には後処理を掛けない (実機のカメラに無い)。真上からの全景 (RViz 風) は図として読むものなので掛けない
-                d.renderPostProcessing = !sensor && !low && !cam.orthographic;
+                d.renderPostProcessing = !sensor && !low;
                 d.antialiasing = AntialiasingMode.None;
                 d.renderShadows = true;
+                if (sensor) d.SetRenderer(1);              // 際の陰り (SSAO) の無い描画器 (UrpSetup が 2 番目に置く)
+                // 真上からの全景 (RViz 風) は図として読むものなので、ぼかさない: ぼけの無い Volume だけを見せる
+                d.volumeLayerMask = cam.orthographic ? 1 << kOrthoVolumeLayer : 1 << 0;
             }
 
-            // ---- 後処理 (全体に効く Volume)
+            // ---- 後処理 (全体に効く Volume)。真上からの全景用に、ぼけだけ外した同じものをもう 1 つ置く
+            SetAO(urp, look);
+            MakeVolume("URPVolume", 0, look);
+            var flat = look; flat.dof = false;
+            MakeVolume("URPVolumeOrtho", kOrthoVolumeLayer, flat);
+            Debug.Log($"[RenderCompat] URP: materials on {n} renderers, {s_Lights.Count} lights, shadow {urp.shadowDistance:F0} m, quality {RenderQuality.Current}");
+        }
+
+        const int kOrthoVolumeLayer = 30;
+
+        static void MakeVolume(string name, int layer, Look look)
+        {
             var profile = ScriptableObject.CreateInstance<VolumeProfile>();
             var tm = profile.Add<Tonemapping>(true);
-            tm.mode.value = low ? TonemappingMode.None : TonemappingMode.Neutral;
+            tm.mode.value = look.post ? TonemappingMode.ACES : TonemappingMode.None;
             var bloom = profile.Add<Bloom>(true);
-            bloom.intensity.value = low ? 0f : 0.15f;
-            bloom.threshold.value = 1.0f;
-            if (!circuit && course.Room && !low)
+            bloom.intensity.value = look.bloom;
+            bloom.threshold.value = 0f;
+            bloom.scatter.value = 0.7f;
+            var ca = profile.Add<ColorAdjustments>(true);
+            ca.postExposure.value = Mathf.Log(look.exposure * Tune("urpexp", 1f) / (1f + look.bloom * Tune("urpbloomcomp", 0.75f)), 2f);
+            ca.contrast.value = look.contrast; ca.saturation.value = look.saturation;
+            if (look.dof)
             {
-                // 部屋の会場 (-venue room): 小さな車を近くから撮った写真らしく (HDRP 版と同じねらい。映り込みと際の陰りは URP 版には無い)
-                bloom.intensity.value = 0.25f;
                 var dof = profile.Add<DepthOfField>(true);
                 dof.mode.value = DepthOfFieldMode.Gaussian;
-                dof.gaussianStart.value = 4.5f;
-                dof.gaussianEnd.value = 22f;
-                dof.gaussianMaxRadius.value = 1.0f;
-                var vg = profile.Add<Vignette>(true);
-                vg.intensity.value = 0.22f; vg.smoothness.value = 0.45f;
-                var ca = profile.Add<ColorAdjustments>(true);
-                ca.contrast.value = 10f; ca.saturation.value = 6f;
+                dof.gaussianStart.value = look.dofStart;
+                dof.gaussianEnd.value = look.dofEnd;
+                dof.gaussianMaxRadius.value = look.dofBlur / 3.5f * Tune("urpdof", 1.5f);
             }
-            var go = new GameObject("URPVolume");
+            if (look.vignette > 0f)
+            {
+                var vg = profile.Add<Vignette>(true);
+                vg.intensity.value = look.vignette; vg.smoothness.value = look.vignetteSmooth;
+            }
+            var go = new GameObject(name) { layer = layer };
             var vol = go.AddComponent<Volume>();
             vol.isGlobal = true;
             vol.priority = 10f;
             vol.sharedProfile = profile;
-            Debug.Log($"[RenderCompat] URP: materials on {n} renderers, {s_Lights.Count} lights, shadow {urp.shadowDistance:F0} m, quality {RenderQuality.Current}");
+        }
+
+        /// 際の陰り (SSAO): UrpSetup が 1 番目の描画器に付けた機能の強さ・半径を入れる。設定の型は非公開なので名前で探す
+        static void SetAO(UniversalRenderPipelineAsset urp, Look look)
+        {
+            try
+            {
+                const System.Reflection.BindingFlags bf = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public;
+                var list = typeof(UniversalRenderPipelineAsset).GetField("m_RendererDataList", bf)?.GetValue(urp) as ScriptableRendererData[];
+                if (list == null || list.Length == 0 || list[0] == null) { Debug.LogWarning("[RenderCompat] URP の描画器が見つからない (際の陰りなし)"); return; }
+                foreach (var f in list[0].rendererFeatures)
+                {
+                    if (f == null || f.GetType().Name != "ScreenSpaceAmbientOcclusion") continue;
+                    f.SetActive(look.ao > 0f);
+                    var st = f.GetType().GetField("m_Settings", bf)?.GetValue(f);
+                    if (st == null) continue;
+                    void Set(string n, object v) { var fi = st.GetType().GetField(n, bf); if (fi != null) fi.SetValue(st, System.Convert.ChangeType(v, fi.FieldType.IsEnum ? typeof(int) : fi.FieldType)); }
+                    Set("Intensity", look.ao * Tune("urpao", 0.5f));
+                    Set("Radius", look.aoRadius);
+                    Set("DirectLightingStrength", 0.25f);
+                    list[0].SetDirty();
+                    return;
+                }
+                Debug.LogWarning("[RenderCompat] URP の描画器に SSAO が無い (scripts/migrate_urp.sh の phase 2 をやり直す)");
+            }
+            catch (Exception e) { Debug.LogWarning($"[RenderCompat] SSAO: {e.Message}"); }
         }
 
         /// 場面のすべての Renderer の Standard 材質を URP/Lit に差し替える (あとから作られたもの = エピソードごとの床テープ・観戦者も)
@@ -126,8 +173,11 @@ namespace Minicar
             return n;
         }
 
+        static bool s_Circuit;
+
         static partial void RefreshImpl()
         {
+            if (!s_Circuit) ApplyRoomReflection();
             ConvertAll();
             foreach (var kv in s_Map) CopyLit(kv.Key, kv.Value);
             TickImpl();
@@ -156,9 +206,25 @@ namespace Minicar
             var coat = s.name == "CarPaint" ? (map ? s_CoatMapTemplate : s_CoatTemplate) : null;
             var m = new Material(coat != null ? coat : s_LitTemplate) { name = s.name + "_URP" };
             CopyLit(s, m);
-            if (coat != null) { m.EnableKeyword("_CLEARCOAT"); m.SetFloat("_ClearCoat", 1f); m.SetFloat("_ClearCoatMask", 1f); m.SetFloat("_ClearCoatSmoothness", 0.95f); }
+            if (coat != null) { m.EnableKeyword("_CLEARCOAT"); m.SetFloat("_ClearCoat", 1f); m.SetFloat("_ClearCoatMask", Tune("urpcoat", 0.4f)); m.SetFloat("_ClearCoatSmoothness", 0.95f); }
             s_Map[s] = m;
             return m;
+        }
+
+        // URP/Lit の detail は「0.5 で変化なし」を Linear の値で読む (Standard は sRGB の 0.5 を色空間の係数で 1 倍に直す)。
+        // sRGB のままだと 0.5 が 0.21 と読まれて地面・カーペットが半分以下の暗さになるので、同じ画素を Linear の絵として持ち直す
+        static readonly Dictionary<Texture, Texture2D> s_Detail = new Dictionary<Texture, Texture2D>();
+        static Texture LinearCopy(Texture t)
+        {
+            if (t == null) return null;
+            if (s_Detail.TryGetValue(t, out var done)) return done;
+            var a = t as Texture2D;
+            if (a == null || !a.isReadable) return t;
+            var c = new Texture2D(a.width, a.height, TextureFormat.RGBA32, true, true) { name = a.name + "_Lin", wrapMode = a.wrapMode, anisoLevel = a.anisoLevel, filterMode = a.filterMode };
+            c.SetPixels32(a.GetPixels32());
+            c.Apply(true);
+            s_Detail[t] = c;
+            return c;
         }
 
         static void Keyword(Material m, string kw, bool on) { if (on) m.EnableKeyword(kw); else m.DisableKeyword(kw); }
@@ -209,9 +275,12 @@ namespace Minicar
             bool detail = s.IsKeywordEnabled("_DETAIL_MULX2") && s.GetTexture("_DetailAlbedoMap") != null;
             if (detail)
             {
-                // ★URP/Lit の detail は 1 番目の UV にだけ乗る (Built-in の地面は 2 番目の UV を使う)。タイルは元の値のまま写す
-                m.SetTexture("_DetailAlbedoMap", s.GetTexture("_DetailAlbedoMap"));
-                m.SetTextureScale("_DetailAlbedoMap", s.GetTextureScale("_DetailAlbedoMap"));
+                // ★URP/Lit の detail は 1 番目の UV にだけ乗る (Built-in の地面は 2 番目の UV = m 単位を使う)。
+                //   2 番目の UV を使う材質は、1 番目の UV で同じ大きさになるようタイルを換算する
+                m.SetTexture("_DetailAlbedoMap", LinearCopy(s.GetTexture("_DetailAlbedoMap")));
+                var tile = s.GetTextureScale("_DetailAlbedoMap");
+                if (s.HasProperty("_UVSec") && s.GetFloat("_UVSec") > 0.5f && DetailUv0Scale.TryGetValue(s, out var k)) tile = Vector2.Scale(tile, k);
+                m.SetTextureScale("_DetailAlbedoMap", tile);
                 m.SetTexture("_DetailNormalMap", s.GetTexture("_DetailNormalMap"));
                 m.SetFloat("_DetailAlbedoMapScale", 1f);
                 m.SetFloat("_DetailNormalMapScale", s.HasProperty("_DetailNormalMapScale") ? s.GetFloat("_DetailNormalMapScale") : 1f);

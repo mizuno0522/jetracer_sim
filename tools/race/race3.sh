@@ -101,7 +101,7 @@ relay $D1 $D3 arrow_g --msg int32 --src-topic /sim/arrow_dir --dst-topic /sim/ar
 
 REC_ARGS=()
 [ -n "${RECORD:-}" ] && REC_ARGS=(-record "$RECORD" -recordfps "${RECORD_FPS:-30}" -recordwidth "${RECORD_WIDTH:-1280}" -recordfrom "${RECORD_FROM:-countdown}")
-# プレイヤー: 指定が無ければ GPU を見て選ぶ。方策 (BLUE_MODEL) は画像で走るので、センサ画像が変わらない Built-in 版に固定する
+# プレイヤー: 指定が無ければ GPU を見て選ぶ。方策 (BLUE_MODEL) は画像で走るので、学習したのと同じ Built-in 版に固定する
 if [ -z "${PLAYER:-}" ]; then
   if [ -n "${BLUE_MODEL:-}" ]; then PLAYER="${JETRACER_UNITY_PLAYER:-$HOME/jetracer/unity/player}/MinicarSim.x86_64"
   else PLAYER="$("$REPO/scripts/pick_unity_player.sh")"; fi

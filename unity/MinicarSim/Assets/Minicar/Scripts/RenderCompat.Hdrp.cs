@@ -6,8 +6,8 @@
 //   光と露出: サーキット = 太陽 100,000 lux・物理的な空・露出 EV100 14.4 (今の Built-in の明るさに合わせた値)。
 //             ミニカーの会場 = 今の光の強さのまま、露出 EV100 −1.9 (= log2(1/(1.2π))) で Built-in と同じ明るさになるように換算
 //   霞: サーキットだけ。今の指数の霞 (密度 0.000055/m) と同じ減衰 (平均自由行程 18 km)・高さ 2.5 km で薄れる
-//   段階 (RenderQuality): low = 後処理なし (HDRP 既定の AO・ブルーム・ブラーも 0)・影 150 m / medium = AO・ブルーム・影 300 m / high = 影 600 m・立体の霧・立体の雲
-//   センサカメラ: 後処理 (トーンマップ・ブルーム) と AO を掛けない。★それでも Built-in と画像は変わるので、学習は Built-in のプロジェクトで行う
+//   段階 (RenderQuality) と後処理の強さは RenderCompat.GetLook (3 版で共通)。この版の絵が正で、URP 版・Built-in 版はこれに合わせてある
+//   センサカメラ: 後処理 (トーンマップ・ブルーム) と AO を掛けない
 //
 // HDRP の API は Unity 6 (HDRP 17) を前提に書いている。コンパイルエラーが出たらこのファイルだけ直せばよい。
 #if MINICAR_HDRP
@@ -22,7 +22,7 @@ namespace Minicar
     public static partial class RenderCompat
     {
         const float kSunLux = 100000f;
-        const float kCircuitEV = 12.9f;            // 式の値は log2(kSunLux / (1.2 · π · 1.2)) ≈ 14.43 だが、実機では 1.5 段ほど暗く写った (2026-10-05)。画面で合わせた値
+        static float kCircuitEV => Tune("hdrpev", 12.9f);            // 式の値は log2(kSunLux / (1.2 · π · 1.2)) ≈ 14.43 だが、実機では 1.5 段ほど暗く写った (2026-10-05)。画面で合わせた値
         const float kLegacyEV = -1.915f;           // log2(1 / (1.2 · π)): 光の強さを Built-in の値のまま使うときの露出
         static float Multiplier(float ev) => 1f / (1.2f * Mathf.Pow(2f, ev));
 
@@ -43,6 +43,7 @@ namespace Minicar
             }
             s_Circuit = circuit;
             s_EV = circuit ? kCircuitEV : kLegacyEV;
+            var look = GetLook(circuit);
             // 材質の変形 (切り抜き・半透明・法線・detail) ごとのシェーダはビルドに残すため phase 2 が Resources/HDVariants に置いている
             s_LitTemplate = Resources.Load<Material>("Mat_HDLit");
             if (s_LitTemplate == null)
@@ -122,7 +123,7 @@ namespace Minicar
                 fog.baseHeight.value = 0f;
                 fog.maximumHeight.value = 2500f;
                 fog.maxFogDistance.value = 50000f;
-                fog.enableVolumetricFog.value = RenderQuality.Current == QualityTier.High;
+                fog.enableVolumetricFog.value = false;
             }
             else
             {
@@ -135,43 +136,43 @@ namespace Minicar
             ex.mode.value = ExposureMode.Fixed;
             ex.fixedExposure.value = s_EV;
             var tm = profile.Add<Tonemapping>(true);
-            tm.mode.value = RenderQuality.Current == QualityTier.Low ? TonemappingMode.None : TonemappingMode.ACES;
+            tm.mode.value = look.post ? TonemappingMode.ACES : TonemappingMode.None;
             var sh2 = profile.Add<HDShadowSettings>(true);
-            sh2.maxShadowDistance.value = RenderQuality.Current == QualityTier.High ? 600f : RenderQuality.Current == QualityTier.Medium ? 300f : 150f;
+            sh2.maxShadowDistance.value = look.shadowDistance;
+            // 空からの環境光の倍率。物理的な空のままだと日陰が黒くつぶれる (空の明るさは太陽の 1〜2 割) ので持ち上げる
+            if (circuit) profile.Add<IndirectLightingController>(true).indirectDiffuseLightingMultiplier.value = Tune("hdrpindirect", 3f);
             // HDRP の既定の Volume は ブルーム 0.2・AO 0.5・モーションブラー 0.5 を入れているので、全部ここで上書きする
-            bool low = RenderQuality.Current == QualityTier.Low;
-            profile.Add<ScreenSpaceAmbientOcclusion>(true).intensity.value = low ? 0f : 0.6f;
-            profile.Add<Bloom>(true).intensity.value = low ? 0f : 0.12f;
+            profile.Add<ScreenSpaceAmbientOcclusion>(true).intensity.value = look.ao;
+            profile.Add<Bloom>(true).intensity.value = look.bloom;
             profile.Add<MotionBlur>(true).intensity.value = 0f;
-            if (!circuit && course.Room && !low)
+            if (look.ssr)
             {
-                // 部屋の会場 (-venue room): 小さな車を近くから撮った写真らしく。床や板への映り込み、物の際の陰り、遠くのぼけ、周辺の落ち込み
-                profile.components.Find(c => c is ScreenSpaceAmbientOcclusion).active = true;
-                ((ScreenSpaceAmbientOcclusion)profile.components.Find(c => c is ScreenSpaceAmbientOcclusion)).intensity.value = 1.0f;
-                ((Bloom)profile.components.Find(c => c is Bloom)).intensity.value = 0.22f;
                 var ssr = profile.Add<ScreenSpaceReflection>(true);
                 foreach (string f in new[] { "enabledOpaque", "enabled" })       // HDRP の版で名前が違う
                 {
                     var fi = typeof(ScreenSpaceReflection).GetField(f);
                     if (fi != null && fi.GetValue(ssr) is BoolParameter bp) { bp.overrideState = true; bp.value = true; break; }
                 }
+            }
+            if (look.dof)
+            {
                 var dof = profile.Add<DepthOfField>(true);
                 dof.focusMode.value = DepthOfFieldMode.Manual;
                 dof.nearFocusStart.value = 0f; dof.nearFocusEnd.value = 0f;
-                dof.farFocusStart.value = 4.5f; dof.farFocusEnd.value = 22f;
-                dof.farMaxBlur = 3.5f;
-                var vg = profile.Add<Vignette>(true);
-                vg.intensity.value = 0.22f; vg.smoothness.value = 0.45f;
-                var ca = profile.Add<ColorAdjustments>(true);
-                ca.contrast.value = 10f; ca.saturation.value = 6f;
+                dof.farFocusStart.value = look.dofStart; dof.farFocusEnd.value = look.dofEnd;
+                dof.farMaxBlur = look.dofBlur;
             }
-            if (circuit && RenderQuality.Current == QualityTier.High)
+            if (look.vignette > 0f)
             {
-                var vc = profile.Add<VolumetricClouds>(true);
-                vc.enable.value = true;
-                var dome = GameObject.Find("SkyDome");                     // 立体の雲を使うときは雲の絵のドームを消す
-                if (dome != null) dome.SetActive(false);
+                var vg = profile.Add<Vignette>(true);
+                vg.intensity.value = look.vignette; vg.smoothness.value = look.vignetteSmooth;
             }
+            if (look.contrast != 0f || look.saturation != 0f)
+            {
+                var ca = profile.Add<ColorAdjustments>(true);
+                ca.contrast.value = look.contrast; ca.saturation.value = look.saturation;
+            }
+            // 立体の雲・立体の霧 (HDRP にしか無い) は使わない: 3 版で同じ絵にするため、雲はどの版も同じ雲の絵のドーム (2026-10-05)
             var go = new GameObject("HDRPVolume");
             var vol = go.AddComponent<Volume>();
             vol.isGlobal = true;

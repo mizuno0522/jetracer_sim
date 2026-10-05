@@ -209,7 +209,6 @@ namespace Minicar
                         cam.farClipPlane = 50000f;
                         cam.clearFlags = CameraClearFlags.Skybox;
                     }
-                    ViewPost.Attach(m_Chase[i]);
                 }
             }
             m_FpsT0 = Time.unscaledTime;

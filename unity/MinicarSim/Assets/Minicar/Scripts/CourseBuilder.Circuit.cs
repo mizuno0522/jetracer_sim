@@ -346,7 +346,9 @@ namespace Minicar
             ground.SetTextureScale("_DetailAlbedoMap", new Vector2(1f / 12f, 1f / 12f));
             ground.SetFloat("_UVSec", 1f);                 // 細部は uv1 (m 単位)
             ground.EnableKeyword("_DETAIL_MULX2");
-            MeshObject("Terrain", land.TerrainMesh(), ground);
+            var terrain = land.TerrainMesh();
+            RenderCompat.RegisterDetailUv1(ground, terrain);
+            MeshObject("Terrain", terrain, ground);
 
             var mats = new Material[6];
             for (int k = 0; k < 6; k++)
@@ -385,24 +387,30 @@ namespace Minicar
             var sun = go.AddComponent<Light>();
             m_Ceiling = sun;
             sun.type = LightType.Directional;
-            sun.intensity = 1.35f;
-            sun.color = new Color(1f, 0.95f, 0.86f);
+            sun.intensity = RenderCompat.CircuitSun;         // 3 版で共通の値 (HDRP 版は RenderCompat.Hdrp が lux に換算する)
+            sun.color = RenderCompat.CircuitSunColor;
             sun.shadows = LightShadows.Soft;
-            sun.shadowStrength = 0.8f;
-            sun.shadowBias = 0.05f;
+            sun.shadowStrength = RenderCompat.Tune("shadowstr", 1f);
+            sun.shadowBias = RenderCompat.Tune("shadowbias", 0.05f);
             sun.shadowNormalBias = 0.4f;
             // 太陽は富士山の反対側の空 (仰角 40°) から: 富士山の正面に日が当たる朝の景色 (preview_circuit.py の SUN と同じ)
             go.transform.rotation = Quaternion.LookRotation(-RosFrame.ToUnity(SunDir.x, SunDir.y, SunDir.z));
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.50f, 0.58f, 0.72f);
-            RenderSettings.ambientEquatorColor = new Color(0.40f, 0.43f, 0.44f);
-            RenderSettings.ambientGroundColor = new Color(0.18f, 0.19f, 0.16f);
+            float amb = RenderCompat.CircuitAmbient;
+            var tint = RenderCompat.CircuitAmbientTint;
+            RenderSettings.ambientSkyColor = new Color(0.50f, 0.58f, 0.72f) * tint * amb;
+            RenderSettings.ambientEquatorColor = new Color(0.40f, 0.43f, 0.44f) * tint * amb;
+            RenderSettings.ambientGroundColor = new Color(0.18f, 0.19f, 0.16f) * tint * amb;
+            RenderCompat.ApplyCircuitSky();
             RenderSettings.fog = true;           // 遠くを霞ませる (遠景の山とコースのつながり)
             RenderSettings.fogMode = FogMode.Exponential;   // 2 km で 10 %・18 km (富士山) で 63 %
-            RenderSettings.fogColor = new Color(0.72f, 0.79f, 0.86f);
+            RenderSettings.fogColor = new Color(RenderCompat.Tune("fogr", 0.80f), RenderCompat.Tune("fogg", 0.80f), RenderCompat.Tune("fogb", 0.78f));
+            RenderSettings.reflectionIntensity = RenderCompat.Tune("refl", 1f);
             RenderSettings.fogDensity = 0.000055f;
             QualitySettings.shadowDistance = 180f;
             QualitySettings.shadowCascades = 4;
+            QualitySettings.shadowNearPlaneOffset = RenderCompat.Tune("shadownear", 40f);
+            sun.shadowNearPlane = RenderCompat.Tune("lightnear", 40f);
             QualitySettings.anisotropicFiltering = AnisotropicFiltering.ForceEnable;
             // 映り込み: コースの内側から周りの景色 (空・地平線・森) を 1 回だけ写し取り、全体の映り込みに使う。
             // これが無いと車の塗装とガラスに空の一色しか映らず、平板に見える。low (学習) では作らない

@@ -30,7 +30,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 class UnityPlayerPath(Substitution):
     """unity_player:=auto のとき、scripts/pick_unity_player.sh で GPU に合う版 (Built-in / URP / HDRP) を選ぶ。
 
-    ★URP 版・HDRP 版はセンサ画像の見え方が Built-in と違う。画像で走る方策・検出器の評価・学習 (mlagents) では auto を使わない。
+    3 つの版は同じ仕様の絵を出す (docs/hdrp.md) が、センサ画像は画素までは一致しない。画像で走る方策・検出器の評価・学習 (mlagents) では auto を使わず、版を決めて動かす。
     """
 
     def __init__(self, value, mlagents):

@@ -6,11 +6,11 @@
 #   JETRACER_PIPELINE=hdrp ./scripts/pick_unity_player.sh   # 指定する (builtin | urp | hdrp | auto)
 #
 # 選び方 (ビデオメモリは /sys/class/drm の値と nvidia-smi。いちばん大きい GPU で決める。RenderQuality.cs の low / medium / high と同じ境目):
-#   2 GB 未満・Intel の内蔵だけ・GPU が分からない → Built-in (軽い。学習・検出器の評価もこの版)
+#   2 GB 未満・Intel の内蔵だけ・GPU が分からない → Built-in (軽い。学習もこの版)
 #   2 GB 以上 6 GB 未満 (例: Radeon RX 5300M 3 GB = 評価用の MSI Bravo 15) → URP
 #   6 GB 以上 → HDRP
 # 選んだ版のプレイヤーがまだ無ければ、1 つ軽い版へ下げる (HDRP → URP → Built-in)。
-# ★URP 版・HDRP 版は配信するセンサ画像の見え方が Built-in と違う。画像で走る方策・検出器の評価・学習には Built-in を使う。
+# 3 つの版は同じ仕様の絵を出す (違うのは負荷だけ。docs/hdrp.md)。ただしセンサ画像は画素までは一致しないので、画像で走る方策・検出器は学習・評価したのと同じ版で動かす。
 # 環境: JETRACER_UNITY_PLAYER (Built-in。既定 ~/jetracer/unity/player)、JETRACER_UNITY_PLAYER_URP (player_urp)、JETRACER_UNITY_PLAYER_HDRP (player_hdrp)
 B="${JETRACER_UNITY_PLAYER:-$HOME/jetracer/unity/player}/MinicarSim.x86_64"
 U="${JETRACER_UNITY_PLAYER_URP:-$HOME/jetracer/unity/player_urp}/MinicarSim.x86_64"

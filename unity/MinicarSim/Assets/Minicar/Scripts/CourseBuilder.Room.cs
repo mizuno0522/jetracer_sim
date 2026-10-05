@@ -1,11 +1,9 @@
-// ミニカーの会場を、実際にコースを組んだ部屋らしく見せる (表示・動画用)。参考: 会場の動画 (2026-10-05 水野)。
+// ミニカーの会場: 実際にコースを組んだ部屋。参考: 会場の動画 (2026-10-05 水野)。URP 版・HDRP 版が描く。
+// Built-in 版は部屋を描かず、コースの周りは地面と空だけ (RenderCompat.SimpleVenue。2026-10-06 水野)。コースそのものは 3 版で同じ。
 //
-//   -venue room | plain   既定: URP 版・HDRP 版 (unity/MinicarSimURP・MinicarSimHDRP) は room、Built-in 版は plain
-//
-// plain = 今までの会場 (灰色の床・カプセルの観戦者)。学習・検出器の評価に使う Built-in 版のセンサ画像は変えない。
-// room  = 窓のある会議室: クリーム色の壁、アルミサッシの窓、蛍光灯の並ぶ低い天井、濃いグレーのパンチカーペット、
-//         窓際の長椅子、巻いたカーペット、重ねた椅子。コースの床の区域 (人工芝・滑り板・風呂マット・坂の板) と
-//         壁板も実物の質感に寄せる。コースの形・寸法・色の区別 (白 / 赤の壁、駐車枠の色) は plain と同じ。
+// 窓のある会議室: クリーム色の壁、アルミサッシの窓、蛍光灯の並ぶ低い天井、濃いグレーのパンチカーペット、
+// 窓際の長椅子、巻いたカーペット、重ねた椅子。コースの床の区域 (人工芝・滑り板・風呂マット・坂の板) と壁板も実物の質感。
+// (以前の灰色の床とカプセルの観戦者の会場 -venue plain は無くした。2026-10-05 水野)
 // 寸法はすべて ROS 座標 [m] (x = コースの長手、y = 奥行き、z = 上)。コースは x 0〜10.3、y 0〜6.1。窓は +y の壁。
 using System.Collections.Generic;
 using UnityEngine;
@@ -14,24 +12,12 @@ namespace Minicar
 {
     public partial class CourseBuilder
     {
-        public bool Room { get; private set; }
-        // 窓と蛍光灯のある明るい部屋なので、plain (検出器の明るさに合わせた控えめな光) より明るくする
-        float RoomLight => Room ? 1.9f : 1f;
-        float RoomAmbient => Room ? 2.1f : 1f;
+        // 窓と蛍光灯のある明るい部屋の光 (天井の光・環境光の倍率)
+        const float kRoomLight = 1.9f, kRoomAmbient = 2.1f;
 
         // 部屋の内のり
         const float kRx0 = -3.2f, kRx1 = 13.0f, kRy0 = -4.6f, kRy1 = 8.4f, kRz = 2.7f;
         Transform m_RoomRoot;
-
-        static bool WantRoom()
-        {
-#if MINICAR_HDRP || MINICAR_URP
-            const string def = "room";
-#else
-            const string def = "plain";
-#endif
-            return SimBridge.Arg("-venue", def).ToLowerInvariant() == "room";
-        }
 
         // ------------------------------------------------------------------ 部品
         // ROS 座標の箱 (sx・sy・sz = x・y・z 方向の長さ、yawDeg = z 軸まわり)
@@ -300,6 +286,16 @@ namespace Minicar
         {
             m_RoomRoot = new GameObject("Room").transform;
             m_RoomRoot.SetParent(m_Root, false);
+            if (RenderCompat.SimpleVenue)
+            {
+                // Built-in 版: 部屋は描かない。コースの周りは平らな地面 (600 m 四方) と空だけ
+                const float g = 300f;
+                var ground = Lit(new Color32(150, 146, 136, 255), Speckle(256, 0.10f, 1), 0.1f, new Vector2(400, 400));
+                RQuad("Ground", new Vector3(5f - g, 3f + g, -0.012f), new Vector3(5f + g, 3f + g, -0.012f), new Vector3(5f + g, 3f - g, -0.012f), new Vector3(5f - g, 3f - g, -0.012f),
+                      new Vector3(0, 0, 1), ground, RvizLayout.SensorOnlyLayer);
+                RenderCompat.ApplyCircuitSky();
+                return;
+            }
             int S = RvizLayout.SensorOnlyLayer, O = RvizLayout.OverheadLayer;
             float lx = kRx1 - kRx0, ly = kRy1 - kRy0;
             Vector3 up = new Vector3(0, 0, 1);

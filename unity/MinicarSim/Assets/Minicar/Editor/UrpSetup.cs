@@ -19,6 +19,7 @@ namespace Minicar.EditorTools
         const string kDir = "Assets/MinicarURP";
         const string kAsset = kDir + "/MinicarURP.asset";
         const string kRenderer = kDir + "/MinicarURP_Renderer.asset";
+        const string kRendererPlain = kDir + "/MinicarURP_RendererPlain.asset";
 
         [MenuItem("Minicar/URP Setup (phase 2)")]
         public static void Phase2()
@@ -41,6 +42,41 @@ namespace Minicar.EditorTools
                 EditorUtility.SetDirty(data);
                 Debug.Log($"[UrpSetup] created {kRenderer}");
             }
+            // 際の陰り (SSAO)。HDRP 版・Built-in 版と同じ仕様にするため (強さと半径は実行時に RenderCompat.Urp が入れる)
+            if (!data.rendererFeatures.Exists(f => f != null && f.GetType().Name == "ScreenSpaceAmbientOcclusion"))
+            {
+                var t = typeof(UniversalRendererData).Assembly.GetType("UnityEngine.Rendering.Universal.ScreenSpaceAmbientOcclusion");
+                if (t == null) { Debug.LogError("[UrpSetup] ScreenSpaceAmbientOcclusion の型が無い"); ok = false; }
+                else
+                {
+                    var f = (ScriptableRendererFeature)ScriptableObject.CreateInstance(t);
+                    f.name = "SSAO";
+                    AssetDatabase.AddObjectToAsset(f, data);
+                    ResourceReloader.ReloadAllNullIn(f, UniversalRenderPipelineAsset.packagePath);
+                    data.rendererFeatures.Add(f);
+                    var sd = new SerializedObject(data);
+                    var map = sd.FindProperty("m_RendererFeatureMap");
+                    if (map != null && AssetDatabase.TryGetGUIDAndLocalFileIdentifier(f, out string _, out long id))
+                    {
+                        sd.Update();
+                        map.arraySize = data.rendererFeatures.Count;
+                        map.GetArrayElementAtIndex(map.arraySize - 1).longValue = id;
+                        sd.ApplyModifiedPropertiesWithoutUndo();
+                    }
+                    EditorUtility.SetDirty(data);
+                    Debug.Log("[UrpSetup] SSAO を描画器に足した");
+                }
+            }
+            // センサカメラ用: 際の陰りの無い描画器 (2 番目)
+            var plain = AssetDatabase.LoadAssetAtPath<UniversalRendererData>(kRendererPlain);
+            if (plain == null)
+            {
+                plain = ScriptableObject.CreateInstance<UniversalRendererData>();
+                AssetDatabase.CreateAsset(plain, kRendererPlain);
+                ResourceReloader.ReloadAllNullIn(plain, UniversalRenderPipelineAsset.packagePath);
+                plain.postProcessData = data.postProcessData;
+                EditorUtility.SetDirty(plain);
+            }
             var asset = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(kAsset);
             if (asset == null)
             {
@@ -61,6 +97,14 @@ namespace Minicar.EditorTools
                 if (p == null) { Debug.LogWarning($"[UrpSetup] {name} が見つからない (URP の版の違い)"); return; }
                 if (p.propertyType == SerializedPropertyType.Boolean) p.boolValue = v != 0; else p.intValue = v;
             }
+            var rl = so.FindProperty("m_RendererDataList");
+            if (rl != null)
+            {
+                rl.arraySize = 2;
+                rl.GetArrayElementAtIndex(0).objectReferenceValue = data;
+                rl.GetArrayElementAtIndex(1).objectReferenceValue = plain;
+            }
+            else { Debug.LogError("[UrpSetup] m_RendererDataList が見つからない"); ok = false; }
             Set("m_MainLightShadowmapResolution", 4096);
             Set("m_SoftShadowsSupported", 1);
             Set("m_AdditionalLightsRenderingMode", 1);      // 1 = 画素ごと (ライトかく乱の点光源)

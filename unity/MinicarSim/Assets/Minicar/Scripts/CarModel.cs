@@ -200,6 +200,14 @@ namespace Minicar
             coat.SetFloat("_Glossiness", 0.95f);
             coat.SetFloat("_Metallic", 0f);
             ProcTex.MakeTransparent(coat);
+            // クリア層の周りの映り込みの強さ (Built-in。HDRP 版のクリアコートの見え方に合わせる口)
+            float occ = RenderCompat.Tune("coatocc", 0.35f);
+            if (occ < 0.999f)
+            {
+                var t = new Texture2D(1, 1, TextureFormat.RGBA32, false, true);
+                t.SetPixel(0, 0, new Color(occ, occ, occ, 1f)); t.Apply();
+                coat.SetTexture("_OcclusionMap", t); coat.SetFloat("_OcclusionStrength", 1f);
+            }
             foreach (var r in Root.GetComponentsInChildren<MeshRenderer>(true))
                 if (m_Paints.Contains(r.sharedMaterial)) r.sharedMaterials = new[] { r.sharedMaterial, coat };
         }

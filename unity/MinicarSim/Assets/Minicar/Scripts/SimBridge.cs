@@ -211,7 +211,7 @@ namespace Minicar
             SetLayout(layout == "rviz" ? Layout.Rviz : layout == "chase" ? Layout.Chase : Layout.Aic);
             m_Rviz.Update();            // 接続前から右パネルの視野を合わせておく
             RenderQuality.ApplyBuiltin(Circuit);
-            // HDRP で動かしているときだけ材質・光・空・霞を HDRP 用に置き換える (Built-in では何もしない。docs/hdrp.md)
+            // 版 (Built-in / URP / HDRP) ごとの材質・光・空・霞・後処理に置き換える。絵の仕様は 3 版で同じ (docs/hdrp.md)
             RenderCompat.AfterBuild(m_Course, new[] { m_SensorCam, m_RivalCam }, Circuit);
 
             // -shotdir <dir> [-shotinterval 秒]: 画面 (追従視点 + センサ画像) を一定間隔で PNG で保存 (見た目の確認用)
@@ -403,7 +403,6 @@ namespace Minicar
             m_ViewCam.farClipPlane = Circuit ? 50000f : 60f;
             m_ViewCam.clearFlags = Circuit ? CameraClearFlags.Skybox : CameraClearFlags.SolidColor;   // サーキットは空を描く
             m_ViewCam.backgroundColor = new Color32(40, 42, 46, 255);
-            if (Circuit) ViewPost.Attach(m_ViewCam);
             // 接続前 (/sim/render_state 未着) はコース全体を斜め上から見せる。
             // 原点のままだと床下から写って何も見えない
             PlaceOverview();
@@ -428,8 +427,8 @@ namespace Minicar
         {
             // 自車: 動画の濃紺メタリック。センサカメラには写さない
             // -owncar / -rivalcar / -rival2car: b787 | nd | rx7 (省略で従来の見た目)。見た目だけで物理は変わらない
-            // 屋根のセンサマスト (カメラの柱) は部屋の会場 (-venue room) では付けない (表示用。2026-10-05 水野)
-            bool mast = !m_Course.Room;
+            // 屋根のセンサマスト (カメラの柱) はミニカーの会場では付けない (2026-10-05 水野)
+            bool mast = Circuit;
             m_OwnCar = new CarModel("OwnCar", new Color(0.06f, 0.10f, 0.42f), kOwnCarLayer, mast,
                                     CarModel.ParseStyle(Arg("-owncar", "")));
             m_Opponent = new CarModel("Opponent", new Color(0.85f, 0.85f, 0.83f), 0, false);
