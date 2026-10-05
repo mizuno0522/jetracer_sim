@@ -52,7 +52,8 @@ STEPS="3 install" ./scripts/migrate_urp.sh   # ソースを直したあと (sync
 `migrate_urp.sh` と `migrate_hdrp.sh` の中身は共通の `scripts/migrate_pipeline.sh <urp|hdrp>`。
 
 - 設定 (`Editor/UrpSetup.cs`): 設定アセット `Assets/MinicarURP/MinicarURP.asset` と描画器、色空間 Linear、HDR・深度テクスチャ・影 4096、`Mat_URPLit` と材質の変形 (`Resources/URPVariants`)。描画 API は Built-in 版と同じ (この PC では OpenGLCore)
-- 材質: Standard → Universal Render Pipeline/Lit。車のクリア層 (2 枚目の材質) は外し、塗装のつやを上げる
+- 材質: Standard → Universal Render Pipeline/Lit。車体の塗装はクリアコートつきの Complex Lit (Built-in の 2 枚目のクリア層は外す)。
+  ★材質の変形はキーワードだけでなく設定値・テクスチャも入れて保存する (キーワードだけだと取り込み時に消えて、木が黒い板になった)
 - 光: Linear でも Built-in (Gamma) と同じ明るさに見えるよう、光の強さを 2.2 乗して入れる
 - 影・アンチエイリアス: コードが QualitySettings に入れた値を設定アセットへ写す
 - 後処理 (medium 以上・表示用のカメラだけ): トーンマップ (Neutral)・ブルーム。部屋の会場は遠くのぼけ・周辺減光・コントラスト。映り込みと際の陰り (SSR・AO) は入れていない
