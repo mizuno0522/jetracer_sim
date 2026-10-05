@@ -385,7 +385,7 @@ namespace Minicar
             var sun = go.AddComponent<Light>();
             m_Ceiling = sun;
             sun.type = LightType.Directional;
-            sun.intensity = 1.35f;
+            sun.intensity = RenderCompat.CircuitSun;         // 3 版で共通の値 (HDRP 版は RenderCompat.Hdrp が lux に換算する)
             sun.color = new Color(1f, 0.95f, 0.86f);
             sun.shadows = LightShadows.Soft;
             sun.shadowStrength = 0.8f;
@@ -394,9 +394,10 @@ namespace Minicar
             // 太陽は富士山の反対側の空 (仰角 40°) から: 富士山の正面に日が当たる朝の景色 (preview_circuit.py の SUN と同じ)
             go.transform.rotation = Quaternion.LookRotation(-RosFrame.ToUnity(SunDir.x, SunDir.y, SunDir.z));
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.50f, 0.58f, 0.72f);
-            RenderSettings.ambientEquatorColor = new Color(0.40f, 0.43f, 0.44f);
-            RenderSettings.ambientGroundColor = new Color(0.18f, 0.19f, 0.16f);
+            float amb = RenderCompat.CircuitAmbient;
+            RenderSettings.ambientSkyColor = new Color(0.50f, 0.58f, 0.72f) * amb;
+            RenderSettings.ambientEquatorColor = new Color(0.40f, 0.43f, 0.44f) * amb;
+            RenderSettings.ambientGroundColor = new Color(0.18f, 0.19f, 0.16f) * amb;
             RenderSettings.fog = true;           // 遠くを霞ませる (遠景の山とコースのつながり)
             RenderSettings.fogMode = FogMode.Exponential;   // 2 km で 10 %・18 km (富士山) で 63 %
             RenderSettings.fogColor = new Color(0.72f, 0.79f, 0.86f);

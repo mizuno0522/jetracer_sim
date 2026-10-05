@@ -38,6 +38,8 @@ namespace Minicar.EditorTools
             PlayerSettings.defaultScreenHeight = 720;
             PlayerSettings.resizableWindow = true;
             PlayerSettings.usePlayerLog = true;
+            // 色空間は 3 版 (Built-in・URP・HDRP) とも Linear。光と後処理の計算を同じにして、同じ絵を出す (docs/hdrp.md)
+            PlayerSettings.colorSpace = ColorSpace.Linear;
 
             MakeMaterials();
             MakeScene();

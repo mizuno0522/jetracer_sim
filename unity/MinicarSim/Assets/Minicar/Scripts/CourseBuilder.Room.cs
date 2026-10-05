@@ -1,8 +1,8 @@
 // ミニカーの会場を、実際にコースを組んだ部屋らしく見せる (表示・動画用)。参考: 会場の動画 (2026-10-05 水野)。
 //
-//   -venue room | plain   既定: URP 版・HDRP 版 (unity/MinicarSimURP・MinicarSimHDRP) は room、Built-in 版は plain
+//   -venue room | plain   既定はどの版 (Built-in・URP・HDRP) でも room。学習 (-mlagents) も room (2026-10-05 水野)
 //
-// plain = 今までの会場 (灰色の床・カプセルの観戦者)。学習・検出器の評価に使う Built-in 版のセンサ画像は変えない。
+// plain = 以前の会場 (灰色の床・カプセルの観戦者)。引数で指定したときだけ。
 // room  = 窓のある会議室: クリーム色の壁、アルミサッシの窓、蛍光灯の並ぶ低い天井、濃いグレーのパンチカーペット、
 //         窓際の長椅子、巻いたカーペット、重ねた椅子。コースの床の区域 (人工芝・滑り板・風呂マット・坂の板) と
 //         壁板も実物の質感に寄せる。コースの形・寸法・色の区別 (白 / 赤の壁、駐車枠の色) は plain と同じ。
@@ -25,12 +25,7 @@ namespace Minicar
 
         static bool WantRoom()
         {
-#if MINICAR_HDRP || MINICAR_URP
-            const string def = "room";
-#else
-            const string def = "plain";
-#endif
-            return SimBridge.Arg("-venue", def).ToLowerInvariant() == "room";
+            return SimBridge.Arg("-venue", "room").ToLowerInvariant() == "room";
         }
 
         // ------------------------------------------------------------------ 部品
