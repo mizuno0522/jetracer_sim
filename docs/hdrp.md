@@ -74,16 +74,15 @@ HDRP 版の絵が正で、URP 版・Built-in 版はそれに合わせてある�
 ノート PC (内蔵 + 単体 GPU) では、launch と `scripts/shots.sh` が `DRI_PRIME=1` を既定にして単体 GPU を使う。
 基準の数値は [render_baseline.md](render_baseline.md)。
 
-評価用 PC (RX 5300M) での速さ (`-quality medium`・3 分割の画面・1920×1080・計測 600 フレーム、2026-10-06。裏で別の検証が動いている状態):
+評価用 PC (RX 5300M) での速さ (`-quality medium`・3 分割の画面・1920×1080・計測 600 フレーム、2026-10-06。静かな状態):
 
 | コース | Built-in | URP | HDRP |
 |---|---|---|---|
 | 富士 | 134 fps | 124 fps | 39 fps |
-| ミニカーの会場 (URP・HDRP は部屋、Built-in は地面と空だけ) | 143 fps ★ | 227 fps | 114 fps |
+| ミニカーの会場 (URP・HDRP は部屋、Built-in は地面と空だけ) | 192 fps | 224 fps | 114 fps |
 
-★Built-in の値は、別の Unity ビルドが裏で動いている最中 (負荷平均 11) に計ったもので、静かな状態での計り直しが要る。low は 152 fps。
-部屋を描いていたときの Built-in は 123 fps (low 125 fps) で、まとめて描く仕組みのある URP より遅かった。これが Built-in を地面と空だけにした理由。
-学習の 1 判断あたりの時間 (lockstep) はまだ計り直していない。
+Built-in のミニカーの会場は low で 197 fps。部屋を描いていたときは 123 fps で、いちばん重かったのは壁板の足 (約 400 部品) だった。
+学習の 1 判断あたりの時間 (lockstep) は富士が基準の +4 %、ミニカーの会場が +13 % (線の +10 % を越えている)。くわしくは [render_baseline.md](render_baseline.md)。
 
 ## URP 版のプロジェクト
 

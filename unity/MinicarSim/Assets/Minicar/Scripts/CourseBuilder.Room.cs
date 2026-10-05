@@ -247,6 +247,9 @@ namespace Minicar
             var bolt = Lit(new Color32(176, 178, 182, 255), null, 0.7f);
             bolt.SetFloat("_Metallic", 0.9f);
             var pvc = Lit(new Color32(150, 152, 156, 255), null, 0.35f);
+            // 動かない足は 1 つの親にまとめ、最後にまとめて描けるようにする (足は 1 か所 4 部品 × 約 100 か所。別々に描くと影の分も含めて描く回数が多い)
+            var feet = new GameObject("WallFeet").transform;
+            feet.SetParent(m_Root, false);
             var seen = new HashSet<long>();
             float top = Data.wall_base_m + Data.wall_height_m;
             var walls = new List<WallData>(Data.walls);
@@ -263,7 +266,7 @@ namespace Minicar
                     if (!seen.Add(key)) continue;
                     Vector2 q = p + nrm * 0.028f;                 // ボルトは板の横に立ち、バンドで板を抱える
                     // ⑤狭い道の仕切りは出し入れされるので、その足は仕切りと一緒に出入りさせる
-                    Transform owner = w.divider && Divider != null ? Divider.transform : m_Root;
+                    Transform owner = w.divider && Divider != null ? Divider.transform : feet;
                     var plate = Box("WallFootPlate", RosFrame.ToUnity(q.x, q.y, 0.002f), new Vector3(0.15f, 0.004f, 0.15f), RosFrame.Yaw(yaw), steel);
                     plate.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                     plate.transform.SetParent(owner, true);
@@ -279,6 +282,7 @@ namespace Minicar
                     }
                 }
             }
+            StaticBatchingUtility.Combine(feet.gameObject);
         }
 
         // ------------------------------------------------------------------ 部屋
