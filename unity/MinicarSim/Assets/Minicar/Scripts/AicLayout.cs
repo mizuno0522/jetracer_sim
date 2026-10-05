@@ -635,6 +635,10 @@ namespace Minicar
                 GUI.color = Color.white;
                 GUI.DrawTexture(new Rect(c.x - d * 0.48f, c.y - d * 1.45f, d * 0.96f, d * 1.0f), m_ArrowTex);
                 GUI.matrix = saved;
+                // 白いコース線の上でも丸が埋もれないよう、白縁の外に濃い縁を 1 本
+                GUI.color = new Color(0.02f, 0.03f, 0.06f, 0.9f);
+                GUI.DrawTexture(new Rect(c.x - d * 0.5f - 4f * k, c.y - d * 0.5f - 4f * k, d + 8f * k, d + 8f * k), m_DotTex);
+                GUI.color = Color.white;
                 GUI.DrawTexture(new Rect(c.x - d * 0.5f - 2f * k, c.y - d * 0.5f - 2f * k, d + 4f * k, d + 4f * k), m_DotTex);
                 GUI.color = kCols[i];
                 GUI.DrawTexture(new Rect(c.x - d * 0.5f, c.y - d * 0.5f, d, d), m_DotTex);
@@ -733,8 +737,8 @@ namespace Minicar
             return tex;
         }
 
-        // ミニマップの下絵 (行 0 = 下 = 南): 半透明の紺の円盤と縁の輪、走行レーンの帯、
-        // コースの壁 (白 / 赤)、白い中心線、スタートライン
+        // ミニマップの下絵 (行 0 = 下 = 南): ほぼ不透明の濃紺の円盤と縁の輪、走行レーン、
+        // コースの壁 (白 / 赤)、スタートライン。後ろの映像が透けるとコースが読めないので、地は濃く・線は明るく
         Texture2D MakeMap(int n)
         {
             var px = new Color[n * n];
@@ -746,9 +750,9 @@ namespace Minicar
                     float d = new Vector2(x + 0.5f - n * 0.5f, y + 0.5f - n * 0.5f).magnitude;
                     float t = Mathf.Clamp01(d / R);
                     // 中心がやや明るく、縁へ向けて濃くなる
-                    Color c = Color.Lerp(new Color(0.16f, 0.22f, 0.38f, 0.62f), new Color(0.07f, 0.10f, 0.20f, 0.74f), t * t);
+                    Color c = Color.Lerp(new Color(0.07f, 0.10f, 0.19f, 0.93f), new Color(0.02f, 0.03f, 0.08f, 0.96f), t * t);
                     float ring = Mathf.Clamp01(1f - Mathf.Abs(d - (R - 3f)) / 2.5f);
-                    c = Color.Lerp(c, new Color(0.75f, 0.85f, 1f, 0.85f), ring * 0.8f);
+                    c = Color.Lerp(c, new Color(0.90f, 0.95f, 1f, 1f), ring);
                     c.a *= Mathf.Clamp01(R - d + 0.5f);
                     px[y * n + x] = c;
                 }
@@ -785,21 +789,25 @@ namespace Minicar
 
             // 走行レーン (ミニカーは幅 0.6 m、サーキットはコース幅) の帯
             float laneHalf = m_Data.IsCircuit && m_Data.circuit != null && m_Data.circuit.width_m > 0f ? m_Data.circuit.width_m * 0.5f : 0.30f;
-            for (int s = 0; s < m_Center.Length - 1; s++) Line(m_Center[s], m_Center[s + 1], Mathf.Max(1.2f, laneHalf * pxPerM));
-            Flush(new Color(0.42f, 0.50f, 0.66f, 0.55f));
+            // 帯が細い (サーキットは全長に対して幅が狭い) ときは、読める太さの白線にする。
+            // 太い帯 (ミニカー) は白い壁・車の丸と区別がつくよう、地よりはっきり明るい灰青で塗る
+            bool thin = laneHalf * pxPerM < 3.5f;
+            for (int s = 0; s < m_Center.Length - 1; s++) Line(m_Center[s], m_Center[s + 1], thin ? 3.5f : laneHalf * pxPerM);
+            Flush(thin ? new Color(0.96f, 0.98f, 1f, 1f) : new Color(0.34f, 0.42f, 0.58f, 1f));
             // 壁: 白と赤 (⑤狭い道の中央仕切りも含む。予選でも設置される)
             foreach (string color in new[] { "white", "red" })
             {
                 foreach (var w in m_Data.walls ?? new WallData[0])
                     if ((w.color == "red") == (color == "red"))
                         Line(new Vector2(w.x0, w.y0), new Vector2(w.x1, w.y1), 1.3f);
-                Flush(color == "red" ? new Color(1f, 0.42f, 0.42f, 0.95f) : new Color(0.88f, 0.92f, 1f, 0.9f));
+                Flush(color == "red" ? new Color(1f, 0.36f, 0.36f, 1f) : new Color(0.96f, 0.98f, 1f, 1f));
             }
             // 中心線・参照線は描かない (✎ 2026-09-29、ユーザー: 決勝はコースが分岐し追い抜きもあるので、
             // 1 本の線は実際の走りと合わない)。周回・セクタの判定は描画と無関係に中心線で行う
             // スタートライン (中心線の始点を横切る)
             Vector2 dir = (m_Center[1] - m_Center[0]).normalized, nrm = new Vector2(-dir.y, dir.x);
-            Line(m_Center[0] - nrm * laneHalf * 1.6f, m_Center[0] + nrm * laneHalf * 1.6f, 2.6f);
+            float lineHalf = Mathf.Max(laneHalf * 1.6f, 9f / pxPerM);   // 細い白線のコースでも線から左右にはみ出して見える長さ
+            Line(m_Center[0] - nrm * lineHalf, m_Center[0] + nrm * lineHalf, 2.6f);
             Flush(new Color(1f, 0.92f, 0.25f, 1f));
 
             var tex = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
