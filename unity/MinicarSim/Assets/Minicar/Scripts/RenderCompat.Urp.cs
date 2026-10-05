@@ -25,7 +25,7 @@ namespace Minicar
 
         static readonly Dictionary<Material, Material> s_Map = new Dictionary<Material, Material>();
         static readonly List<(Light light, float last)> s_Lights = new List<(Light, float)>();
-        static Material s_LitTemplate;
+        static Material s_LitTemplate, s_CoatTemplate, s_CoatMapTemplate;
 
         static partial void AfterBuildImpl(CourseBuilder course, Camera[] sensors, bool circuit)
         {
@@ -43,6 +43,9 @@ namespace Minicar
                 if (sh == null) { Debug.LogError("[RenderCompat] Universal Render Pipeline/Lit が無い (Mat_URPLit を phase 2 で作る)"); return; }
                 s_LitTemplate = new Material(sh);
             }
+            // 車体の塗装用のクリアコートつきの材質 (Complex Lit)。無ければ普通の Lit で描く
+            s_CoatTemplate = Resources.Load<Material>("Mat_URPCoat");
+            s_CoatMapTemplate = Resources.Load<Material>("Mat_URPCoatMap");
             bool low = RenderQuality.Current == QualityTier.Low;
 
             // ---- 材質
@@ -148,8 +151,12 @@ namespace Minicar
             if (s == null || s.shader == null) return s;
             if (s_Map.TryGetValue(s, out var done)) return done;
             if (!s.shader.name.StartsWith("Standard")) return s;           // Unlit/Sprites/SensorPost などはそのまま
-            var m = new Material(s_LitTemplate) { name = s.name + "_URP" };
+            // 車体の塗装 (CarPaint): Built-in の 2 枚目のクリア層の代わりに、クリアコートつきの材質で描く
+            bool map = s.IsKeywordEnabled("_METALLICGLOSSMAP");
+            var coat = s.name == "CarPaint" ? (map ? s_CoatMapTemplate : s_CoatTemplate) : null;
+            var m = new Material(coat != null ? coat : s_LitTemplate) { name = s.name + "_URP" };
             CopyLit(s, m);
+            if (coat != null) { m.EnableKeyword("_CLEARCOAT"); m.SetFloat("_ClearCoat", 1f); m.SetFloat("_ClearCoatMask", 1f); m.SetFloat("_ClearCoatSmoothness", 0.95f); }
             s_Map[s] = m;
             return m;
         }
@@ -210,8 +217,6 @@ namespace Minicar
                 m.SetFloat("_DetailNormalMapScale", s.HasProperty("_DetailNormalMapScale") ? s.GetFloat("_DetailNormalMapScale") : 1f);
             }
             Keyword(m, "_DETAIL_MULX2", detail);
-            // 車体の塗装: クリア層を外したぶん、下地のつやを上げる
-            if (s.name == "CarPaint") m.SetFloat("_Smoothness", Mathf.Max(m.GetFloat("_Smoothness"), 0.86f));
         }
     }
 }

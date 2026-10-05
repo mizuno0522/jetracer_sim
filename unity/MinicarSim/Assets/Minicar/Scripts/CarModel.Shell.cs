@@ -434,6 +434,7 @@ namespace Minicar
 
         static void PaintRx7(float z, float x, float y, float u, out Color32 col, out float metal, out float smooth)
         {
+            float zn = z;            // いまの位置 (横の窓とピラーは 4 面図の側面の形をそのまま使う)
             z = Rx7PaintZ(z);
             x = Mathf.Abs(x);        // 左右対称
             var yellow = new Color32(250, 196, 10, 255);
@@ -444,25 +445,35 @@ namespace Minicar
             bool top = u > 6.55f, side = In(u, 2.6f, 5.4f);
 
             // ---- 窓 (ガラスと黒い縁)
-            // FD3S の横の窓はドアの 1 枚だけ (後ろの小窓は無い)。4 面図: 後ろの縁はドアの後端から上へ行くほど前へ流れる曲線で、
-            // その後ろは車体と同じ色の太い C ピラーがハッチのガラスまで続く。A ピラーは細い
-            float fr = Mathf.Clamp01((u - 5.5f) / 0.9f);
-            float sideF = 1.66f - fr * 0.06f,                   // 前の縁は前窓の付け根まで (A ピラーの傾きは曲面の形が作る)
-                  sideR = 0.46f + fr * fr * 0.20f;               // 後ろの縁 (上ほど前)
-            // A ピラーは細く: 横の窓 (〜6.47) と前窓 (6.50〜) の間は 0.03 だけ
-            bool gSide = In(u, 5.46f, 6.47f) && In(z, sideR, sideF);
-            // 前窓: 下の縁 (カウル) は中央が前へ張り出す弧。ハッチのガラス: 角の丸い大きな 1 枚
+            // 横の窓とピラー: 4 面図の側面を目盛りつきで読んだ形を、横から見た位置 (zn = 前後、y = 高さ) でそのまま塗る。
+            //   ドアの窓: 下の縁はベルトライン (後ろ 0.868 → 前 0.843)、上の縁は 1.14 (その上に車体色の屋根の縁が残る)。
+            //             前の縁は A ピラーと平行に後ろへ倒れ (下の角 zn 1.313 → 上の角 1.06)、前窓との間は車体色の A ピラー。
+            //             後ろの縁は下 0.42 → 上 0.585 へ前に流れる
+            //   B ピラー: 窓の後ろ下の角にはまる黒い三角の飾り板 (zn 0.52 より後ろ・高さ 1.05 まで)
+            //   その後ろは車体色の太い C ピラー。ハッチのガラスは屋根から横へ回り込み、前の縁は (0.30, 1.17) → (0.02, 0.935) の斜めの線
+            bool flank = In(u, 5.2f, 6.50f);
+            float belt = 0.868f - (zn - 0.42f) * 0.028f;
+            float rearEdge = y < 1.064f ? 0.42f + (y - 0.882f) * 0.516f : 0.514f + (y - 1.064f) * 0.934f;
+            float frontEdge = 1.313f - (y - 0.843f) * 0.891f;
+            bool gSide = flank && In(y, belt, 1.14f) && In(zn, rearEdge, frontEdge);
+            bool bPillar = gSide && zn < 0.52f && y < 1.05f;
+            float sideIn = gSide ? Mathf.Min(Mathf.Min(y - belt, 1.14f - y), Mathf.Min(zn - rearEdge, frontEdge - zn)) : 0f;     // 縁からの距離
+            bool gHatchSide = In(u, 5.6f, 6.50f) && In(zn, -0.47f, 0.02f + (y - 0.935f) * 1.19f) && y > 0.925f + (zn + 0.47f) * 0.02f;
+            // 前窓: 下の縁 (カウル) は中央が前へ張り出す弧。ハッチのガラス: 角の丸い大きな 1 枚が、後ろ寄りでは横 (屋根の縁の下) まで回り込む
             float cowl = 1.75f - 0.09f * (x / 0.60f) * (x / 0.60f);
             bool gFront = u > 6.50f && In(z, 1.06f, cowl);
             float hz = (z + 0.04f) / 0.38f, hx = x / 0.62f;
-            bool gRear = u > 6.50f && hz * hz * hz * hz + hx * hx * hx * hx < 1f;
+            bool gRear = (u > 6.50f && hz * hz * hz * hz + hx * hx * hx * hx < 1f) || gHatchSide;
             if (gSide || gFront || gRear)
             {
                 float he = Mathf.Pow(hz * hz * hz * hz + hx * hx * hx * hx, 0.25f);
-                bool edge = gSide ? (u < 5.49f || u > 6.455f || z < sideR + 0.028f || z > sideF - 0.025f)
+                bool edge = gSide ? (bPillar || sideIn < 0.014f)
                           : gFront ? (u < 6.515f || z < 1.075f || z > cowl - 0.015f)
-                          : (u < 6.54f || he > 0.94f);
-                col = edge ? black : glass; metal = 0f; smooth = edge ? 0.45f : 0.96f;
+                          : (u > 6.50f ? he > 0.94f : false);
+                // ガラスは少し青みのある濃い色 (真っ黒にすると、黒い B ピラーや窓の縁と見分けがつかない)
+                col = edge ? black : new Color32(30, 40, 52, 255); metal = 0f; smooth = edge ? (bPillar ? 0.20f : 0.45f) : 0.96f;
+                // B ピラーの飾り板とドアの窓の間に、窓の縁の細い線 (ゴム) が 1 本見える
+                if (gSide && !bPillar && zn < 0.532f && y < 1.05f) { col = new Color32(70, 72, 76, 255); smooth = 0.5f; }
                 return;
             }
 
@@ -581,7 +592,8 @@ namespace Minicar
             bool left = x < 0f;      // 給油口は左だけ
             x = Mathf.Abs(x);        // ほかは左右対称
             var black = new Color32(12, 12, 13, 255);
-            col = new Color32(184, 10, 22, 255); metal = 0.66f; smooth = 0.70f;        // ソウルレッドの下地 (明るい所で鮮やかな赤)
+            // ソウルレッドの下地: 金属感の強い深い赤 (陰は暗く沈み、光の当たる所だけ鮮やかに光る)。明るい普通の赤にしないこと (2026-10-05 水野)
+            col = new Color32(168, 4, 10, 255); metal = 0.80f; smooth = 0.62f;
             bool side = In(u, 2.6f, 5.4f);
             // 室内 (幌を開けた開口の内側) とダッシュボードの上は黒
             if (u > 6.02f && In(z, 0.12f, 1.64f)) { col = new Color32(16, 16, 17, 255); metal = 0f; smooth = 0.15f; return; }

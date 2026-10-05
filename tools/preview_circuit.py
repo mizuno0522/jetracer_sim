@@ -807,8 +807,8 @@ def render(data, s_car, view, W, H, ss=2):
 
 
 CARMODEL = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', 'unity', 'MinicarSim', 'Assets', 'Minicar', 'Scripts', 'CarModel.cs')
-PAINT = {'BuildRx7': (0.97, 0.745, 0.055), 'BuildRoadster': (0.72, 0.04, 0.085), 'BuildB787': (0.96, 0.42, 0.06)}
-METAL = {'BuildRx7': 0.25, 'BuildRoadster': 0.66, 'BuildB787': 0.15}     # CarModel の下地の金属感 (ソウルレッドは 0.66)
+PAINT = {'BuildRx7': (0.97, 0.745, 0.055), 'BuildRoadster': (0.66, 0.015, 0.04), 'BuildB787': (0.96, 0.42, 0.06)}
+METAL = {'BuildRx7': 0.25, 'BuildRoadster': 0.80, 'BuildB787': 0.15}     # CarModel の下地の金属感 (ソウルレッドは 0.8)
 MATS = {'yellow': None, 'red': None, 'orange': None, 'paint': None, 'green': (0.05, 0.55, 0.30), 'black': (0.03, 0.03, 0.03),
         'glass': (0.04, 0.05, 0.07), 'lamp': (0.95, 0.95, 0.90), 'tail': (0.75, 0.05, 0.05), 'alu': (0.55, 0.56, 0.58), 'seat': (0.12, 0.11, 0.11)}
 
@@ -939,12 +939,17 @@ class Shell:
 def rx7_mat(z, x, y, u):
     """CarModel.Shell.PaintRx7 の大きな塗り分けだけ (窓・黒い樹脂・尾端の帯)。細い合わせ目は省く"""
     # 断面を 4 面図に合わせて前後へ動かしたので、動かす前の z に直して判定する (CarModel.Shell.Rx7PaintZ と同じ)
+    zn = z
     z = float(np.interp(z, [-1.000, 0, 0.75, 1.15, 1.90, 2.25, 2.425, 3.225], [-0.907, 0, 0.75, 1.03, 1.78, 2.20, 2.425, 3.302]))
     x = abs(x)
     fr = min(1.0, max(0.0, (u - 5.5) / 0.9))
-    # 横の窓はドアの 1 枚だけ (後ろの縁は上ほど前)。前窓の下の縁は弧、ハッチのガラスは角の丸い 1 枚
-    if (5.46 <= u <= 6.47 and 0.46 + fr * fr * 0.20 <= z <= 1.66 - fr * 0.06) or \
-       (u > 6.50 and (1.06 <= z <= 1.75 - 0.09 * (x / 0.60) ** 2 or ((z + 0.04) / 0.38) ** 4 + (x / 0.62) ** 4 < 1)):
+    # ドアの窓と B ピラー・ハッチの横は、4 面図の側面の形を横から見た位置 (zn, y) で塗る (PaintRx7 と同じ式)
+    belt = 0.868 - (zn - 0.42) * 0.028
+    rear = 0.42 + (y - 0.882) * 0.516 if y < 1.064 else 0.514 + (y - 1.064) * 0.934
+    if 5.2 <= u <= 6.50 and belt <= y <= 1.14 and rear <= zn <= 1.313 - (y - 0.843) * 0.891:
+        return 'black' if zn < 0.52 and y < 1.05 else 'glass'
+    if (u > 6.50 and (1.06 <= z <= 1.75 - 0.09 * (x / 0.60) ** 2 or ((z + 0.04) / 0.38) ** 4 + (x / 0.62) ** 4 < 1)) or \
+       (5.6 <= u <= 6.50 and -0.47 <= zn <= 0.02 + (y - 0.935) * 1.19 and y > 0.925 + (zn + 0.47) * 0.02):
         return 'glass'
     if (z > 2.75 and y < 0.185) or (z < -0.55 and y < 0.27 and x < 0.62):
         return 'black'

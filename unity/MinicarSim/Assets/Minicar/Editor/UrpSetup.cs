@@ -92,6 +92,28 @@ namespace Minicar.EditorTools
                 if (AssetDatabase.LoadAssetAtPath<Material>(mp) == null) AssetDatabase.CreateAsset(new Material(lit), mp);
                 MakeVariants(lit);
             }
+            // 車体の塗装用: クリアコートつきの Complex Lit (金属的な下地の上に透明な層。ソウルレッドの深さはこれで出る)
+            var coatSh = Shader.Find("Universal Render Pipeline/Complex Lit");
+            if (coatSh == null) Debug.LogWarning("[UrpSetup] Universal Render Pipeline/Complex Lit が無い (車体のクリアコートは付かない)");
+            else
+            {
+                foreach (bool map in new[] { false, true })
+                {
+                    var m = new Material(coatSh) { name = map ? "Mat_URPCoatMap" : "Mat_URPCoat" };
+                    m.SetFloat("_ClearCoat", 1f);
+                    m.SetFloat("_ClearCoatMask", 1f);
+                    m.SetFloat("_ClearCoatSmoothness", 0.95f);
+                    m.EnableKeyword("_CLEARCOAT");
+                    if (map)
+                    {
+                        m.SetTexture("_MetallicGlossMap", AssetDatabase.LoadAssetAtPath<Texture2D>(kDir + "/Resources/URPVariants/White.asset"));
+                        m.EnableKeyword("_METALLICSPECGLOSSMAP");
+                    }
+                    string cp = $"{kDir}/Resources/{m.name}.mat";
+                    if (AssetDatabase.LoadAssetAtPath<Material>(cp) != null) AssetDatabase.DeleteAsset(cp);
+                    AssetDatabase.CreateAsset(m, cp);
+                }
+            }
             AssetDatabase.SaveAssets();
             Debug.Log($"[UrpSetup] done ok={ok} pipeline={GraphicsSettings.defaultRenderPipeline?.name} colorSpace={PlayerSettings.colorSpace}");
             if (Application.isBatchMode) EditorApplication.Exit(ok ? 0 : 1);
@@ -104,6 +126,9 @@ namespace Minicar.EditorTools
             string dir = kDir + "/Resources/URPVariants";
             Directory.CreateDirectory(dir);
             AssetDatabase.Refresh();
+            var white = TexAsset(dir + "/White.asset", new Color32(255, 255, 255, 255), false);
+            var grey = TexAsset(dir + "/Grey.asset", new Color32(128, 128, 128, 255), true);
+            var flatN = TexAsset(dir + "/FlatNormal.asset", new Color32(255, 128, 128, 128), true);
             // 0 = 不透明・1 = 切り抜き・2 = 半透明 (アルファ)・3 = 半透明 (乗算済み)
             string[][] modes = { new string[0], new[] { "_ALPHATEST_ON" }, new[] { "_SURFACE_TYPE_TRANSPARENT" }, new[] { "_SURFACE_TYPE_TRANSPARENT", "_ALPHAPREMULTIPLY_ON" } };
             for (int i = 0; i < modes.Length; i++)
@@ -111,6 +136,22 @@ namespace Minicar.EditorTools
                 {
                     if (i == 0 && k == 0) continue;            // Mat_URPLit と同じ
                     var m = new Material(lit) { name = $"URP_{i}{k}" };
+                    // ★キーワードだけ立てても、URP が材質を取り込むときに「設定値から決め直す」ので消える (木の切り抜きが効かず黒い板になった)。
+                    //   キーワードの元になる設定値とテクスチャも入れておく
+                    if (i == 1) m.SetFloat("_AlphaClip", 1f);
+                    if (i >= 2)
+                    {
+                        m.SetFloat("_Surface", 1f);
+                        m.SetFloat("_Blend", i == 3 ? 1f : 0f);
+                        m.SetFloat("_SrcBlend", (float)(i == 3 ? BlendMode.One : BlendMode.SrcAlpha));
+                        m.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+                        m.SetFloat("_ZWrite", 0f);
+                        m.SetOverrideTag("RenderType", "Transparent");
+                        m.renderQueue = 3000;
+                    }
+                    if ((k & 1) != 0) m.SetTexture("_BumpMap", flatN);
+                    if ((k & 2) != 0) { m.SetTexture("_DetailAlbedoMap", grey); m.SetTexture("_DetailNormalMap", flatN); }
+                    if ((k & 4) != 0) m.SetTexture("_MetallicGlossMap", white);
                     foreach (var kw in modes[i]) m.EnableKeyword(kw);
                     if ((k & 1) != 0) m.EnableKeyword("_NORMALMAP");
                     if ((k & 2) != 0) m.EnableKeyword("_DETAIL_MULX2");
@@ -120,6 +161,19 @@ namespace Minicar.EditorTools
                     AssetDatabase.CreateAsset(m, path);
                 }
             Debug.Log($"[UrpSetup] shader variant materials → {dir}");
+        }
+
+        static Texture2D TexAsset(string path, Color32 c, bool linear)
+        {
+            var old = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            if (old != null) return old;
+            var t = new Texture2D(4, 4, TextureFormat.RGBA32, false, linear);
+            var px = new Color32[16];
+            for (int i = 0; i < px.Length; i++) px[i] = c;
+            t.SetPixels32(px);
+            t.Apply();
+            AssetDatabase.CreateAsset(t, path);
+            return t;
         }
 
         static void EnsureGlobalSettings()
