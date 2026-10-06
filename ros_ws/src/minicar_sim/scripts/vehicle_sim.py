@@ -786,7 +786,11 @@ class VehicleSim(Node):
                                 callback_group=self._cb_group_step)
             self.create_subscription(Image, '/camera/image_raw', self._cb_step_image, sensor_qos,
                                      callback_group=self._cb_group_io)
-            self.create_subscription(Imu, '/imu', self._cb_step_imu, sensor_qos,
+            # 1 step ぶんの IMU (3〜4 サンプル) は 1 ms 以内に続けて届く。受け取りの深さが 1 だと上書きされて数が足りず、
+            # srv_step が毎回 0.1 s の時間切れまで待っていた (判断の約 3 割)。step ぶんを取りこぼさない深さにする
+            imu_step_qos = QoSProfile(reliability=QoSReliabilityPolicy.BEST_EFFORT,
+                                      history=QoSHistoryPolicy.KEEP_LAST, depth=50)
+            self.create_subscription(Imu, '/imu', self._cb_step_imu, imu_step_qos,
                                      callback_group=self._cb_group_io)
             self._publish_clock()
             self.get_logger().info(
@@ -1810,7 +1814,8 @@ class VehicleSim(Node):
             time.sleep(0.001)
         # 画像はカメラの周期 (1/cam_rate) でしか来ない。この step で 1 枚「来る予定」のときだけ待つ。
         # OpenCV 描画はここで同期的に描く。Unity は /sim/render_state (stamp = sim 時刻) を受けて描くので、
-        # 新しい stamp の画像が返るまで待つ (step_image_timeout_s)。
+        # いま出した姿勢の stamp で描いた画像が返るまで待つ (step_image_timeout_s)。「前より新しい」だけだと、
+        # 1 つ前の step の姿勢で描いた画像を受け取ってしまうことがある (Unity は -mlagents のとき、新しい姿勢が届くたびに撮る)。
         self._cam_acc += self.control_dt
         expect_image = False
         if self.use_camera and self._cam_acc >= 1.0 / self.cam_rate - 1e-9:
@@ -1823,7 +1828,8 @@ class VehicleSim(Node):
             while time.monotonic() < t_end:
                 if self._img_event.wait(0.005):
                     st = self._last_img.header.stamp
-                    if st.sec + st.nanosec * 1e-9 > img_stamp0:
+                    t_img = st.sec + st.nanosec * 1e-9
+                    if t_img > img_stamp0 and t_img >= getattr(self, '_render_stamp', 0.0) - 1e-7:
                         break
                     self._img_event.clear()
         res.image = self._last_img if self._last_img is not None else Image()
@@ -2539,6 +2545,7 @@ class VehicleSim(Node):
         'step_id', 'car_id')            # ★予約 (lockstep の描画同期と N 台並列用。Unity は当面無視してよい)
 
     def _publish_render_state(self, stamp):
+        self._render_stamp = stamp.sec + stamp.nanosec * 1e-9      # lockstep: この stamp で描いた画像を待つ (srv_step)
         opp = getattr(self, '_opp_world', None) if self.spawn_opp else None
         m = Float64MultiArray()
         m.data = [float(stamp.sec), float(stamp.nanosec),

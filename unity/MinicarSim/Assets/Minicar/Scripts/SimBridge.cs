@@ -143,6 +143,7 @@ namespace Minicar
         bool m_StateDirty;
         int m_ArrowDirShown = -1;
         float m_NextCapture;
+        double m_CapturedStamp = -1.0;     // 学習のとき: 最後に撮った姿勢の stamp
         bool m_ReadbackBusy;
         int m_CropRows;
         byte[] m_Out;
@@ -157,6 +158,9 @@ namespace Minicar
             // 描画の上限。カメラは 30 Hz で配るので 60 で足りる (1 コマおきに配る)。120 では描画だけで CPU を
             // 使い、3 台レースで PC が詰まった (✎ 2026-09-28)。-fps で変えられる
             Application.targetFrameRate = int.Parse(Arg("-fps", "60"));
+            // 学習 (-mlagents・lockstep) は上限を外す: sim は 1 判断ごとに画像を待っていて、姿勢の受け取り → 撮影 → 読み出しが
+            // それぞれコマの境目を待つので、60 fps の上限だと 1 枚に約 60 ms かかる (docs/render_baseline.md)
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-mlagents") >= 0) Application.targetFrameRate = -1;
             RenderQuality.Init();                 // -quality low|medium|high|auto (コースを組む前に決める)
             m_Course = GetComponent<CourseBuilder>();
             float t0 = Time.realtimeSinceStartup;
@@ -495,7 +499,19 @@ namespace Minicar
 
             var cam = m_Course.Data.camera;
             float period = 1f / Mathf.Max(1f, cam.rate_hz);
-            if (Time.unscaledTime >= m_NextCapture && !m_ReadbackBusy)
+            if (m_Agent != null)
+            {
+                // 学習 (-mlagents・lockstep): 壁時計ではなく、sim から新しい姿勢が届いたら撮る。sim は 1 判断ごとにその姿勢の画像を
+                // 待っているので、15 Hz の刻みを待つと 1 判断に 100 ms 以上の待ちが乗る (docs/render_baseline.md)。
+                // 読み出し中に次の姿勢が届いたら、読み出しが終わりしだいその姿勢で撮り直す
+                double st = S(F.StampSec) + S(F.StampNsec) * 1e-9;
+                if (st != m_CapturedStamp && !m_ReadbackBusy)        // != : リセットで sim の時刻が戻っても撮る
+                {
+                    m_CapturedStamp = st;
+                    Capture();
+                }
+            }
+            else if (Time.unscaledTime >= m_NextCapture && !m_ReadbackBusy)
             {
                 // 予定時刻を period ずつ進める (「今 + period」だとフレームの端数ぶん
                 // 毎回遅れて、30 Hz 指定が 20 Hz に落ちていた)
