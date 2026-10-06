@@ -504,6 +504,9 @@ namespace Minicar
                 // 学習 (-mlagents・lockstep): 壁時計ではなく、sim から新しい姿勢が届いたら撮る。sim は 1 判断ごとにその姿勢の画像を
                 // 待っているので、15 Hz の刻みを待つと 1 判断に 100 ms 以上の待ちが乗る (docs/render_baseline.md)。
                 // 読み出し中に次の姿勢が届いたら、読み出しが終わりしだいその姿勢で撮り直す
+                // 学習器 (mlagents-learn --target-frame-rate=60 など) はつながったときに描画の上限を入れ直すので、外し続ける
+                // (上限 60 fps だと 1 判断 200 ms、外すと 97 ms。docs/render_baseline.md)
+                if (Application.targetFrameRate != -1) Application.targetFrameRate = -1;
                 double st = S(F.StampSec) + S(F.StampNsec) * 1e-9;
                 if (st != m_CapturedStamp && !m_ReadbackBusy)        // != : リセットで sim の時刻が戻っても撮る
                 {
