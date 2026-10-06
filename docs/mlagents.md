@@ -74,7 +74,7 @@ ros2 run joy game_controller_node & python3 tools/teleop/joy_teleop.py
 学習器に `--timeout-wait 120` を付けておくと、sim の起動が遅いときにも待てる。
 
 評価用 PC で確認済み (2026-10-05、富士・RX-7): 模倣 + PPO が回り、`MinicarDriver.onnx` の書き出し・`--resume` での再開・
-`--inference` での走行まで通る。速さは毎秒 6〜7 判断 (torch は CPU 版)。
+`--inference` での走行まで通る。速さはそのとき毎秒 6〜7 判断 (torch は CPU 版)。lockstep の待ちを直して毎秒 9〜10 判断になった (2026-10-06)。
 
 ```bash
 # 端末 0: 学習器 (リポジトリ直下で。demo_path: demos はここからの相対)
@@ -90,7 +90,8 @@ tensorboard --logdir results        # Environment/Cumulative Reward、minicar/pr
 
 - `behavioral_cloning` が最初の 15 万判断で人の運転に寄せ、以降は PPO が報酬で伸ばす。デモが数周しか無いときは `minicar_gail_ppo.yaml` (GAIL を弱く足す)
 - `--time-scale=1 --capture-frame-rate=0` は必須。ML-Agents の既定 (時間 20 倍・キャプチャ 60 fps) は Unity の時計を変え、配信画像の周期と自動露出がずれる。sim の時間は lockstep が決めるので、時間倍率では速くならない
-- 速さの目安: 1 判断ごとに画像の描画を待つので **毎秒 10〜15 判断** (gateway のログ `decisions=… (… /s)`)。100 万判断で 20 時間前後。止めて再開は `--resume`
+- 速さの実測 (評価用 PC、2026-10-06): **毎秒 10 判断前後** (ミニカー 10.3、富士 9.4。gateway のログ `decisions=… (… /s)`)。100 万判断で 27 時間前後。止めて再開は `--resume`。
+  1 判断 約 100 ms の半分は学習器の推論 (torch は CPU 版)。Unity は `-mlagents` のあいだ描画の上限を外すので、`--target-frame-rate` の値は速さに効かない (docs/render_baseline.md)
 - 学習した方策で走らせるだけなら `mlagents-learn <同じ yaml> --run-id=<同じ> --resume --inference`
 - 結果の方策は `results/<run-id>/MinicarDriver.onnx`
 

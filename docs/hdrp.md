@@ -79,10 +79,10 @@ HDRP 版の絵が正で、URP 版・Built-in 版はそれに合わせてある�
 | コース | Built-in | URP | HDRP |
 |---|---|---|---|
 | 富士 | 134 fps | 124 fps | 39 fps |
-| ミニカーの会場 (URP・HDRP は部屋、Built-in は地面と空だけ) | 192 fps | 224 fps | 114 fps |
+| ミニカーの会場 (URP・HDRP は部屋、Built-in は地面と空だけ) | 192 fps | 230 fps | 115 fps |
 
 Built-in のミニカーの会場は low で 197 fps。部屋を描いていたときは 123 fps で、いちばん重かったのは壁板の足 (約 400 部品) だった。
-学習の 1 判断あたりの時間 (lockstep) は、待ちを直してミニカーの会場 75 ms・富士 98 ms (直す前は 179 ms・143 ms。描画ではなく画像と IMU の待ちが原因だった)。くわしくは [render_baseline.md](render_baseline.md)。
+学習の 1 判断あたりの時間 (lockstep) は、待ちを直してミニカーの会場 75 ms・富士 98 ms (直す前は 179 ms・143 ms。描画ではなく画像と IMU の待ちが原因だった)。学習器をつないだ状態では 97 ms・106 ms (毎秒 10 判断前後)。くわしくは [render_baseline.md](render_baseline.md)。
 
 ## URP 版のプロジェクト
 
